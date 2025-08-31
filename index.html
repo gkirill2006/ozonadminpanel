@@ -13,15 +13,13 @@
     <script src="/vendors/simplebar/simplebar.min.js"></script>
     <script src="/assets/js/config.js"></script>
     
-    <!-- Проверяем загрузку lodash -->
+    <!-- Проверяем загрузку lodash (в Telegram WebView CDN может быть заблокирован) -->
     <script>
-      if (typeof window.lodash === 'undefined') {
-        console.log('⚠️ lodash не загрузился, пробуем альтернативный путь...')
-        // Пробуем загрузить lodash из CDN если локальный не работает
-        const lodashScript = document.createElement('script')
-        lodashScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js'
-        lodashScript.onload = () => console.log('✅ lodash загружен из CDN')
-        document.head.appendChild(lodashScript)
+      // lodash публикует глобал window._, а не window.lodash
+      if (typeof window._ === 'undefined') {
+        console.warn('⚠️ lodash (window._) не обнаружен. Проверь путь /vendors/lodash/lodash.min.js');
+      } else {
+        console.log('✅ lodash обнаружен');
       }
       
       // Создаем функцию toggleNavbarVerticalCollapsed СРАЗУ
@@ -99,7 +97,7 @@
           
           // Проверяем CSS правила сайдбара
           console.log('🎨 Проверяем CSS правила сайдбара...')
-          const sidebar = document.querySelector('.navbar-vertical')
+          // повторно используем уже объявленную переменную sidebar
           if (sidebar) {
             const computedStyle = window.getComputedStyle(sidebar)
             console.log('🎨 Сайдбар width:', computedStyle.width)
@@ -151,6 +149,8 @@
     <link rel="stylesheet" href="https://unicons.iconscout.com/release/v4.0.8/css/line.css">
     <link href="/css/theme.min.css" type="text/css" rel="stylesheet" id="style-default">
     <link href="/css/user.min.css" type="text/css" rel="stylesheet" id="user-style-default">
+    <!-- Small alignment tweaks to match Phoenix preview exactly -->
+    <link href="/css/overrides.css" type="text/css" rel="stylesheet">
     
     <!-- Telegram WebApp SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -194,9 +194,8 @@
     
     <!-- Phoenix core must load after Bootstrap -->
     <script src="/assets/js/phoenix.js"></script>
-    <!-- ECharts and dashboard initializers depend on phoenix.utils -->
+    <!-- ECharts (инициализация скрипта графиков выполняется из DashboardView.vue, чтобы не было повторных загрузок через ngrok) -->
     <script src="/vendors/echarts/echarts.min.js"></script>
-    <script src="/assets/js/dashboards/ecommerce-dashboard.js"></script>
     
     <script>
       // Базовый тест
@@ -204,7 +203,7 @@
 
       // Проверяем загрузку скриптов
       console.log('=== ПРОВЕРКА СКРИПТОВ ===')
-      console.log('window.lodash:', !!window.lodash)
+      console.log('window._ (lodash):', !!window._)
       console.log('window.SimpleBar:', !!window.SimpleBar)
       console.log('window.config:', !!window.config)
       console.log('window.feather:', !!window.feather)

@@ -270,9 +270,10 @@ defineExpose({
     z-index: 1040;
     transition: transform 0.3s ease;
     position: fixed;
-    top: var(--phoenix-navbar-top-height);
+    /* При нижней навигации на мобилке сайдбар должен занимать весь экран */
+    top: 0;
     left: 0;
-    height: calc(100vh - var(--phoenix-navbar-top-height));
+    height: 100vh;
   }
 
   .navbar-vertical.show {
@@ -281,6 +282,8 @@ defineExpose({
 
   .sidebar-overlay {
     display: block;
+    top: 0;
+    height: 100vh;
   }
 
   .navbar-vertical-footer {

@@ -1187,6 +1187,22 @@ onMounted(() => {
     window.feather.replace()
   }
 
+  // Аккуратно подгружаем скрипт графиков Phoenix один раз (убирает повторные запросы через ngrok)
+  const ensureDashboardScript = () => new Promise<void>((resolve) => {
+    if ((window as any).__ecommerceDashLoaded) return resolve()
+    if (document.getElementById('ecommerce-dashboard-js')) return resolve()
+    const s = document.createElement('script')
+    s.id = 'ecommerce-dashboard-js'
+    s.src = '/assets/js/dashboards/ecommerce-dashboard.js'
+    s.defer = true
+    s.onload = () => { (window as any).__ecommerceDashLoaded = true; resolve() }
+    s.onerror = () => resolve()
+    document.body.appendChild(s)
+  })
+
+  // не блокируем рендер; грузим фоном
+  ensureDashboardScript()
+
   // Initialize chart
   if (storesChart.value) {
     const ctx = storesChart.value.getContext('2d')
