@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="ru" dir="ltr" data-navigation-type="default" data-navbar-horizontal-shape="default">
+
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" href="/favicon.ico">
+    <title>TGPoint Admin</title>
+
+    <!-- Phoenix scripts that define CSS variables MUST load before stylesheets -->
+    <script src="/vendors/lodash/lodash.min.js"></script>
+    <script src="/vendors/simplebar/simplebar.min.js"></script>
+    <script src="/assets/js/config.js"></script>
+    
+    <!-- Проверяем загрузку lodash -->
+    <script>
+      if (typeof window.lodash === 'undefined') {
+        console.log('⚠️ lodash не загрузился, пробуем альтернативный путь...')
+        // Пробуем загрузить lodash из CDN если локальный не работает
+        const lodashScript = document.createElement('script')
+        lodashScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js'
+        lodashScript.onload = () => console.log('✅ lodash загружен из CDN')
+        document.head.appendChild(lodashScript)
+      }
+      
+      // Создаем функцию toggleNavbarVerticalCollapsed СРАЗУ
+      if (!window.phoenix) {
+        window.phoenix = {}
+      }
+      
+      window.phoenix.toggleNavbarVerticalCollapsed = function() {
+        console.log('🎯 toggleNavbarVerticalCollapsed вызвана!')
+        console.log('🎯 document.documentElement:', document.documentElement)
+        console.log('🎯 Текущие классы:', document.documentElement.className)
+        
+        const html = document.documentElement
+        const isCollapsed = html.classList.contains('navbar-vertical-collapsed')
+        
+        console.log('🎯 isCollapsed:', isCollapsed)
+        
+        if (isCollapsed) {
+          // Разворачиваем сайдбар
+          html.classList.remove('navbar-vertical-collapsed')
+          localStorage.setItem('phoenixIsNavbarVerticalCollapsed', 'false')
+          
+          // Показываем все элементы
+          const navbar = document.querySelector('.navbar-vertical')
+          if (navbar) {
+            navbar.classList.remove('navbar-vertical-collapsed')
+          }
+          
+          // Обновляем иконки
+          if (window.feather) {
+            window.feather.replace()
+          }
+          
+          console.log('Phoenix: сайдбар развернут')
+          console.log('🎯 Классы после разворачивания:', html.className)
+        } else {
+          // Сворачиваем сайдбар
+          html.classList.add('navbar-vertical-collapsed')
+          localStorage.setItem('phoenixIsNavbarVerticalCollapsed', 'true')
+          
+          // Скрываем элементы
+          const navbar = document.querySelector('.navbar-vertical')
+          if (navbar) {
+            navbar.classList.add('navbar-vertical-collapsed')
+          }
+          
+          // Обновляем иконки
+          if (window.feather) {
+            window.feather.replace()
+          }
+          
+          console.log('Phoenix: сайдбар свернут')
+          console.log('🎯 Классы после сворачивания:', html.className)
+          console.log('🎯 Проверяем что класс добавился:', html.classList.contains('navbar-vertical-collapsed'))
+          
+          // Принудительно обновляем стили
+          console.log('🎯 Принудительно обновляем стили...')
+          html.style.display = 'none'
+          html.offsetHeight // force reflow
+          html.style.display = ''
+          console.log('🎯 Стили обновлены')
+          
+          // Принудительно обновляем ширину сайдбара
+          console.log('🎯 Принудительно обновляем ширину сайдбара...')
+          const sidebar = document.querySelector('.navbar-vertical')
+          if (sidebar) {
+            if (isCollapsed) {
+              sidebar.style.width = 'var(--phoenix-navbar-vertical-collapsed-width)'
+              console.log('🎯 Сайдбар свернут, ширина установлена:', getComputedStyle(sidebar).width)
+            } else {
+              sidebar.style.width = 'var(--phoenix-navbar-vertical-width)'
+              console.log('🎯 Сайдбар развернут, ширина установлена:', getComputedStyle(sidebar).width)
+            }
+          }
+          
+          // Проверяем CSS правила сайдбара
+          console.log('🎨 Проверяем CSS правила сайдбара...')
+          const sidebar = document.querySelector('.navbar-vertical')
+          if (sidebar) {
+            const computedStyle = window.getComputedStyle(sidebar)
+            console.log('🎨 Сайдбар width:', computedStyle.width)
+            console.log('🎨 Сайдбар transform:', computedStyle.transform)
+            console.log('🎨 Сайдбар transition:', computedStyle.transition)
+          }
+          
+          // Проверяем CSS переменные Phoenix
+          console.log('🎨 CSS переменные Phoenix:')
+          console.log('--phoenix-navbar-vertical-width:', getComputedStyle(document.documentElement).getPropertyValue('--phoenix-navbar-vertical-width'))
+          console.log('--phoenix-navbar-vertical-collapsed-width:', getComputedStyle(document.documentElement).getPropertyValue('--phoenix-navbar-vertical-collapsed-width'))
+          
+          // Принудительно устанавливаем правильные CSS переменные Phoenix
+          console.log('🎨 Устанавливаем правильные CSS переменные...')
+          document.documentElement.style.setProperty('--phoenix-navbar-vertical-width', '16.5rem')
+          document.documentElement.style.setProperty('--phoenix-navbar-vertical-collapsed-width', '4rem')
+          console.log('🎨 CSS переменные установлены:')
+          console.log('--phoenix-navbar-vertical-width:', getComputedStyle(document.documentElement).getPropertyValue('--phoenix-navbar-vertical-width'))
+          console.log('--phoenix-navbar-vertical-collapsed-width:', getComputedStyle(document.documentElement).getPropertyValue('--phoenix-navbar-vertical-collapsed-width'))
+        }
+        
+        console.log('Phoenix toggleNavbarVerticalCollapsed вызван, новое состояние:', !isCollapsed)
+        
+        // Вызываем событие для обновления других компонентов
+        window.dispatchEvent(new CustomEvent('phoenix.navbar.toggle', {
+          detail: { collapsed: !isCollapsed }
+        }))
+      }
+      
+      // Сигнализируем что Phoenix готов
+      window.phoenixReady = true
+      console.log('✅ Phoenix готов!')
+      console.log('window.phoenixReady:', window.phoenixReady)
+      console.log('🔍 Проверка функции:')
+      console.log('window.phoenix:', window.phoenix)
+      console.log('window.phoenix.toggleNavbarVerticalCollapsed:', typeof window.phoenix.toggleNavbarVerticalCollapsed)
+      console.log('window.phoenix.toggleNavbarVerticalCollapsed === function:', typeof window.phoenix.toggleNavbarVerticalCollapsed === 'function')
+    </script>
+
+    <!-- ===============================================-->
+    <!--    Stylesheets-->
+    <!-- ===============================================-->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+    <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@300;400;600;700;800;900&amp;display=swap" rel="stylesheet">
+    
+    <!-- Phoenix CSS -->
+    <link href="/vendors/simplebar/simplebar.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unicons.iconscout.com/release/v4.0.8/css/line.css">
+    <link href="/css/theme.min.css" type="text/css" rel="stylesheet" id="style-default">
+    <link href="/css/user.min.css" type="text/css" rel="stylesheet" id="user-style-default">
+    
+    <!-- Telegram WebApp SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    
+    <!-- Phoenix core scripts (after CSS) -->
+    <script src="/vendors/feather-icons/feather.min.js"></script>
+    
+    <!-- Обрабатываем ошибки docs.js -->
+    <script>
+      // Перехватываем ошибки до загрузки phoenix.js
+      window.addEventListener('error', function(e) {
+        if (e.message.includes('Toast') || e.filename.includes('docs.js') || 
+            e.filename.includes('list.min.js') || e.message.includes('childNodes')) {
+          console.log('🚫 Игнорируем ошибку:', e.message, 'из', e.filename)
+          e.preventDefault()
+          return false
+        }
+      })
+    </script>
+    
+  </head>
+
+  <body>
+    <!-- ===============================================-->
+    <!--    Main Content-->
+    <!-- ===============================================-->
+    <main class="main" id="top">
+      <!-- Vue app will be mounted here -->
+      <div id="app"></div>
+    </main>
+    
+    <!-- ===============================================-->
+    <!--    JavaScripts-->
+    <!-- ===============================================-->
+    <script src="/vendors/popper/popper.min.js"></script>
+    <script src="/vendors/bootstrap/bootstrap.min.js"></script>
+    <script src="/vendors/anchorjs/anchor.min.js"></script>
+    <script src="/vendors/is/is.min.js"></script>
+    <script src="/vendors/fontawesome/all.min.js"></script>
+    <script src="/vendors/dayjs/dayjs.min.js"></script>
+    
+    <!-- Phoenix core must load after Bootstrap -->
+    <script src="/assets/js/phoenix.js"></script>
+    <!-- ECharts and dashboard initializers depend on phoenix.utils -->
+    <script src="/vendors/echarts/echarts.min.js"></script>
+    <script src="/assets/js/dashboards/ecommerce-dashboard.js"></script>
+    
+    <script>
+      // Базовый тест
+      console.log('🚀 JavaScript работает!')
+
+      // Проверяем загрузку скриптов
+      console.log('=== ПРОВЕРКА СКРИПТОВ ===')
+      console.log('window.lodash:', !!window.lodash)
+      console.log('window.SimpleBar:', !!window.SimpleBar)
+      console.log('window.config:', !!window.config)
+      console.log('window.feather:', !!window.feather)
+      console.log('window.phoenix:', !!window.phoenix)
+      console.log('window.bootstrap:', !!window.bootstrap)
+      
+      // Проверяем CSS файлы
+      console.log('🎨 Проверка CSS файлов:')
+      const themeCSS = document.querySelector('link[href*="theme.min.css"]')
+      const userCSS = document.querySelector('link[href*="user.min.css"]')
+      console.log('theme.min.css загружен:', !!themeCSS)
+      console.log('user.min.css загружен:', !!userCSS)
+      
+      // Проверяем что CSS правила работают
+      const testElement = document.createElement('div')
+      testElement.style.position = 'absolute'
+      testElement.style.left = '-9999px'
+      testElement.className = 'navbar-vertical-collapsed'
+      document.body.appendChild(testElement)
+      
+      const computedStyle = window.getComputedStyle(testElement)
+      console.log('🎨 CSS правила navbar-vertical-collapsed загружены:', computedStyle.display !== '')
+      
+      document.body.removeChild(testElement)
+    </script>
+    
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
