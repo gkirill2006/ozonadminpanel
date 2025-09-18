@@ -49,8 +49,9 @@
         <button
           type="button"
           class="nav-link"
-          :class="{ active: activeTab === 'addresses' }"
+          :class="{ active: activeTab === 'addresses', disabled: !storeDetail?.business_type }"
           role="tab"
+          :disabled="!storeDetail?.business_type"
           @click="activeTab = 'addresses'"
         >
           Адреса и точки
@@ -60,6 +61,103 @@
 
     <div v-if="activeTab === 'general'" class="tab-pane active" role="tabpanel">
       <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-transparent py-3 d-flex align-items-center justify-content-between">
+          <h5 class="mb-0">Тип бизнеса</h5>
+        </div>
+        <div class="card-body">
+          <template v-if="storeDetail?.business_type">
+            <p class="mb-1">
+              Тип: <strong>{{ businessTypeLabel }}</strong>
+            </p>
+            <p class="text-body-secondary mb-0 small">Тип выбран и изменить его нельзя.</p>
+          </template>
+          <template v-else>
+            <p class="text-body-secondary">Выберите, что вы предлагаете клиентам. После выбора изменить тип нельзя.</p>
+            <div class="business-type-options mb-3">
+              <button
+                v-for="type in businessTypes"
+                :key="type.value"
+                type="button"
+                class="type-chip"
+                :class="{ active: selectedBusinessType === type.value }"
+                :disabled="typeSaveLoading"
+                @click="selectedBusinessType = type.value"
+              >
+                {{ type.label }}
+              </button>
+            </div>
+            <div v-if="businessTypesLoading" class="text-body-secondary small">Загружаем типы бизнеса…</div>
+            <div v-else-if="businessTypesError" class="alert alert-danger" role="alert">{{ businessTypesError }}</div>
+            <button
+              type="button"
+              class="btn btn-primary"
+              :disabled="typeSaveLoading || !selectedBusinessType"
+              @click="saveBusinessType"
+            >
+              <span v-if="typeSaveLoading" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+              Сохранить тип
+            </button>
+            <div v-if="typeSaveError" class="alert alert-danger mt-3 mb-0" role="alert">
+              {{ typeSaveError }}
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <div v-if="storeDetail?.business_type" class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-transparent py-3 d-flex align-items-center justify-content-between">
+          <h5 class="mb-0">Категория витрины</h5>
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-12 col-md-6">
+              <label class="form-label">Категория</label>
+              <select
+                class="form-select"
+                v-model="selectedCategoryId"
+                :disabled="categoriesLoading || categorySaveLoading"
+                @change="handleCategorySelect"
+              >
+                <option value="">Указать свою</option>
+                <option v-for="category in categories" :key="category.id" :value="String(category.id)">
+                  {{ category.name }}
+                </option>
+              </select>
+              <div v-if="categoriesLoading" class="text-body-secondary small mt-2">Загружаем возможные категории…</div>
+              <div v-else-if="categoriesError" class="text-danger small mt-2">{{ categoriesError }}</div>
+            </div>
+            <div class="col-12 col-md-6">
+              <label class="form-label">Своя категория</label>
+              <input
+                v-model="customCategoryValue"
+                type="text"
+                class="form-control"
+                placeholder="Например, Авторские изделия"
+                :disabled="categorySaveLoading"
+                @input="handleCustomCategoryInput"
+              />
+              <small class="text-body-secondary">Оставьте пустым, если выбрали категорию из списка.</small>
+            </div>
+          </div>
+          <div class="mt-3 d-flex flex-column flex-sm-row gap-2 align-items-sm-center">
+            <button
+              type="button"
+              class="btn btn-primary"
+              :disabled="categorySaveLoading"
+              @click="saveCategory"
+            >
+              <span v-if="categorySaveLoading" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+              Сохранить категорию
+            </button>
+            <span v-if="categorySaveMessage" class="text-success small">{{ categorySaveMessage }}</span>
+          </div>
+          <div v-if="categorySaveError" class="alert alert-danger mt-3 mb-0" role="alert">
+            {{ categorySaveError }}
+          </div>
+        </div>
+      </div>
+
+      <div v-if="storeDetail?.business_type" class="card border-0 shadow-sm mb-4">
         <div class="card-header bg-transparent py-3">
           <h5 class="mb-0">Основная информация</h5>
         </div>
@@ -74,6 +172,7 @@
                 class="form-control"
                 placeholder="Например, TGPoint Маркет"
                 required
+                :disabled="isSavingStore"
               />
             </div>
             <button type="submit" class="btn btn-primary" :disabled="isSavingStore">
@@ -90,7 +189,7 @@
         </div>
       </div>
 
-      <div class="card border-0 shadow-sm mb-4">
+      <div v-if="storeDetail?.business_type" class="card border-0 shadow-sm mb-4">
         <div class="card-header bg-transparent py-3 d-flex justify-content-between align-items-center">
           <h5 class="mb-0">Телефоны магазина</h5>
           <button type="button" class="btn btn-outline-primary btn-sm" @click="fetchPhones" :disabled="phonesLoading">
@@ -151,9 +250,10 @@
     </div>
 
     <div v-else-if="activeTab === 'addresses'" class="tab-pane active" role="tabpanel">
-      <div class="row g-4">
-        <div class="col-12 col-xl-7">
-          <div class="card border-0 shadow-sm h-100">
+      <template v-if="storeDetail?.business_type">
+        <div class="row g-4">
+          <div class="col-12 col-xl-7">
+            <div class="card border-0 shadow-sm h-100">
             <div class="card-header bg-transparent py-3 d-flex justify-content-between align-items-center">
               <h5 class="mb-0">Адреса магазина</h5>
               <button type="button" class="btn btn-outline-primary btn-sm" @click="fetchAddresses" :disabled="addressesLoading">
@@ -213,7 +313,14 @@
             </div>
           </div>
         </div>
-      </div>
+        </div>
+      </template>
+
+      <template v-else>
+        <div class="alert alert-info" role="alert">
+          Выберите тип бизнеса, чтобы продолжить настройку магазина.
+        </div>
+      </template>
     </div>
   </div>
 </template>
@@ -267,6 +374,27 @@ const addressForm = reactive({
   address_text: ''
 })
 
+const businessTypes = ref<{ value: string; label: string }[]>([])
+const businessTypesLoading = ref(false)
+const businessTypesError = ref<string | null>(null)
+const selectedBusinessType = ref('')
+const typeSaveLoading = ref(false)
+const typeSaveError = ref<string | null>(null)
+const businessTypeLabel = computed(() => {
+  const value = storeDetail.value?.business_type
+  if (!value) return ''
+  return businessTypes.value.find((item) => item.value === value)?.label || value
+})
+
+const categories = ref<{ id: number; name: string }[]>([])
+const categoriesLoading = ref(false)
+const categoriesError = ref<string | null>(null)
+const selectedCategoryId = ref<string | null>(null)
+const customCategoryValue = ref('')
+const categorySaveLoading = ref(false)
+const categorySaveMessage = ref<string | null>(null)
+const categorySaveError = ref<string | null>(null)
+
 const phones = ref<StorePhone[]>([])
 const phonesLoading = ref(false)
 const phonesError = ref<string | null>(null)
@@ -302,10 +430,26 @@ const fetchStore = async () => {
   storeError.value = null
 
   try {
+    if (!businessTypes.value.length) {
+      await fetchBusinessTypes()
+    }
     const data = await apiService.getStore(storeId)
     storeDetail.value = data
     storeForm.name = data?.name || ''
     storesStore.setActiveStoreId(storeId)
+    selectedBusinessType.value = data?.business_type || ''
+    const currentCategory = data?.category
+    if (currentCategory && typeof currentCategory === 'object') {
+      selectedCategoryId.value = currentCategory.id ? String(currentCategory.id) : null
+    } else if (currentCategory) {
+      selectedCategoryId.value = String(currentCategory)
+    } else {
+      selectedCategoryId.value = null
+    }
+    customCategoryValue.value = data?.custom_category || ''
+    if (selectedBusinessType.value) {
+      await fetchCategories(selectedBusinessType.value)
+    }
     await Promise.all([fetchAddresses(), fetchPhones()])
   } catch (error: unknown) {
     storeError.value = error instanceof Error ? error.message : 'Не удалось загрузить магазин'
@@ -356,6 +500,39 @@ const fetchPhones = async () => {
     phones.value = []
   } finally {
     phonesLoading.value = false
+  }
+}
+
+const fetchBusinessTypes = async () => {
+  businessTypesLoading.value = true
+  businessTypesError.value = null
+  try {
+    const data = await apiService.getBusinessTypes()
+    businessTypes.value = Array.isArray(data) ? data : []
+  } catch (error: unknown) {
+    businessTypesError.value = error instanceof Error ? error.message : 'Не удалось загрузить типы бизнеса'
+  } finally {
+    businessTypesLoading.value = false
+  }
+}
+
+const fetchCategories = async (type: string) => {
+  if (!type) {
+    categories.value = []
+    return
+  }
+
+  categoriesLoading.value = true
+  categoriesError.value = null
+
+  try {
+    const data = await apiService.getCategoriesByType(type)
+    categories.value = Array.isArray(data) ? data : []
+  } catch (error: unknown) {
+    categoriesError.value = error instanceof Error ? error.message : 'Не удалось загрузить категории'
+    categories.value = []
+  } finally {
+    categoriesLoading.value = false
   }
 }
 
@@ -471,6 +648,79 @@ const goToDashboard = () => {
   router.push({ name: 'dashboard' })
 }
 
+const saveBusinessType = async () => {
+  if (!currentStoreId.value || !selectedBusinessType.value) return
+  typeSaveLoading.value = true
+  typeSaveError.value = null
+
+  try {
+    await apiService.setStoreBusinessType(currentStoreId.value, selectedBusinessType.value)
+    if (storeDetail.value) {
+      storeDetail.value.business_type = selectedBusinessType.value
+    }
+    await fetchCategories(selectedBusinessType.value)
+    selectedCategoryId.value = null
+    customCategoryValue.value = ''
+    await storesStore.fetchStores()
+  } catch (error: unknown) {
+    typeSaveError.value = error instanceof Error ? error.message : 'Не удалось сохранить тип бизнеса'
+  } finally {
+    typeSaveLoading.value = false
+  }
+}
+
+const saveCategory = async () => {
+  if (!currentStoreId.value) return
+  categorySaveLoading.value = true
+  categorySaveError.value = null
+  categorySaveMessage.value = null
+
+  try {
+    const payload: Record<string, unknown> = {}
+    if (selectedCategoryId.value) {
+      payload.category = Number(selectedCategoryId.value)
+      payload.custom_category = null
+    } else if (customCategoryValue.value.trim()) {
+      payload.category = null
+      payload.custom_category = customCategoryValue.value.trim()
+    } else {
+      categorySaveError.value = 'Выберите категорию или укажите свою'
+      categorySaveLoading.value = false
+      return
+    }
+
+    const updated = await apiService.updateStore(currentStoreId.value, payload)
+    storeDetail.value = updated
+    const newCategory = updated?.category
+    if (newCategory && typeof newCategory === 'object') {
+      selectedCategoryId.value = newCategory.id ? String(newCategory.id) : null
+    } else if (newCategory) {
+      selectedCategoryId.value = String(newCategory)
+    } else {
+      selectedCategoryId.value = null
+    }
+    customCategoryValue.value = updated?.custom_category || ''
+    categorySaveMessage.value = 'Категория сохранена'
+    setTimeout(() => (categorySaveMessage.value = null), 3000)
+  } catch (error: unknown) {
+    categorySaveError.value = error instanceof Error ? error.message : 'Не удалось сохранить категорию'
+  } finally {
+    categorySaveLoading.value = false
+  }
+}
+
+const handleCategorySelect = () => {
+  customCategoryValue.value = ''
+  categorySaveError.value = null
+  categorySaveMessage.value = null
+}
+
+const handleCustomCategoryInput = () => {
+  selectedCategoryId.value = null
+  categorySaveError.value = null
+  categorySaveMessage.value = null
+}
+
 watch(
   () => currentStoreId.value,
   () => {
@@ -484,6 +734,18 @@ watch(
   () => {
     if (!currentStoreId.value && primaryStore.value?.id) {
       fetchStore()
+    }
+  }
+)
+
+watch(
+  () => selectedBusinessType.value,
+  (value) => {
+    if (!storeDetail.value?.business_type && value) {
+      fetchCategories(value)
+    }
+    if (typeSaveError.value) {
+      typeSaveError.value = null
     }
   }
 )
@@ -517,5 +779,32 @@ onMounted(async () => {
 
 .list-group-item:last-child {
   border-bottom: none;
+}
+
+.business-type-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.type-chip {
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: #f8fafc;
+  border-radius: 999px;
+  padding: 0.45rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #1f2a37;
+  transition: all 0.15s ease;
+}
+
+.type-chip.active {
+  background: #2563eb;
+  color: #fff;
+  border-color: #2563eb;
+}
+
+.type-chip:disabled {
+  opacity: 0.6;
 }
 </style>

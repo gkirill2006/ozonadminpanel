@@ -237,6 +237,31 @@ class ApiService {
     return this.handleResponse(response)
   }
 
+  async getBusinessTypes() {
+    const response = await fetch(`${API_BASE_URL}/stores/business-types/`, {
+      method: 'GET',
+      headers: this.getHeaders()
+    })
+    return this.handleResponse(response)
+  }
+
+  async setStoreBusinessType(storeId: string, businessType: string) {
+    const response = await fetch(`${API_BASE_URL}/stores/stores/${storeId}/set-business-type/`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ business_type: businessType })
+    })
+    return this.handleResponse(response)
+  }
+
+  async getCategoriesByType(type: string) {
+    const response = await fetch(`${API_BASE_URL}/stores/categories/?type=${encodeURIComponent(type)}`, {
+      method: 'GET',
+      headers: this.getHeaders()
+    })
+    return this.handleResponse(response)
+  }
+
   async getStoreAddresses(storeId?: string) {
     const baseUrl = `${API_BASE_URL}/stores/store-addresses/`
     const url = storeId ? `${baseUrl}?store=${encodeURIComponent(storeId)}` : baseUrl

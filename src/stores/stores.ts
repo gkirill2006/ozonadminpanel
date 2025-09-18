@@ -5,6 +5,7 @@ import { apiService } from '@/services/api'
 export interface Store {
   id: string
   name: string
+  business_type?: string | null
   [key: string]: unknown
 }
 

@@ -8,6 +8,8 @@
         </div>
 
         <template v-else>
+
+
           <div v-if="storesError" class="alert alert-danger d-flex align-items-center justify-content-between gap-3" role="alert">
             <span>{{ storesError }}</span>
             <button type="button" class="btn btn-link btn-sm p-0" @click="fetchStores">Повторить</button>
@@ -24,16 +26,49 @@
               <h4 class="mb-1">{{ store.name || 'Без названия' }}</h4>
               <p class="text-body-secondary mb-0">Магазин TGPoint</p>
             </button>
-            <div>
-              <button
-                type="button"
-                class="btn btn-outline-primary"
-                :disabled="isCreating"
-                @click="createBusiness"
-              >
-                <span v-if="isCreating" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                {{ isCreating ? 'Создание...' : 'Создать ещё один бизнес' }}
-              </button>
+
+            <div class="create-card p-4 border rounded-3">
+              <h5 class="mb-3">Создать новый бизнес</h5>
+              <div class="row g-3 align-items-center">
+                <div class="col-12 col-md-6">
+                  <input
+                    v-model="customStoreName"
+                    type="text"
+                    class="form-control"
+                    placeholder="Название бизнеса"
+                    :disabled="isCreating"
+                    maxlength="60"
+                  />
+                </div>
+                <div class="col-12 col-md-6">
+                  <div class="business-type-options justify-content-md-end">
+                    <button
+                      v-for="type in businessTypes"
+                      :key="type.value"
+                      type="button"
+                      class="type-chip"
+                      :class="{ active: selectedBusinessType === type.value }"
+                      :disabled="isCreating"
+                      @click="selectBusinessType(type.value)"
+                    >
+                      {{ type.label }}
+                    </button>
+                  </div>
+                  <div v-if="businessTypesLoading" class="text-body-secondary small mt-2">Загружаем типы бизнеса…</div>
+                  <div v-else-if="businessTypesError" class="text-danger small mt-2">{{ businessTypesError }}</div>
+                </div>
+              </div>
+              <div class="mt-3 d-flex flex-column flex-sm-row gap-2 align-items-sm-center">
+                <button
+                  type="button"
+                  class="btn btn-outline-primary"
+                  :disabled="isCreating || !businessTypes.length || !selectedBusinessType"
+                  @click="createBusiness"
+                >
+                  <span v-if="isCreating" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                  {{ isCreating ? 'Создание...' : 'Создать бизнес' }}
+                </button>
+              </div>
               <div v-if="createError" class="alert alert-danger mt-3 mb-0" role="alert">
                 {{ createError }}
               </div>
@@ -53,7 +88,22 @@
                   :disabled="isCreating"
                   maxlength="60"
                 />
-                <button type="submit" class="btn btn-primary btn-lg w-100 hero-button" :disabled="isCreating">
+                <div class="business-type-options justify-content-center">
+                  <button
+                    v-for="type in businessTypes"
+                    :key="type.value"
+                    type="button"
+                    class="type-chip"
+                    :class="{ active: selectedBusinessType === type.value }"
+                    :disabled="isCreating"
+                    @click="selectBusinessType(type.value)"
+                  >
+                    {{ type.label }}
+                  </button>
+                </div>
+                <span v-if="businessTypesLoading" class="text-body-secondary small">Загружаем типы бизнеса…</span>
+                <span v-else-if="businessTypesError" class="text-danger small">{{ businessTypesError }}</span>
+                <button type="submit" class="btn btn-primary btn-lg w-100 hero-button" :disabled="isCreating || !businessTypes.length || !selectedBusinessType">
                   <span v-if="isCreating" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
                   {{ isCreating ? 'Создание...' : 'Создать бизнес' }}
                 </button>
@@ -91,6 +141,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useStoresStore } from '@/stores/stores'
+import { apiService } from '@/services/api'
 
 const router = useRouter()
 const storesStore = useStoresStore()
@@ -99,6 +150,10 @@ const { stores, isLoading: storesLoading, error: storesError, hasStores } = stor
 const isCreating = ref(false)
 const createError = ref<string | null>(null)
 const customStoreName = ref('')
+const businessTypes = ref<{ value: string; label: string }[]>([])
+const businessTypesLoading = ref(false)
+const businessTypesError = ref<string | null>(null)
+const selectedBusinessType = ref('')
 
 const previewCategories = [
   {
@@ -135,6 +190,23 @@ const previewCategories = [
 
 const fetchStores = () => storesStore.fetchStores()
 
+const fetchBusinessTypes = async () => {
+  businessTypesLoading.value = true
+  businessTypesError.value = null
+  try {
+    const data = await apiService.getBusinessTypes()
+    businessTypes.value = Array.isArray(data) ? data : []
+  } catch (error: unknown) {
+    businessTypesError.value = error instanceof Error ? error.message : 'Не удалось загрузить типы бизнеса'
+  } finally {
+    businessTypesLoading.value = false
+  }
+}
+
+const selectBusinessType = (value: string) => {
+  selectedBusinessType.value = value
+}
+
 const openStore = (storeId: string) => {
   if (!storeId) return
   storesStore.setActiveStoreId(storeId)
@@ -163,8 +235,18 @@ const createBusiness = async () => {
   createError.value = null
 
   try {
+    if (!businessTypes.value.length) {
+      await fetchBusinessTypes()
+    }
+    if (!selectedBusinessType.value) {
+      createError.value = 'Выберите тип бизнеса'
+      return
+    }
     const payloadName = customStoreName.value.trim() || defaultStoreName.value
-    const created = await storesStore.createStore({ name: payloadName })
+    const created = await storesStore.createStore({
+      name: payloadName,
+      business_type: selectedBusinessType.value
+    })
     customStoreName.value = ''
     const createdId = created?.id ? String(created.id) : null
     if (createdId) {
@@ -188,10 +270,26 @@ watch(
   { deep: true }
 )
 
+watch(
+  () => selectedBusinessType.value,
+  () => {
+    if (createError.value) createError.value = null
+  }
+)
+
+watch(
+  () => customStoreName.value,
+  () => {
+    if (createError.value) createError.value = null
+  }
+)
+
 onMounted(() => {
   if (!stores.value.length && !storesLoading.value) {
     storesStore.fetchStores()
   }
+
+  fetchBusinessTypes()
 
   if (window.feather) {
     window.feather.replace()
@@ -221,6 +319,38 @@ onMounted(() => {
 .business-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+}
+
+.create-card {
+  background: #fff;
+  border-radius: 16px;
+}
+
+.business-type-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.type-chip {
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: #f8fafc;
+  border-radius: 999px;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #1f2a37;
+  transition: all 0.15s ease;
+}
+
+.type-chip.active {
+  background: #2563eb;
+  color: #fff;
+  border-color: #2563eb;
+}
+
+.type-chip:disabled {
+  opacity: 0.6;
 }
 
 .empty-state {

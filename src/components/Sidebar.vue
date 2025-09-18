@@ -211,7 +211,6 @@ onMounted(() => {
   // Синхронизируем состояние с реальным DOM
   const htmlElement = document.documentElement
   isCollapsed.value = htmlElement.classList.contains('navbar-vertical-collapsed')
-  console.log('[Sidebar] Инициализация: isCollapsed =', isCollapsed.value)
 
   // Open the group that contains current route on load
   syncGroupsWithRoute()
@@ -220,7 +219,6 @@ onMounted(() => {
   collapseToggle.value?.addEventListener('navbar.vertical.toggle', () => {
     const collapsed = document.documentElement.classList.contains('navbar-vertical-collapsed')
     isCollapsed.value = collapsed
-    console.log('[Sidebar] Синхронизация по событию phoenix: collapsed =', collapsed)
   })
 
   // На всякий случай синхронизируемся при изменении класса на <html>
@@ -228,7 +226,6 @@ onMounted(() => {
     const collapsed = document.documentElement.classList.contains('navbar-vertical-collapsed')
     if (collapsed !== isCollapsed.value) {
       isCollapsed.value = collapsed
-      console.log('[Sidebar] MutationObserver: collapsed =', collapsed)
     }
   })
   mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
@@ -262,7 +259,7 @@ const handleCollapseToggle = () => {
   try {
     localStorage.setItem('phoenixIsNavbarVerticalCollapsed', nextState ? 'true' : 'false')
   } catch (error) {
-    console.warn('Failed to persist collapsed state', error)
+    // ignore storage errors
   }
   isCollapsed.value = nextState
   const event = new CustomEvent('navbar.vertical.toggle')
@@ -304,10 +301,7 @@ watch(
 // Expose for parent component
 defineExpose({
   toggleMobile: () => {
-    console.log('Sidebar toggleMobile called, current state:', isMobileOpen.value)
-    console.log('Screen width:', window.innerWidth)
     isMobileOpen.value = !isMobileOpen.value
-    console.log('New state:', isMobileOpen.value)
   }
 })
 </script>

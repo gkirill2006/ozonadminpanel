@@ -98,9 +98,11 @@
 import { onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useStoresStore } from '@/stores/stores'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const storesStore = useStoresStore()
 
 const user = computed(() => authStore.user)
 
@@ -126,6 +128,7 @@ const logout = () => {
 const emit = defineEmits(['toggle-sidebar'])
 
 const goHome = () => {
+  storesStore.setActiveStoreId(null)
   router.push({ name: 'dashboard' })
 }
 </script>
