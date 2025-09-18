@@ -36,7 +36,8 @@ body {
     border-top: 1px solid var(--phoenix-secondary-bg);
     border-bottom: 0;
     z-index: 1050; /* выше сайдбара (1040) и оверлея (1029) */
+    padding-bottom: max(env(safe-area-inset-bottom), 0px);
   }
   /* ensure content is not overlapped by bottom bar */
-  .content { padding-bottom: var(--phoenix-navbar-top-height); }
+  .content { padding-bottom: calc(var(--phoenix-navbar-top-height) + env(safe-area-inset-bottom)); }
 }

@@ -203,6 +203,14 @@ class ApiService {
     return this.handleResponse(response)
   }
 
+  async getStore(storeId: string) {
+    const response = await fetch(`${API_BASE_URL}/stores/stores/${storeId}/`, {
+      method: 'GET',
+      headers: this.getHeaders()
+    })
+    return this.handleResponse(response)
+  }
+
   async createStore(storeData: any) {
     const response = await fetch(`${API_BASE_URL}/stores/stores/`, {
       method: 'POST',
@@ -214,7 +222,7 @@ class ApiService {
 
   async updateStore(storeId: string, storeData: any) {
     const response = await fetch(`${API_BASE_URL}/stores/stores/${storeId}/`, {
-      method: 'PUT',
+      method: 'PATCH',
       headers: this.getHeaders(),
       body: JSON.stringify(storeData)
     })
@@ -223,6 +231,60 @@ class ApiService {
 
   async deleteStore(storeId: string) {
     const response = await fetch(`${API_BASE_URL}/stores/stores/${storeId}/`, {
+      method: 'DELETE',
+      headers: this.getHeaders()
+    })
+    return this.handleResponse(response)
+  }
+
+  async getStoreAddresses(storeId?: string) {
+    const baseUrl = `${API_BASE_URL}/stores/store-addresses/`
+    const url = storeId ? `${baseUrl}?store=${encodeURIComponent(storeId)}` : baseUrl
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: this.getHeaders()
+    })
+    return this.handleResponse(response)
+  }
+
+  async createStoreAddress(addressData: any) {
+    const response = await fetch(`${API_BASE_URL}/stores/store-addresses/`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(addressData)
+    })
+    return this.handleResponse(response)
+  }
+
+  async deleteStoreAddress(addressId: string) {
+    const response = await fetch(`${API_BASE_URL}/stores/store-addresses/${addressId}/`, {
+      method: 'DELETE',
+      headers: this.getHeaders()
+    })
+    return this.handleResponse(response)
+  }
+
+  async getStorePhones(storeId?: string) {
+    const baseUrl = `${API_BASE_URL}/stores/store-phones/`
+    const url = storeId ? `${baseUrl}?store=${encodeURIComponent(storeId)}` : baseUrl
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: this.getHeaders()
+    })
+    return this.handleResponse(response)
+  }
+
+  async createStorePhone(phoneData: any) {
+    const response = await fetch(`${API_BASE_URL}/stores/store-phones/`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(phoneData)
+    })
+    return this.handleResponse(response)
+  }
+
+  async deleteStorePhone(phoneId: string) {
+    const response = await fetch(`${API_BASE_URL}/stores/store-phones/${phoneId}/`, {
       method: 'DELETE',
       headers: this.getHeaders()
     })

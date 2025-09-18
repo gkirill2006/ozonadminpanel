@@ -8,6 +8,7 @@
   
   <!-- Точная копия Phoenix структуры -->
   <nav class="navbar navbar-vertical navbar-expand-lg" :class="{ 'show': isMobileOpen }">
+    <!-- Используем кнопку-гамбургер из нижнего TopNavbar для закрытия -->
     <!-- На мобилке раскрываем внутренний collapse вручную -->
     <div class="navbar-collapse collapse" :class="{ show: isMobileOpen }" id="navbarVerticalCollapse">
       <!-- scrollbar removed-->
@@ -123,14 +124,39 @@
             </div>
           </li>
 
+          <template v-if="isStoreContext">
+            <li class="nav-item">
+              <p class="navbar-vertical-label">Магазин</p>
+              <hr class="navbar-vertical-line" />
+            </li>
+            <li v-for="item in storeMenuItems" :key="item.label" class="nav-item">
+              <div class="nav-item-wrapper">
+                <div class="nav-link disabled label-1 store-nav-item">
+                  <div class="d-flex align-items-center">
+                    <span class="nav-link-icon">
+                      <span :data-feather="item.icon"></span>
+                    </span>
+                    <span class="nav-link-text">{{ item.label }}</span>
+                  </div>
+                  <span class="badge bg-secondary-subtle text-secondary-emphasis ms-2">Скоро</span>
+                </div>
+              </div>
+            </li>
+          </template>
+
         </ul>
       </div>
     </div>
 
     <!-- Точная копия Phoenix footer -->
     <div class="navbar-vertical-footer">
-      <!-- Не вешаем свой click: Phoenix сам обрабатывает клик по .navbar-vertical-toggle -->
-      <button class="btn navbar-vertical-toggle border-0 fw-semibold w-100 white-space-nowrap d-flex align-items-center" :title="isCollapsed ? 'Развернуть меню' : 'Свернуть меню'">
+      <button
+        ref="collapseToggle"
+        type="button"
+        class="btn navbar-vertical-toggle border-0 fw-semibold w-100 white-space-nowrap d-flex align-items-center"
+        :title="isCollapsed ? 'Развернуть меню' : 'Свернуть меню'"
+        @click.prevent="handleCollapseToggle"
+      >
         <span class="uil uil-left-arrow-to-left fs-8"></span>
         <span class="uil uil-arrow-from-right fs-8"></span>
         <span class="navbar-vertical-footer-text ms-2">Collapsed View</span>
@@ -140,13 +166,25 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute } from 'vue-router'
+import { storeToRefs } from 'pinia'
+import { useStoresStore } from '@/stores/stores'
 
 const isMobileOpen = ref(false)
 const isCollapsed = ref(false)
 const openGroups = ref<{ [key: string]: boolean }>({ manage: true })
+const collapseToggle = ref<HTMLButtonElement | null>(null)
 const route = useRoute()
+const storesStore = useStoresStore()
+const { activeStoreId } = storeToRefs(storesStore)
+const isStoreContext = computed(() => !!activeStoreId.value && route.path.startsWith('/stores'))
+const storeMenuItems = [
+  { label: 'Настройки', icon: 'sliders' },
+  { label: 'Клиенты', icon: 'users' },
+  { label: 'Рассылки', icon: 'send' },
+  { label: 'Заказы', icon: 'shopping-cart' }
+]
 
 onMounted(() => {
   // Initialize Feather icons
@@ -179,8 +217,7 @@ onMounted(() => {
   syncGroupsWithRoute()
 
   // Слушаем событие Phoenix на самой кнопке (phoenix.js диспатчит его на элементе)
-  const toggleEl = document.querySelector('.navbar-vertical-toggle')
-  toggleEl?.addEventListener('navbar.vertical.toggle', () => {
+  collapseToggle.value?.addEventListener('navbar.vertical.toggle', () => {
     const collapsed = document.documentElement.classList.contains('navbar-vertical-collapsed')
     isCollapsed.value = collapsed
     console.log('[Sidebar] Синхронизация по событию phoenix: collapsed =', collapsed)
@@ -217,6 +254,21 @@ const toggleGroup = (key: string) => {
   openGroups.value[key] = !openGroups.value[key]
 }
 
+const handleCollapseToggle = () => {
+  const className = 'navbar-vertical-collapsed'
+  const html = document.documentElement
+  const nextState = !html.classList.contains(className)
+  html.classList.toggle(className, nextState)
+  try {
+    localStorage.setItem('phoenixIsNavbarVerticalCollapsed', nextState ? 'true' : 'false')
+  } catch (error) {
+    console.warn('Failed to persist collapsed state', error)
+  }
+  isCollapsed.value = nextState
+  const event = new CustomEvent('navbar.vertical.toggle')
+  collapseToggle.value?.dispatchEvent(event)
+}
+
 const syncGroupsWithRoute = () => {
   const p = route.path
   // Manage group contains these routes
@@ -234,6 +286,15 @@ watch(
     document.documentElement.classList.add('phoenix-hide-popouts')
     setTimeout(() => document.documentElement.classList.remove('phoenix-hide-popouts'), 250)
     // Re-render feather icons for dynamically shown elements
+    if (window.feather) {
+      window.feather.replace()
+    }
+  }
+)
+
+watch(
+  () => activeStoreId.value,
+  () => {
     if (window.feather) {
       window.feather.replace()
     }
@@ -289,6 +350,14 @@ defineExpose({
   .navbar-vertical-footer {
     display: none;
   }
+
+  /* Center menu items vertically */
+  .navbar-vertical .navbar-vertical-content {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: calc(100vh - 3.25rem); /* subtract mobile header */
+  }
 }
 
 /* Desktop styles: rely on Phoenix defaults (no overrides) */
@@ -296,4 +365,15 @@ defineExpose({
 /* Под попапы Phoenix: мгновенно скрывать после клика */
 :deep(html.phoenix-hide-popouts.navbar-vertical-collapsed) .navbar-vertical.navbar-expand-lg .nav-item-wrapper:hover .parent-wrapper.label-1,
 :deep(html.phoenix-hide-popouts.navbar-vertical-collapsed) .navbar-vertical.navbar-expand-lg .nav-item-wrapper:hover .nav-link-text-wrapper { display: none !important; }
+
+.store-nav-item {
+  justify-content: space-between;
+  opacity: 0.75;
+  cursor: default;
+}
+
+.store-nav-item .badge {
+  font-size: 0.65rem;
+  letter-spacing: 0.02em;
+}
 </style>

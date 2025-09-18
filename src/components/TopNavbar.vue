@@ -12,7 +12,7 @@
           <span class="navbar-toggle-icon"><span class="toggle-line"></span></span>
         </button>
         
-        <a class="navbar-brand me-1 me-sm-3" href="#">
+        <a class="navbar-brand me-1 me-sm-3" href="#" @click.prevent="goHome">
           <div class="d-flex align-items-center">
             <div class="d-flex align-items-center">
               <h5 class="logo-text ms-2 d-none d-sm-block">TGPoint</h5>
@@ -124,6 +124,10 @@ const logout = () => {
 }
 
 const emit = defineEmits(['toggle-sidebar'])
+
+const goHome = () => {
+  router.push({ name: 'dashboard' })
+}
 </script>
 
 <style scoped>
@@ -139,13 +143,30 @@ const emit = defineEmits(['toggle-sidebar'])
   /* Гарантируем отображение кнопки бургера на мобилке */
   .navbar-toggler { display: flex !important; }
   
+  /* Перемещаем панель вниз и держим поверх сайдбара/оверлея */
   .navbar-top {
-    z-index: 1030;
+    position: fixed !important;
+    bottom: 0 !important;
+    top: auto !important;
+    left: 0;
+    right: 0;
+    z-index: 1100; /* выше сайдбара (1040) и оверлея (1029) */
+    border-top: 1px solid var(--phoenix-secondary-bg);
+    border-bottom: 0;
+    background: var(--phoenix-body-bg);
   }
 }
 
 /* Desktop styles: rely on Phoenix theme for spacing; keep only z-index */
 @media (min-width: 769px) {
   .navbar-top { z-index: 1020; }
+}
+
+:deep(.navbar-nav.navbar-nav-icons) {
+  padding-right: 2rem;
+}
+
+:deep(.navbar-nav.navbar-nav-icons .dropdown-menu-end) {
+  transform: translateX(-3rem);
 }
 </style> 
