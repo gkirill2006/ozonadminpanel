@@ -316,6 +316,74 @@ class ApiService {
     return this.handleResponse(response)
   }
 
+  async getCatalogSections(params: { store: string; parent?: string | null } | null = null) {
+    const query = new URLSearchParams()
+    if (params?.store) query.append('store', params.store)
+    if (params?.parent !== undefined) {
+      if (params.parent === null) {
+        query.append('parent', 'null')
+      } else {
+        query.append('parent', params.parent)
+      }
+    }
+
+    const url = `${API_BASE_URL}/stores/catalog-sections/${query.toString() ? `?${query.toString()}` : ''}`
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: this.getHeaders()
+    })
+    return this.handleResponse(response)
+  }
+
+  async createCatalogSection(sectionData: any) {
+    const response = await fetch(`${API_BASE_URL}/stores/catalog-sections/`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(sectionData)
+    })
+    return this.handleResponse(response)
+  }
+
+  async getProducts(params: { store: string; section?: string | null } | null = null) {
+    const query = new URLSearchParams()
+    if (params?.store) query.append('store', params.store)
+    if (params?.section) query.append('section', params.section)
+
+    const url = `${API_BASE_URL}/stores/products/${query.toString() ? `?${query.toString()}` : ''}`
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: this.getHeaders()
+    })
+    return this.handleResponse(response)
+  }
+
+  async createProduct(productData: any) {
+    const response = await fetch(`${API_BASE_URL}/stores/products/`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(productData)
+    })
+    return this.handleResponse(response)
+  }
+
+  async createProductVariant(variantData: any) {
+    const response = await fetch(`${API_BASE_URL}/stores/product-variants/`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(variantData)
+    })
+    return this.handleResponse(response)
+  }
+
+  async createProductComponent(componentData: any) {
+    const response = await fetch(`${API_BASE_URL}/stores/product-components/`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(componentData)
+    })
+    return this.handleResponse(response)
+  }
+
   // Dashboard stats
   async getDashboardStats() {
     const response = await fetch(`${API_BASE_URL}/dashboard/stats/`, {

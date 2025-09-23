@@ -80,7 +80,7 @@
                     </router-link>
                   </li>
                   <li class="nav-item">
-                    <router-link to="/products" class="nav-link" @click="onMenuItemClick">
+                    <router-link :to="productsNavTarget" class="nav-link" @click="onMenuItemClick">
                       <div class="d-flex align-items-center">
                         <span class="nav-link-icon">
                           <span data-feather="package"></span>
@@ -185,6 +185,13 @@ const storeMenuItems = [
   { label: 'Рассылки', icon: 'send' },
   { label: 'Заказы', icon: 'shopping-cart' }
 ]
+
+const productsNavTarget = computed(() => {
+  if (activeStoreId.value) {
+    return { path: '/products', query: { store: activeStoreId.value } }
+  }
+  return '/products'
+})
 
 onMounted(() => {
   // Initialize Feather icons
