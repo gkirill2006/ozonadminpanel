@@ -12,22 +12,110 @@
       </div>
 
       <template v-if="hasStores">
-        <div class="card border-0 shadow-sm">
+        <div class="card border-0 shadow-sm dashboard-card">
           <div class="card-body p-4 p-md-5">
             <div class="mb-4">
               <h2 class="mb-2">Ваши бизнесы</h2>
               <p class="text-body-secondary mb-0">Выберите магазин, чтобы перейти к управлению.</p>
             </div>
             <div class="d-flex flex-column gap-3">
-              <button
+              <div
                 v-for="store in stores"
                 :key="store.id"
-                type="button"
-                class="business-card p-4 bg-body-secondary-subtle text-start"
-                @click="openStore(String(store.id))"
+                class="store-card"
               >
-                <h4 class="mb-1">{{ store.name || 'Без названия' }}</h4>
-              </button>
+                <div class="store-card__header">
+                  <div class="store-card__identity">
+                    <div class="store-card__avatar">
+                      {{ getStoreInitials(store.name) }}
+                    </div>
+                    <div>
+                      <h4 class="store-card__title mb-1">{{ store.name || 'Без названия' }}</h4>
+                      <p class="store-card__subtitle mb-0">{{ getBusinessTypeLabel(store.business_type) }}</p>
+                    </div>
+                  </div>
+                  <span
+                    class="store-card__status"
+                    :class="`store-card__status--${getStoreStatus(store).tone}`"
+                  >
+                    <i data-feather="check-circle" class="store-card__status-icon"></i>
+                    {{ getStoreStatus(store).label }}
+                  </span>
+                </div>
+
+                <div class="store-card__progress">
+                  <div class="store-card__progress-header">
+                    <span>Заполнено профиля</span>
+                    <span>{{ calculateProfileCompletion(store) }}%</span>
+                  </div>
+                  <div class="store-card__progress-bar">
+                    <div
+                      class="store-card__progress-fill"
+                      :style="{ width: `${calculateProfileCompletion(store)}%` }"
+                    ></div>
+                  </div>
+                </div>
+
+                <ul class="store-card__details">
+                  <li>
+                    <i data-feather="map-pin"></i>
+                    <span>{{ getPrimaryAddress(store) || 'Адрес не указан' }}</span>
+                  </li>
+                  <li>
+                    <i data-feather="phone"></i>
+                    <span>{{ getPrimaryPhone(store) || 'Телефон не указан' }}</span>
+                  </li>
+                </ul>
+
+                <div class="store-card__tariff">
+                  <div class="store-card__tariff-row">
+                    <div class="store-card__tariff-icon">
+                      <i data-feather="credit-card"></i>
+                    </div>
+                    <div>
+                      <span class="store-card__tariff-label">Тариф: {{ getPlanTitle(store) }}</span>
+                      <p class="store-card__tariff-caption mb-0">
+                        <i data-feather="calendar"></i>
+                        {{ getPlanExpirationText(store) }}
+                      </p>
+                    </div>
+                  </div>
+                  <p v-if="getPlanDaysLeft(store) !== null" class="store-card__tariff-days mb-0">
+                    Осталось {{ getPlanDaysLeft(store) }} {{ getDaysLabel(getPlanDaysLeft(store) || 0) }}
+                  </p>
+                </div>
+
+                <div class="store-card__link">
+                  <span class="store-card__link-label">Ссылка на витрину</span>
+                  <div class="store-card__link-body">
+                    <span class="store-card__link-text">{{ getStorePublicLink(store) || '—' }}</span>
+                    <button
+                      type="button"
+                      class="btn btn-link store-card__link-copy"
+                      :disabled="!getStorePublicLink(store)"
+                      @click="copyStoreLink(store)"
+                    >
+                      <i
+                        :data-feather="copiedStoreId === store.id ? 'check' : 'copy'"
+                        class="store-card__link-icon"
+                      ></i>
+                      <span class="ms-1">
+                        {{ copiedStoreId === store.id ? 'Скопировано' : 'Копировать' }}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="store-card__actions">
+                  <button
+                    type="button"
+                    class="btn btn-primary btn-lg w-100"
+                    @click="openStore(String(store.id))"
+                  >
+                    Перейти в управление
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -166,7 +254,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useStoresStore } from '@/stores/stores'
@@ -186,6 +274,8 @@ const businessTypesLoading = ref(false)
 const businessTypesError = ref<string | null>(null)
 const selectedBusinessType = ref('')
 const isNameValid = computed(() => storeNameInput.value.trim().length > 0)
+const copiedStoreId = ref<string | null>(null)
+let copyResetTimer: number | undefined
 
 const previewCategories = [
   { title: 'Магазин', description: 'Цветы, одежда, электроника', icon: 'fas fa-shopping-bag' },
@@ -197,6 +287,172 @@ const previewCategories = [
 ]
 
 const fetchStores = () => storesStore.fetchStores()
+
+const getBusinessTypeLabel = (type: unknown): string => {
+  if (!type || typeof type !== 'string') {
+    return 'Категория не выбрана'
+  }
+  const fromFetched = businessTypes.value.find((item) => item.value === type)
+  if (fromFetched) {
+    return fromFetched.label
+  }
+  const fallbackMap: Record<string, string> = {
+    goods: 'Товары',
+    services: 'Услуги'
+  }
+  return fallbackMap[type] || 'Категория не выбрана'
+}
+
+const getStoreInitials = (name: unknown): string => {
+  if (!name || typeof name !== 'string') return '—'
+  const parts = name.trim().split(/\s+/)
+  if (!parts.length) return '—'
+  const initials = parts.slice(0, 2).map((part) => part.charAt(0).toUpperCase())
+  return initials.join('') || '—'
+}
+
+const calculateProfileCompletion = (store: Record<string, any>): number => {
+  if (!store) return 0
+  const checks: Array<boolean> = [
+    Boolean(store.description),
+    Boolean(store.logo),
+    Boolean(store.banner),
+    Boolean(getPrimaryAddress(store)),
+    Boolean(getPrimaryPhone(store)),
+    Boolean(store.telegram_bot_username),
+    Boolean(store.business_type || store.custom_category)
+  ]
+  const total = checks.length
+  const filled = checks.filter(Boolean).length
+  const percent = Math.max(10, Math.round((filled / total) * 100))
+  return Math.min(100, percent)
+}
+
+const getPrimaryAddress = (store: Record<string, any>): string | null => {
+  if (!store) return null
+  const fromArray = Array.isArray(store.addresses) ? store.addresses.find(Boolean) : null
+  const addressCandidate = fromArray || store.primary_address || store.address || null
+  if (addressCandidate?.address_text && typeof addressCandidate.address_text === 'string') {
+    return addressCandidate.address_text.trim() || null
+  }
+  if (addressCandidate?.address && typeof addressCandidate.address === 'string') {
+    return addressCandidate.address.trim() || null
+  }
+  if (addressCandidate?.full_address && typeof addressCandidate.full_address === 'string') {
+    return addressCandidate.full_address.trim() || null
+  }
+  const fallback = [store.address_text, store.location, store.city, store.street_address].find(
+    (value) => typeof value === 'string' && value.trim().length
+  )
+  return fallback ? String(fallback).trim() : null
+}
+
+const getPrimaryPhone = (store: Record<string, any>): string | null => {
+  if (!store) return null
+  const fromArray = Array.isArray(store.phones) ? store.phones.find(Boolean) : null
+  const phoneCandidate = fromArray || store.primary_phone || store.phone || null
+  const candidateValues = [
+    phoneCandidate?.number,
+    phoneCandidate?.formatted,
+    store.phone,
+    store.contact_phone,
+    store.telephone,
+    Array.isArray(store.addresses) ? store.addresses.find((addr: any) => addr?.phones?.length)?.phones?.[0]?.number : null
+  ]
+  const result = candidateValues.find((value) => typeof value === 'string' && value.trim().length)
+  return result ? String(result).trim() : null
+}
+
+const getStoreStatus = (store: Record<string, any>) => {
+  if (store?.is_active === false) {
+    return { label: 'Неактивен', tone: 'warning' }
+  }
+  return { label: 'Готов', tone: 'success' }
+}
+
+const formatDate = (value: string | Date | null | undefined): string | null => {
+  if (!value) return null
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return null
+  }
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  }).format(date)
+}
+
+const getPlanTitle = (store: Record<string, any>): string => {
+  return store?.subscription?.plan?.title || store?.plan_title || 'Не выбран'
+}
+
+const getPlanExpirationText = (store: Record<string, any>): string => {
+  const expiresAt = store?.subscription?.expires_at || store?.plan_expires_at
+  const formatted = formatDate(expiresAt)
+  if (!formatted) {
+    return 'Дата окончания не указана'
+  }
+  return `До ${formatted}`
+}
+
+const getPlanDaysLeft = (store: Record<string, any>): number | null => {
+  const expiresAt = store?.subscription?.expires_at || store?.plan_expires_at
+  if (!expiresAt) return null
+  const target = new Date(expiresAt)
+  if (Number.isNaN(target.getTime())) return null
+  const now = new Date()
+  const diff = Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+  return diff >= 0 ? diff : 0
+}
+
+const getDaysLabel = (value: number): string => {
+  const absValue = Math.abs(value)
+  const lastTwo = absValue % 100
+  const lastOne = absValue % 10
+  if (lastTwo >= 11 && lastTwo <= 19) {
+    return 'дней'
+  }
+  if (lastOne === 1) return 'день'
+  if (lastOne >= 2 && lastOne <= 4) return 'дня'
+  return 'дней'
+}
+
+const getStorePublicLink = (store: Record<string, any>): string => {
+  const explicit = store?.public_url || store?.url || store?.landing_url
+  if (explicit) return explicit
+  const slug = store?.slug || store?.theme || store?.alias
+  if (slug) {
+    return `https://tgpoint.app/store/${slug}`
+  }
+  if (store?.telegram_bot_username) {
+    return `https://t.me/${store.telegram_bot_username}`
+  }
+  return ''
+}
+
+const copyStoreLink = async (store: Record<string, any>) => {
+  const link = getStorePublicLink(store)
+  if (!link) return
+  try {
+    await navigator.clipboard.writeText(link)
+    copiedStoreId.value = store.id
+    if (copyResetTimer !== undefined) {
+      window.clearTimeout(copyResetTimer)
+    }
+    copyResetTimer = window.setTimeout(() => {
+      copiedStoreId.value = null
+      if (window.feather) {
+        window.feather.replace()
+      }
+    }, 1500)
+    if (window.feather) {
+      window.feather.replace()
+    }
+  } catch (error) {
+    console.error('Clipboard copy failed', error)
+  }
+}
 
 const fetchBusinessTypes = async () => {
   businessTypesLoading.value = true
@@ -302,6 +558,12 @@ onMounted(() => {
     window.feather.replace()
   }
 })
+
+onUnmounted(() => {
+  if (copyResetTimer !== undefined) {
+    window.clearTimeout(copyResetTimer)
+  }
+})
 </script>
 
 <style scoped>
@@ -319,21 +581,292 @@ onMounted(() => {
   justify-content: center;
 }
 
-.business-card {
-  background-color: var(--phoenix-secondary-bg, rgba(0, 0, 0, 0.03));
-  display: block;
-  text-align: left;
-  cursor: pointer;
-  color: inherit;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 16px;
-  background-clip: padding-box;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+.dashboard-card {
+  border-radius: 24px;
 }
 
-.business-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+.store-card {
+  background: #fff;
+  border-radius: 24px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+  padding: 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.store-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.store-card__identity {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.store-card__avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: #fff;
+  font-weight: 700;
+  font-size: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.store-card__title {
+  font-weight: 700;
+  font-size: 1.35rem;
+  color: #0f172a;
+}
+
+.store-card__subtitle {
+  color: #64748b;
+  font-size: 0.95rem;
+}
+
+.store-card__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  padding: 0.35rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+
+.store-card__status-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.store-card__status--success {
+  background: #dcfce7;
+  color: #15803d;
+  border-color: rgba(21, 128, 61, 0.2);
+}
+
+.store-card__status--warning {
+  background: #fef3c7;
+  color: #b45309;
+  border-color: rgba(180, 83, 9, 0.2);
+}
+
+.store-card__progress {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.store-card__progress-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.95rem;
+  color: #475569;
+  font-weight: 600;
+}
+
+.store-card__progress-bar {
+  width: 100%;
+  height: 8px;
+  background: rgba(15, 23, 42, 0.08);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.store-card__progress-fill {
+  height: 100%;
+  background: #0f172a;
+  border-radius: inherit;
+  transition: width 0.3s ease;
+}
+
+.store-card__details {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  font-size: 0.95rem;
+  color: #0f172a;
+}
+
+.store-card__details li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.store-card__details i {
+  width: 18px;
+  height: 18px;
+  color: #64748b;
+}
+
+.store-card__tariff {
+  background: rgba(37, 99, 235, 0.08);
+  border-radius: 16px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.store-card__tariff-row {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.store-card__tariff-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: rgba(37, 99, 235, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #2563eb;
+}
+
+.store-card__tariff-icon i {
+  width: 18px;
+  height: 18px;
+}
+
+.store-card__tariff-label {
+  font-weight: 600;
+  color: #1d4ed8;
+  display: block;
+}
+
+.store-card__tariff-caption {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #475569;
+  font-size: 0.9rem;
+}
+
+.store-card__tariff-caption i {
+  width: 16px;
+  height: 16px;
+  color: #475569;
+}
+
+.store-card__tariff-days {
+  color: #16a34a;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.store-card__link {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.store-card__link-label {
+  font-size: 0.85rem;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.store-card__link-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background: #f8fafc;
+  border-radius: 14px;
+  padding: 0.75rem 1rem;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.store-card__link-text {
+  font-weight: 600;
+  color: #0f172a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.store-card__link-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-weight: 600;
+  color: #2563eb;
+  text-decoration: none;
+  padding: 0;
+}
+
+.store-card__link-copy:disabled {
+  color: #94a3b8;
+}
+
+.store-card__link-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.store-card__actions .btn {
+  border-radius: 14px;
+  font-weight: 600;
+  padding: 0.85rem 1.25rem;
+}
+
+.store-card__actions .btn:focus {
+  box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.2);
+}
+
+@media (max-width: 576px) {
+  .dashboard {
+    padding-top: 0px;
+  }
+
+  .dashboard-card {
+    width: 100vw;
+    margin-left: calc(50% - 50vw);
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .dashboard-card .card-body {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .store-card {
+    padding: 1.25rem;
+    border-radius: 20px;
+  }
+
+  .store-card__header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .store-card__status {
+    margin-top: 0.5rem;
+  }
+
+  .store-card__link-body {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .store-card__link-copy {
+    padding-top: 0.25rem;
+  }
 }
 
 .create-wrapper {

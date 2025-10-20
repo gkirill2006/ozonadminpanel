@@ -4,18 +4,25 @@ import { useAuthStore } from '@/stores/auth'
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) || ''
 
 class ApiService {
-  private getHeaders(): HeadersInit {
+  private getHeaders(options?: { contentType?: 'json' | 'form-data' | null }): HeadersInit {
     const authStore = useAuthStore()
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
+    const headers: Record<string, string> = {
       'Cache-Control': 'no-cache',
-      'Pragma': 'no-cache'
+      'Pragma': 'no-cache',
+      'Accept': 'application/json'
     }
-    
+    const contentType = options?.contentType === undefined ? 'json' : options.contentType
+    if (contentType === 'json') {
+      headers['Content-Type'] = 'application/json'
+    }
+    if (contentType === 'form-data') {
+      delete headers['Content-Type']
+    }
+
     if (authStore.accessToken) {
       headers['Authorization'] = `Bearer ${authStore.accessToken}`
     }
-    
+
     return headers
   }
 
@@ -357,11 +364,12 @@ class ApiService {
     return this.handleResponse(response)
   }
 
-  async createProduct(productData: any) {
+  async createProduct(productData: FormData | Record<string, any>) {
+    const isFormData = typeof FormData !== 'undefined' && productData instanceof FormData
     const response = await fetch(`${API_BASE_URL}/stores/products/`, {
       method: 'POST',
-      headers: this.getHeaders(),
-      body: JSON.stringify(productData)
+      headers: this.getHeaders(isFormData ? { contentType: 'form-data' } : undefined),
+      body: isFormData ? productData : JSON.stringify(productData)
     })
     return this.handleResponse(response)
   }

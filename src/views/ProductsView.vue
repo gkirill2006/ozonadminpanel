@@ -132,6 +132,41 @@
                 />
               </div>
 
+              <div class="col-12">
+                <label class="form-label">Изображения</label>
+                <input
+                  ref="imageInputRef"
+                  class="form-control"
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  @change="handleImageSelect"
+                />
+                <small class="text-body-secondary">До {{ MAX_PRODUCT_IMAGES }} файлов, первый будет обложкой.</small>
+
+                <div v-if="productImages.length" class="product-images-preview">
+                  <div
+                    v-for="(image, index) in productImages"
+                    :key="image.previewUrl"
+                    class="image-thumb"
+                  >
+                    <img :src="image.previewUrl" alt="Превью изображения" />
+                    <button
+                      type="button"
+                      class="btn btn-sm btn-light remove-image-btn"
+                      aria-label="Удалить изображение"
+                      @click="removeSelectedImage(index)"
+                    >
+                      ×
+                    </button>
+                  </div>
+                </div>
+                <div class="text-body-secondary small mt-1" v-else>
+                  Изображения пока не выбраны.
+                </div>
+                <div v-if="imageUploadError" class="text-danger small mt-2">{{ imageUploadError }}</div>
+              </div>
+
               <div class="col-12 col-md-6">
                 <label class="form-label">Подзаголовок</label>
                 <input v-model.trim="productForm.subtitle" type="text" class="form-control" placeholder="Например, 32 см" />
@@ -153,7 +188,7 @@
                 </select>
               </div>
               <div class="col-12 col-md-4" v-if="productForm.unit === 'custom'">
-                <label class="form-label">Своя единица</label>
+                <label class="form-label">Своя единица<span class="text-danger">*</span></label>
                 <input v-model.trim="productForm.custom_unit" type="text" class="form-control" placeholder="Например, коробка" required />
               </div>
               <div class="col-12 col-md-4">
@@ -201,7 +236,7 @@
 
             <div class="row g-3 mt-1" v-if="productForm.requires_prepayment">
               <div class="col-12 col-md-4">
-                <label class="form-label">Сумма предоплаты</label>
+                <label class="form-label">Сумма предоплаты<span class="text-danger">*</span></label>
                 <input v-model.trim="productForm.prepayment_amount" type="number" min="0" step="0.01" class="form-control" placeholder="200.00" />
               </div>
             </div>
@@ -291,41 +326,67 @@
             <p class="text-body-secondary mb-3">Добавьте первую позицию, чтобы покупатели увидели ассортимент магазина.</p>
             <button type="button" class="btn btn-primary" @click="forceOpenProductForm">Добавить товар</button>
           </div>
-          <div v-else class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
-              <thead class="bg-body-secondary">
+          <div v-else class="table-responsive scrollbar">
+            <table class="table table-sm fs-9 mb-0 product-table">
+              <thead class="bg-body-tertiary text-body-tertiary text-uppercase fw-semibold">
                 <tr>
-                  <th scope="col">Название</th>
+                  <th scope="col" class="px-2" style="width: 2.5rem;">
+                    <div class="form-check mb-0 fs-8">
+                      <input class="form-check-input" type="checkbox" disabled />
+                    </div>
+                  </th>
+                  <th scope="col" class="text-nowrap">Фото</th>
+                  <th scope="col" class="text-nowrap">Товар</th>
+                  <th scope="col" class="text-end text-nowrap">Цена</th>
                   <th scope="col" class="text-nowrap">Раздел</th>
-                  <th scope="col">Цена</th>
-                  <th scope="col">Доступность</th>
-                  <th scope="col" class="text-end">ID</th>
+                  <th scope="col" class="text-center text-nowrap">Статус</th>
+                  <th scope="col" class="text-end text-nowrap">ID</th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="product in productsDisplay" :key="product.id">
-                  <td>
-                    <div class="fw-semibold">{{ product.name }}</div>
-                    <div v-if="product.subtitle" class="text-body-secondary small">{{ product.subtitle }}</div>
-                    <div v-if="product.sku" class="text-body-tertiary small">SKU: {{ product.sku }}</div>
+                <tr v-for="product in productsDisplay" :key="product.id" class="position-static">
+                  <td class="fs-9 align-middle px-2">
+                    <div class="form-check mb-0 fs-8">
+                      <input class="form-check-input" type="checkbox" disabled />
+                    </div>
                   </td>
-                  <td>
-                    <span v-if="product.sectionDisplay">{{ product.sectionDisplay }}</span>
-                    <span v-else class="text-body-secondary">Без раздела</span>
+                  <td class="align-middle white-space-nowrap py-2">
+                    <div class="product-thumb border border-translucent rounded-2 overflow-hidden" :class="{ 'thumb-placeholder': !product.firstImageUrl }">
+                      <img v-if="product.firstImageUrl" :src="product.firstImageUrl" alt="Изображение товара" />
+                      <span v-else class="text-body-tertiary">Нет</span>
+                    </div>
                   </td>
-                  <td>
-                    <div class="fw-semibold">{{ formatPrice(product.price, product.price_currency) }}</div>
-                    <div v-if="product.compare_at_price" class="text-body-tertiary small text-decoration-line-through">
+                  <td class="product align-middle ps-4">
+                    <div class="fw-semibold text-body">{{ product.name }}</div>
+                    <div v-if="product.subtitle" class="text-body-secondary line-clamp-2 fs-9 mt-1">{{ product.subtitle }}</div>
+                    <div v-if="product.sku" class="text-body-quaternary fs-10 mt-1">SKU: {{ product.sku }}</div>
+                  </td>
+                  <td class="price align-middle text-end fw-semibold text-body ps-4">
+                    {{ formatPrice(product.price, product.price_currency) }}
+                    <div v-if="product.compare_at_price" class="text-body-quaternary fs-10 text-decoration-line-through mt-1">
                       {{ formatPrice(product.compare_at_price, product.price_currency) }}
                     </div>
                   </td>
-                  <td>
-                    <span v-if="product.is_available" class="badge bg-success-subtle text-success">В наличии</span>
-                    <span v-else class="badge bg-secondary-subtle text-secondary">Нет в наличии</span>
-                    <span v-if="product.allow_preorders" class="badge bg-primary-subtle text-primary ms-2">Предзаказ</span>
+                  <td class="category align-middle text-body-secondary ps-4">
+                    <span v-if="product.sectionDisplay">{{ product.sectionDisplay }}</span>
+                    <span v-else class="text-body-tertiary">Без раздела</span>
                   </td>
-                  <td class="text-end">
-                    <code class="small">{{ product.id }}</code>
+                  <td class="align-middle text-center ps-4">
+                    <span
+                      v-if="product.is_available"
+                      class="badge badge-phoenix badge-phoenix-success-subtle align-middle"
+                    >В наличии</span>
+                    <span
+                      v-else
+                      class="badge badge-phoenix badge-phoenix-secondary-subtle align-middle"
+                    >Нет на складе</span>
+                    <span
+                      v-if="product.allow_preorders"
+                      class="badge badge-phoenix badge-phoenix-primary-subtle align-middle ms-2"
+                    >Предзаказ</span>
+                  </td>
+                  <td class="align-middle text-end pe-1 ps-4">
+                    <code class="text-body-tertiary">{{ product.id }}</code>
                   </td>
                 </tr>
               </tbody>
@@ -338,7 +399,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
 import { useStoresStore } from '@/stores/stores'
@@ -351,6 +412,13 @@ interface CatalogSection {
   description?: string | null
 }
 
+interface ProductImageInfo {
+  id: number | string
+  url: string
+  alt_text?: string | null
+  position?: number | null
+}
+
 interface ProductListItem {
   id: number | string
   name: string
@@ -358,11 +426,32 @@ interface ProductListItem {
   price: string
   compare_at_price?: string | null
   price_currency?: string | null
-  section?: number | null
+  section?: number | null | string
   section_name?: string | null
+  existing_images?: ProductImageInfo[]
   is_available?: boolean
   allow_preorders?: boolean
   sku?: string | null
+  description?: string | null
+  unit?: string | null
+  custom_unit?: string | null
+  stock_quantity?: string | number | null
+  stock_unit?: string | null
+  preorder_start?: string | null
+  preorder_end?: string | null
+  availability_date?: string | null
+  requires_prepayment?: boolean
+  prepayment_amount?: string | number | null
+}
+
+interface ProductDisplayItem extends ProductListItem {
+  sectionDisplay: string | null
+  firstImageUrl: string | null
+}
+
+interface SelectedImage {
+  file: File
+  previewUrl: string
 }
 
 const router = useRouter()
@@ -378,6 +467,9 @@ const productsError = ref<string | null>(null)
 const sections = ref<CatalogSection[]>([])
 const sectionsLoading = ref(false)
 const sectionsError = ref<string | null>(null)
+const imageInputRef = ref<HTMLInputElement | null>(null)
+const productImages = ref<SelectedImage[]>([])
+const imageUploadError = ref<string | null>(null)
 const showProductForm = ref(false)
 const showSectionForm = ref(false)
 const isCreatingProduct = ref(false)
@@ -386,9 +478,13 @@ const productCreateSuccess = ref<string | null>(null)
 const sectionCreating = ref(false)
 const sectionCreateError = ref<string | null>(null)
 const sectionCreateSuccess = ref<string | null>(null)
+const isEditingProduct = ref(false)
+const editingProductId = ref<string | number | null>(null)
+const editingExistingImages = ref<ProductImageInfo[]>([])
 
 let productsRequestToken = 0
 let sectionsRequestToken = 0
+const MAX_PRODUCT_IMAGES = 6
 
 const unitOptions = [
   { value: 'piece', label: 'Шт.' },
@@ -455,7 +551,7 @@ const sectionNameMap = computed<Record<number, string>>(() => {
   }, {} as Record<number, string>)
 })
 
-const productsDisplay = computed(() => {
+const productsDisplay = computed<ProductDisplayItem[]>(() => {
   return products.value.map((product) => {
     const rawId = product.section
     const sectionId = typeof rawId === 'number' ? rawId : Number(rawId)
@@ -465,20 +561,168 @@ const productsDisplay = computed(() => {
         ? null
         : sectionNameMap.value[sectionId] ?? null
 
+    const firstImageUrl = Array.isArray(product.existing_images) && product.existing_images.length
+      ? normalizeImageUrl(product.existing_images[0]?.url || null)
+      : null
+
     return {
       ...product,
-      sectionDisplay
+      sectionDisplay,
+      firstImageUrl
     }
   })
 })
 
 const isProductFormValid = computed(() => {
-  if (!productForm.name.trim()) return false
-  if (!productForm.price.trim()) return false
-  if (productForm.unit === 'custom' && !productForm.custom_unit.trim()) return false
-  if (productForm.requires_prepayment && !productForm.prepayment_amount.trim()) return false
+  const name = typeof productForm.name === 'string' ? productForm.name : String(productForm.name ?? '')
+  const priceValue = productForm.price
+  const price = typeof priceValue === 'number' ? String(priceValue) : String(priceValue ?? '')
+  const customUnit = typeof productForm.custom_unit === 'string'
+    ? productForm.custom_unit
+    : String(productForm.custom_unit ?? '')
+  const prepayment = typeof productForm.prepayment_amount === 'string'
+    ? productForm.prepayment_amount
+    : String(productForm.prepayment_amount ?? '')
+
+  if (!name.trim()) return false
+  if (!price.trim()) return false
+  if (productForm.unit === 'custom' && !customUnit.trim()) return false
+  if (productForm.requires_prepayment && !prepayment.trim()) return false
   return true
 })
+
+const normalizeImageUrl = (value: string | null | undefined) => {
+  if (!value) return null
+  try {
+    const parsed = new URL(value, window.location.origin)
+    const encodedPath = parsed.pathname
+      .split('/')
+      .map((segment) => encodeURIComponent(decodeURIComponent(segment)))
+      .join('/')
+    parsed.pathname = encodedPath
+    return parsed.toString()
+  } catch (error) {
+    try {
+      const parsedRelative = value.startsWith('/') ? new URL(value, window.location.origin) : new URL(`${window.location.origin.replace(/\/$/, '')}/${value.replace(/^\//, '')}`)
+      const encodedPath = parsedRelative.pathname
+        .split('/')
+        .map((segment) => encodeURIComponent(decodeURIComponent(segment)))
+        .join('/')
+      parsedRelative.pathname = encodedPath
+      return parsedRelative.toString()
+    } catch {
+      return value.replace(/ /g, '%20')
+    }
+  }
+}
+
+const formatIsoForInput = (value: string | null | undefined) => {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const pad = (num: number) => num.toString().padStart(2, '0')
+  const year = date.getFullYear()
+  const month = pad(date.getMonth() + 1)
+  const day = pad(date.getDate())
+  const hours = pad(date.getHours())
+  const minutes = pad(date.getMinutes())
+  return `${year}-${month}-${day}T${hours}:${minutes}`
+}
+
+const toStringValue = (value: unknown) => {
+  if (value === null || value === undefined) return ''
+  return typeof value === 'string' ? value : String(value)
+}
+
+const populateProductForm = (product: ProductListItem) => {
+  productForm.name = product.name ?? ''
+  productForm.price = toStringValue(product.price)
+  productForm.section = product.section ? String(product.section) : ''
+  productForm.subtitle = product.subtitle ?? ''
+  productForm.description = product.description ?? ''
+  productForm.sku = product.sku ?? ''
+  productForm.unit = product.unit ?? 'piece'
+  productForm.custom_unit = product.custom_unit ?? ''
+  productForm.compare_at_price = toStringValue(product.compare_at_price)
+  productForm.price_currency = product.price_currency ?? ''
+  productForm.stock_quantity = toStringValue(product.stock_quantity)
+  productForm.stock_unit = product.stock_unit ?? ''
+  productForm.is_available = product.is_available ?? true
+  productForm.allow_preorders = product.allow_preorders ?? false
+  productForm.preorder_start = formatIsoForInput(product.preorder_start)
+  productForm.preorder_end = formatIsoForInput(product.preorder_end)
+  productForm.availability_date = formatIsoForInput(product.availability_date)
+  productForm.requires_prepayment = product.requires_prepayment ?? false
+  productForm.prepayment_amount = toStringValue(product.prepayment_amount)
+}
+
+const existingImagesPreview = computed(() => {
+  return editingExistingImages.value.map((image) => ({
+    ...image,
+    url: normalizeImageUrl(image.url)
+  }))
+})
+
+const clearSelectedImages = () => {
+  productImages.value.forEach((item) => URL.revokeObjectURL(item.previewUrl))
+  productImages.value = []
+  if (imageInputRef.value) {
+    imageInputRef.value.value = ''
+  }
+  imageUploadError.value = null
+}
+
+const handleImageSelect = (event: Event) => {
+  const target = event.target as HTMLInputElement | null
+  const files = Array.from(target?.files ?? [])
+  if (!files.length) return
+
+  let availableSlots = MAX_PRODUCT_IMAGES - productImages.value.length
+  let limitSkipped = 0
+  let typeSkipped = 0
+
+  files.forEach((file) => {
+    if (availableSlots <= 0) {
+      limitSkipped += 1
+      return
+    }
+
+    if (!file.type.startsWith('image/')) {
+      typeSkipped += 1
+      return
+    }
+
+    const previewUrl = URL.createObjectURL(file)
+    productImages.value.push({ file, previewUrl })
+    availableSlots -= 1
+  })
+
+  if (limitSkipped || typeSkipped) {
+    const parts: string[] = []
+    if (limitSkipped) {
+      parts.push(`ограничение в ${MAX_PRODUCT_IMAGES} изображений`)
+    }
+    if (typeSkipped) {
+      parts.push('поддерживаются только файлы изображений')
+    }
+    imageUploadError.value = `Некоторые файлы не были добавлены: ${parts.join('; ')}.`
+  } else {
+    imageUploadError.value = null
+  }
+
+  if (target) {
+    target.value = ''
+  }
+}
+
+const removeSelectedImage = (index: number) => {
+  if (index < 0 || index >= productImages.value.length) return
+  const [removed] = productImages.value.splice(index, 1)
+  if (removed) {
+    URL.revokeObjectURL(removed.previewUrl)
+  }
+  imageUploadError.value = null
+}
 
 const ensureSelectedStore = (): string | null => {
   const queryStore = typeof route.query.store === 'string' ? route.query.store : null
@@ -573,7 +817,8 @@ const fetchProducts = async (storeId: string) => {
       ? list.map((item: any) => ({
           ...item,
           section_name: item.section?.name || item.section?.title || item.section_name || null,
-          section: typeof item.section === 'object' ? item.section?.id ?? null : item.section ?? null
+          section: typeof item.section === 'object' ? item.section?.id ?? null : item.section ?? null,
+          existing_images: Array.isArray(item.existing_images) ? item.existing_images : []
         }))
       : []
     if (token === productsRequestToken) {
@@ -621,14 +866,21 @@ const refreshProducts = () => {
 }
 
 const toggleProductForm = () => {
-  showProductForm.value = !showProductForm.value
-  if (!showProductForm.value) {
+  if (showProductForm.value) {
     resetProductForm()
+    return
   }
+  productCreateError.value = null
+  productCreateSuccess.value = null
+  imageUploadError.value = null
+  showProductForm.value = true
 }
 
 const forceOpenProductForm = () => {
   if (!showProductForm.value) {
+    productCreateError.value = null
+    productCreateSuccess.value = null
+    imageUploadError.value = null
     showProductForm.value = true
   }
 }
@@ -655,6 +907,8 @@ const resetProductForm = () => {
   productForm.prepayment_amount = ''
   productCreateError.value = null
   productCreateSuccess.value = null
+  imageUploadError.value = null
+  clearSelectedImages()
   isCreatingProduct.value = false
   showProductForm.value = false
 }
@@ -665,42 +919,77 @@ const submitProduct = async () => {
   productCreateError.value = null
   productCreateSuccess.value = null
 
-  const payload: Record<string, any> = {
-    store: localSelectedStoreId.value,
-    name: productForm.name.trim(),
-    price: productForm.price.trim(),
-    is_available: productForm.is_available,
-    allow_preorders: productForm.allow_preorders,
-    requires_prepayment: productForm.requires_prepayment
+  const formData = new FormData()
+  const toIsoString = (value: string) => {
+    if (!value) return null
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return null
+    return date.toISOString()
   }
 
-  if (productForm.section) payload.section = Number(productForm.section)
-  if (productForm.subtitle.trim()) payload.subtitle = productForm.subtitle.trim()
-  if (productForm.description.trim()) payload.description = productForm.description.trim()
-  if (productForm.sku.trim()) payload.sku = productForm.sku.trim()
-  if (productForm.unit) payload.unit = productForm.unit
-  if (productForm.unit === 'custom' && productForm.custom_unit.trim()) payload.custom_unit = productForm.custom_unit.trim()
-  if (productForm.compare_at_price.trim()) payload.compare_at_price = productForm.compare_at_price.trim()
-  if (productForm.price_currency.trim()) payload.price_currency = productForm.price_currency.trim().toUpperCase()
-  if (productForm.stock_quantity.trim()) payload.stock_quantity = productForm.stock_quantity.trim()
-  if (productForm.stock_unit.trim()) payload.stock_unit = productForm.stock_unit.trim()
-  if (productForm.preorder_start) payload.preorder_start = new Date(productForm.preorder_start).toISOString()
-  if (productForm.preorder_end) payload.preorder_end = new Date(productForm.preorder_end).toISOString()
-  if (productForm.availability_date) payload.availability_date = new Date(productForm.availability_date).toISOString()
-  if (productForm.requires_prepayment && productForm.prepayment_amount.trim()) payload.prepayment_amount = productForm.prepayment_amount.trim()
+  const toStringValue = (value: unknown) => {
+    if (value === null || value === undefined) return ''
+    return typeof value === 'string' ? value : String(value)
+  }
+
+  const appendIfNotEmpty = (key: string, value: unknown) => {
+    const stringValue = toStringValue(value).trim()
+    if (stringValue) {
+      formData.append(key, stringValue)
+    }
+  }
+
+  formData.append('store', localSelectedStoreId.value)
+  formData.append('name', toStringValue(productForm.name).trim())
+  formData.append('price', toStringValue(productForm.price).trim())
+  formData.append('is_available', productForm.is_available ? 'true' : 'false')
+  formData.append('allow_preorders', productForm.allow_preorders ? 'true' : 'false')
+  formData.append('requires_prepayment', productForm.requires_prepayment ? 'true' : 'false')
+
+  if (productForm.section) formData.append('section', toStringValue(productForm.section))
+  appendIfNotEmpty('subtitle', productForm.subtitle)
+  appendIfNotEmpty('description', productForm.description)
+  appendIfNotEmpty('sku', productForm.sku)
+  if (productForm.unit) formData.append('unit', productForm.unit)
+  if (productForm.unit === 'custom') {
+    appendIfNotEmpty('custom_unit', productForm.custom_unit)
+  }
+  appendIfNotEmpty('compare_at_price', productForm.compare_at_price)
+  const currency = toStringValue(productForm.price_currency).trim()
+  if (currency) {
+    formData.append('price_currency', currency.toUpperCase())
+  }
+  appendIfNotEmpty('stock_quantity', productForm.stock_quantity)
+  appendIfNotEmpty('stock_unit', productForm.stock_unit)
+
+  const preorderStartIso = toIsoString(productForm.preorder_start)
+  const preorderEndIso = toIsoString(productForm.preorder_end)
+  const availabilityIso = toIsoString(productForm.availability_date)
+
+  if (preorderStartIso) formData.append('preorder_start', preorderStartIso)
+  if (preorderEndIso) formData.append('preorder_end', preorderEndIso)
+  if (availabilityIso) formData.append('availability_date', availabilityIso)
+
+  if (productForm.requires_prepayment) {
+    appendIfNotEmpty('prepayment_amount', productForm.prepayment_amount)
+  }
+
+  productImages.value.forEach((item) => {
+    formData.append('images', item.file)
+  })
 
   try {
-    const created = await apiService.createProduct(payload)
+    const created = await apiService.createProduct(formData)
     productCreateSuccess.value = 'Товар создан'
     if (created?.id) {
       await fetchProducts(localSelectedStoreId.value)
     }
-    isCreatingProduct.value = false
     setTimeout(() => {
       resetProductForm()
     }, 1200)
   } catch (error: unknown) {
     productCreateError.value = error instanceof Error ? error.message : 'Не удалось создать товар'
+  } finally {
     isCreatingProduct.value = false
   }
 }
@@ -791,6 +1080,10 @@ onMounted(async () => {
   const initialStoreId = ensureSelectedStore()
   await handleStoreChange(initialStoreId)
 })
+
+onBeforeUnmount(() => {
+  clearSelectedImages()
+})
 </script>
 
 <style scoped>
@@ -807,6 +1100,71 @@ onMounted(async () => {
 .product-form .form-select,
 .product-form .form-control {
   min-height: 38px;
+}
+
+.product-images-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.image-thumb {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+  background: #f8f9fa;
+}
+
+.image-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.remove-image-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  line-height: 1;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.product-table thead th {
+  font-size: 0.65rem;
+  letter-spacing: 0.04em;
+}
+
+.product-thumb {
+  width: 53px;
+  height: 53px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f8f9fa;
+}
+
+.product-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.product-thumb.thumb-placeholder {
+  background: #f1f3f5;
+  color: var(--phoenix-body-color-secondary, #6c757d);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
 }
 
 .table-responsive {

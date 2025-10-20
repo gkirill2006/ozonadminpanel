@@ -3,8 +3,7 @@ import { useAuthStore } from '@/stores/auth'
 
 export function initTelegramUI(): void {
   try {
-    const w = window as any
-    const tg = w?.Telegram?.WebApp
+    const tg = window.Telegram?.WebApp
     if (!tg) return
     tg.ready && tg.ready()
     tg.expand && tg.expand()
@@ -18,8 +17,7 @@ export function initTelegramUI(): void {
 
 export async function tryTelegramAutoLogin(): Promise<boolean> {
   try {
-    const w = window as any
-    const tg = w?.Telegram?.WebApp
+    const tg = window.Telegram?.WebApp
     await apiService.miniappLog('tryTelegramAutoLogin start')
     if (!tg) {
       await apiService.miniappLog('Telegram.WebApp not found', 'warn')
