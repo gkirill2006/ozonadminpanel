@@ -12,137 +12,170 @@
     <!-- На мобилке раскрываем внутренний collapse вручную -->
     <div class="navbar-collapse collapse" :class="{ show: isMobileOpen }" id="navbarVerticalCollapse">
       <!-- scrollbar removed-->
-      <div class="navbar-vertical-content">
-        <ul class="navbar-nav flex-column" id="navbarVerticalNav">
+      <div class="navbar-vertical-content" :style="navContentStyle">
+        <ul class="navbar-nav flex-column sidebar-nav" id="navbarVerticalNav">
           
-          <!-- Группа: Главная (аналог Home в Phoenix) -->
-          <li class="nav-item">
-            <!-- parent pages-->
-            <div class="nav-item-wrapper">
-              <a class="nav-link dropdown-indicator label-1" href="#nv-home" role="button" data-bs-toggle="collapse" aria-controls="nv-home" :aria-expanded="true">
-                <div class="d-flex align-items-center">
-                  <div class="dropdown-indicator-icon-wrapper">
-                    <span class="fas fa-caret-right dropdown-indicator-icon"></span>
-                  </div>
-                  <span class="nav-link-icon">
-                    <span data-feather="pie-chart"></span>
-                  </span>
-                  <span class="nav-link-text">Dashboard</span>
-                </div>
-              </a>
-              <div class="parent-wrapper label-1">
-                <ul class="nav collapse parent show" data-bs-parent="#navbarVerticalCollapse" id="nv-home">
-                  <li class="collapsed-nav-item-title d-none">Dashboard</li>
-                  <li class="nav-item">
-                    <router-link class="nav-link active" to="/" @click="onMenuItemClick">
-                      <div class="d-flex align-items-center">
-                        <span class="nav-link-text">Обзор</span>
-                      </div>
-                    </router-link>
-                  </li>
-                </ul>
-              </div>
-            </div>
-          </li>
-
-          <!-- Лейбл -->
-          <li class="nav-item">
-            <p class="navbar-vertical-label">Управление</p>
-            <hr class="navbar-vertical-line" />
-          </li>
-
-          <!-- Группа: Управление (Phoenix-style) -->
-          <li class="nav-item">
-            <!-- parent pages-->
-            <div class="nav-item-wrapper">
-              <a class="nav-link dropdown-indicator label-1" href="#nv-manage" role="button" data-bs-toggle="collapse" aria-controls="nv-manage" :aria-expanded="openGroups.manage ? 'true' : 'false'" @click.prevent="toggleGroup('manage')">
-                <div class="d-flex align-items-center">
-                  <div class="dropdown-indicator-icon-wrapper">
-                    <span class="fas fa-caret-right dropdown-indicator-icon" :class="{ 'fa-rotate-90': openGroups.manage }"></span>
-                  </div>
-                  <span class="nav-link-icon">
-                    <span data-feather="settings"></span>
-                  </span>
-                  <span class="nav-link-text">Управление</span>
-                </div>
-              </a>
-              <div class="parent-wrapper label-1">
-                <ul class="nav collapse parent" :class="{ show: openGroups.manage }" id="nv-manage" data-bs-parent="#navbarVerticalCollapse">
-                  <li class="collapsed-nav-item-title d-none">Управление</li>
-                  <li class="nav-item">
-                    <router-link to="/stores" class="nav-link" @click="onMenuItemClick">
-                      <div class="d-flex align-items-center">
-                        <span class="nav-link-icon">
-                          <span data-feather="shopping-bag"></span>
-                        </span>
-                        <span class="nav-link-text">Магазины</span>
-                      </div>
-                    </router-link>
-                  </li>
-                  <li class="nav-item">
-                    <router-link :to="productsNavTarget" class="nav-link" @click="onMenuItemClick">
-                      <div class="d-flex align-items-center">
-                        <span class="nav-link-icon">
-                          <span data-feather="package"></span>
-                        </span>
-                        <span class="nav-link-text">Товары</span>
-                      </div>
-                    </router-link>
-                  </li>
-                  <li class="nav-item">
-                    <router-link to="/subscription" class="nav-link" @click="onMenuItemClick">
-                      <div class="d-flex align-items-center">
-                        <span class="nav-link-icon">
-                          <span data-feather="credit-card"></span>
-                        </span>
-                        <span class="nav-link-text">Подписки</span>
-                      </div>
-                    </router-link>
-                  </li>
-                  <li class="nav-item">
-                    <router-link to="/users" class="nav-link" @click="onMenuItemClick">
-                      <div class="d-flex align-items-center">
-                        <span class="nav-link-icon">
-                          <span data-feather="users"></span>
-                        </span>
-                        <span class="nav-link-text">Пользователи</span>
-                      </div>
-                    </router-link>
-                  </li>
-                  <li class="nav-item">
-                    <router-link to="/settings" class="nav-link" @click="onMenuItemClick">
-                      <div class="d-flex align-items-center">
-                        <span class="nav-link-icon">
-                          <span data-feather="sliders"></span>
-                        </span>
-                        <span class="nav-link-text">Настройки</span>
-                      </div>
-                    </router-link>
-                  </li>
-                </ul>
-              </div>
-            </div>
-          </li>
-
-          <template v-if="isStoreContext">
+          <template v-if="!isStoreContext">
+            <!-- Главная -->
             <li class="nav-item">
-              <p class="navbar-vertical-label">Магазин</p>
-              <hr class="navbar-vertical-line" />
-            </li>
-            <li v-for="item in storeMenuItems" :key="item.label" class="nav-item">
               <div class="nav-item-wrapper">
-                <div class="nav-link disabled label-1 store-nav-item">
+                <router-link
+                  to="/"
+                  class="nav-link label-1"
+                  :class="{ active: route.path === '/' }"
+                  @click="onMenuItemClick"
+                >
                   <div class="d-flex align-items-center">
                     <span class="nav-link-icon">
-                      <span :data-feather="item.icon"></span>
+                      <span data-feather="pie-chart"></span>
                     </span>
-                    <span class="nav-link-text">{{ item.label }}</span>
+                    <span class="nav-link-text">Главная</span>
                   </div>
-                  <span class="badge bg-secondary-subtle text-secondary-emphasis ms-2">Скоро</span>
+                </router-link>
+              </div>
+            </li>
+
+            <!-- Лейбл -->
+            <li class="nav-item">
+              <p class="navbar-vertical-label">Управление</p>
+              <hr class="navbar-vertical-line" />
+            </li>
+
+            <!-- Группа: Управление (Phoenix-style) -->
+            <li class="nav-item">
+              <div class="nav-item-wrapper">
+                <a class="nav-link dropdown-indicator label-1" href="#nv-manage" role="button" data-bs-toggle="collapse" aria-controls="nv-manage" :aria-expanded="openGroups.manage ? 'true' : 'false'" @click.prevent="toggleGroup('manage')">
+                  <div class="d-flex align-items-center">
+                    <div class="dropdown-indicator-icon-wrapper">
+                      <span class="fas fa-caret-right dropdown-indicator-icon" :class="{ 'fa-rotate-90': openGroups.manage }"></span>
+                    </div>
+                    <span class="nav-link-icon">
+                      <span data-feather="settings"></span>
+                    </span>
+                    <span class="nav-link-text">Управление</span>
+                  </div>
+                </a>
+                <div class="parent-wrapper label-1">
+                  <ul class="nav collapse parent" :class="{ show: openGroups.manage }" id="nv-manage" data-bs-parent="#navbarVerticalCollapse">
+                    <li class="collapsed-nav-item-title d-none">Управление</li>
+                    <li class="nav-item">
+                      <router-link to="/stores" class="nav-link" @click="onMenuItemClick">
+                        <div class="d-flex align-items-center">
+                          <span class="nav-link-icon">
+                            <span data-feather="shopping-bag"></span>
+                          </span>
+                          <span class="nav-link-text">Магазины</span>
+                        </div>
+                      </router-link>
+                    </li>
+                    <li class="nav-item">
+                      <router-link :to="productsNavTarget" class="nav-link" @click="onMenuItemClick">
+                        <div class="d-flex align-items-center">
+                          <span class="nav-link-icon">
+                            <span data-feather="package"></span>
+                          </span>
+                          <span class="nav-link-text">Товары</span>
+                        </div>
+                      </router-link>
+                    </li>
+                    <li class="nav-item">
+                      <router-link to="/subscription" class="nav-link" @click="onMenuItemClick">
+                        <div class="d-flex align-items-center">
+                          <span class="nav-link-icon">
+                            <span data-feather="credit-card"></span>
+                          </span>
+                          <span class="nav-link-text">Подписки</span>
+                        </div>
+                      </router-link>
+                    </li>
+                    <li class="nav-item">
+                      <router-link to="/users" class="nav-link" @click="onMenuItemClick">
+                        <div class="d-flex align-items-center">
+                          <span class="nav-link-icon">
+                            <span data-feather="users"></span>
+                          </span>
+                          <span class="nav-link-text">Пользователи</span>
+                        </div>
+                      </router-link>
+                    </li>
+                    <li class="nav-item">
+                      <router-link to="/settings" class="nav-link" @click="onMenuItemClick">
+                        <div class="d-flex align-items-center">
+                          <span class="nav-link-icon">
+                            <span data-feather="sliders"></span>
+                          </span>
+                          <span class="nav-link-text">Настройки</span>
+                        </div>
+                      </router-link>
+                    </li>
+                  </ul>
                 </div>
               </div>
             </li>
           </template>
+
+          <template v-else>
+            <li class="nav-item">
+              <div class="nav-item-wrapper">
+                <router-link
+                  v-if="storeNavPrimaryItem && storeNavPrimaryItem.to"
+                  class="nav-link label-1"
+                  :class="{ active: isNavItemActive(storeNavPrimaryItem) }"
+                  :to="storeNavPrimaryItem.to"
+                  @click="onMenuItemClick"
+                >
+                  <div class="d-flex align-items-center">
+                    <span v-if="storeNavPrimaryItem.icon" class="nav-link-icon">
+                      <span :data-feather="storeNavPrimaryItem.icon"></span>
+                    </span>
+                    <span class="nav-link-text" :class="{ 'ms-2': storeNavPrimaryItem.icon }">{{ storeNavPrimaryItem.label }}</span>
+                  </div>
+                </router-link>
+              </div>
+            </li>
+            <li class="nav-item">
+              <p class="navbar-vertical-label">Магазин</p>
+              <hr class="navbar-vertical-line" />
+            </li>
+            <li v-for="item in storeNavSecondaryItems" :key="item.key" class="nav-item">
+              <div class="nav-item-wrapper">
+                <div class="nav-item-wrapper-inner">
+                  <router-link
+                    v-if="item.to && !item.disabled"
+                    class="nav-link label-1"
+                    :class="{ active: isNavItemActive(item) }"
+                    :to="item.to"
+                    @click="onMenuItemClick"
+                  >
+                    <div class="d-flex align-items-center">
+                    <span v-if="item.icon" class="nav-link-icon">
+                      <span :data-feather="item.icon"></span>
+                    </span>
+                    <span class="nav-link-text" :class="{ 'ms-2': item.icon }">{{ item.label }}</span>
+                    </div>
+                  </router-link>
+                  <div v-else class="nav-link label-1 store-nav-item disabled">
+                    <div class="d-flex align-items-center">
+                      <span class="nav-link-text">{{ item.label }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </li>
+          </template>
+
+          <li class="nav-item sidebar-settings-item">
+            <div class="nav-item-wrapper">
+              <button type="button" class="nav-link label-1 sidebar-settings-link" disabled>
+                <div class="d-flex align-items-center">
+                  <span class="nav-link-icon">
+                    <span data-feather="settings"></span>
+                  </span>
+                  <span class="nav-link-text">Настройки</span>
+                </div>
+              </button>
+            </div>
+          </li>
 
         </ul>
       </div>
@@ -166,8 +199,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch, computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
+import { useRoute, useRouter, RouteLocationRaw } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useStoresStore } from '@/stores/stores'
 
@@ -176,15 +209,45 @@ const isCollapsed = ref(false)
 const openGroups = ref<{ [key: string]: boolean }>({ manage: true })
 const collapseToggle = ref<HTMLButtonElement | null>(null)
 const route = useRoute()
+const router = useRouter()
 const storesStore = useStoresStore()
 const { activeStoreId } = storeToRefs(storesStore)
-const isStoreContext = computed(() => !!activeStoreId.value && route.path.startsWith('/stores'))
-const storeMenuItems = [
-  { label: 'Настройки', icon: 'sliders' },
-  { label: 'Клиенты', icon: 'users' },
-  { label: 'Рассылки', icon: 'send' },
-  { label: 'Заказы', icon: 'shopping-cart' }
-]
+const storeContextPaths = ['/stores', '/products']
+const isStoreContext = computed(() => {
+  if (!activeStoreId.value) return false
+  return storeContextPaths.some(prefix => route.path.startsWith(prefix))
+})
+const isTelegramApp = ref(false)
+const viewportWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 0)
+
+const withStoreQuery = (path: string): RouteLocationRaw => {
+  if (activeStoreId.value) {
+    return { path, query: { store: activeStoreId.value } }
+  }
+  return path
+}
+
+const storeNavItems = computed(() => [
+  { key: 'store-home', label: 'Главная', icon: 'home', to: '/' },
+  { key: 'store-products', label: 'Товары', icon: 'shopping-bag', to: withStoreQuery('/products'), matchPrefix: '/products' },
+  { key: 'store-orders', label: '📦 Заказы', disabled: true },
+  { key: 'store-users', label: '👥 Пользователи', disabled: true },
+  { key: 'store-appearance', label: '🖼 Внешний вид', disabled: true },
+  { key: 'store-mailing', label: 'Рассылки', disabled: true },
+  { key: 'store-loyalty', label: 'Программа лояльности', disabled: true },
+  { key: 'store-settings', label: '⚙️ Настройки бизнеса', icon: 'sliders', to: withStoreQuery('/stores'), matchPrefix: '/stores' }
+])
+
+const storeNavPrimaryItem = computed(() => storeNavItems.value[0])
+const storeNavSecondaryItems = computed(() => storeNavItems.value.slice(1))
+
+const navContentStyle = computed(() => {
+  if (!isTelegramApp.value) return {}
+  const offset = viewportWidth.value >= 992 ? 22 : 172
+  return {
+    paddingTop: `calc(env(safe-area-inset-top, 0px) + ${offset}px)`
+  }
+})
 
 const productsNavTarget = computed(() => {
   if (activeStoreId.value) {
@@ -193,10 +256,30 @@ const productsNavTarget = computed(() => {
   return '/products'
 })
 
+const isNavItemActive = (item: any) => {
+  if (!item.to) return false
+  if (item.matchPrefix) {
+    return route.path.startsWith(item.matchPrefix)
+  }
+  const resolved = router.resolve(item.to)
+  return route.path === resolved.path
+}
+
 onMounted(() => {
   // Initialize Feather icons
   if (window.feather) {
     window.feather.replace()
+  }
+
+  isTelegramApp.value = document.body.classList.contains('tg-webapp') || document.documentElement.classList.contains('tg-webapp')
+
+  if (typeof window !== 'undefined') {
+    const updateWidth = () => {
+      viewportWidth.value = window.innerWidth
+    }
+    updateWidth()
+    window.addEventListener('resize', updateWidth)
+    onUnmounted(() => window.removeEventListener('resize', updateWidth))
   }
 
   // Initialize collapsed state from persisted config (Phoenix behavior)
@@ -286,6 +369,9 @@ watch(
   () => {
     closeMobile()
     syncGroupsWithRoute()
+    if (!isTelegramApp.value) {
+      isTelegramApp.value = document.body.classList.contains('tg-webapp') || document.documentElement.classList.contains('tg-webapp')
+    }
     // Спрячем popouts сразу после смены маршрута
     document.documentElement.classList.add('phoenix-hide-popouts')
     setTimeout(() => document.documentElement.classList.remove('phoenix-hide-popouts'), 250)
@@ -356,8 +442,8 @@ defineExpose({
   .navbar-vertical .navbar-vertical-content {
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    min-height: calc(100vh - 3.25rem); /* subtract mobile header */
+    flex: 1 1 auto;
+    min-height: calc(100vh - 3.25rem);
   }
 }
 
@@ -373,8 +459,58 @@ defineExpose({
   cursor: default;
 }
 
-.store-nav-item .badge {
-  font-size: 0.65rem;
-  letter-spacing: 0.02em;
+.store-nav-item.disabled {
+  opacity: 0.6;
+}
+
+
+:deep(.navbar-vertical .nav-item-wrapper > .nav-link),
+:deep(.navbar-vertical .nav-item-wrapper > .nav-link.dropdown-indicator) {
+  cursor: pointer !important;
+}
+
+.nav-link-emoji {
+  font-size: 1rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+}
+
+.sidebar-settings-link {
+  cursor: default;
+}
+
+.navbar-vertical-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.navbar-vertical-content #navbarVerticalNav {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-settings-item {
+  margin-top: auto;
+}
+
+
+
+.sidebar-settings-link .nav-link-text {
+  font-weight: 600;
+}
+
+.sidebar-settings-link [data-feather] {
+  width: 18px;
+  height: 18px;
+}
+
+.navbar-nav .nav-link .nav-link-text.ms-2 {
+  margin-left: 0.5rem !important;
 }
 </style>
