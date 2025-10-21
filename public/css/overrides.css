@@ -7,6 +7,22 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+html,
+body {
+  height: 100%;
+}
+
+.tg-safe-area-top {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1200;
+  pointer-events: none;
+  height: calc(env(safe-area-inset-top, 0px) + 50px);
+  background: linear-gradient(180deg, #d1d5db 0%, rgba(209, 213, 219, 0.85) 60%, rgba(209, 213, 219, 0) 100%);
+}
+
 /* Normalize feather icon size where inline style is missing */
 [data-feather] {
   width: 20px;
@@ -30,6 +46,17 @@ body {
 
 /* Bottom navigation on mobile: move top navbar to bottom for thumb reachability */
 @media (max-width: 768px) {
+  body {
+    overflow: hidden;
+  }
+
+  main#top {
+    height: 100vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-top: calc(env(safe-area-inset-top, 0px) + 12px);
+  }
+
   .navbar-top.fixed-top {
     top: auto !important;
     bottom: 0 !important;
@@ -40,4 +67,14 @@ body {
   }
   /* ensure content is not overlapped by bottom bar */
   .content { padding-bottom: calc(var(--phoenix-navbar-top-height) + env(safe-area-inset-bottom)); }
+}
+
+@media (min-width: 769px) {
+  .tg-safe-area-top {
+    display: none;
+  }
+
+  main#top {
+    padding-top: 0;
+  }
 }
