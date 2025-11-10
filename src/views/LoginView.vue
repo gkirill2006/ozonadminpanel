@@ -58,7 +58,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import QrcodeVue from 'qrcode.vue'
@@ -77,7 +77,7 @@ const sessionId = ref('')
 const telegramLink = ref('')
 const pollingStatus = ref('')
 const pollingError = ref('')
-const stopPolling = ref(null)
+const stopPolling = ref<null | (() => void)>(null)
 
 const openTelegramModal = async () => {
   try {
@@ -88,13 +88,14 @@ const openTelegramModal = async () => {
     
     const data = await apiService.generateSessionId()
     sessionId.value = data.session_id
-    telegramLink.value = `tg://resolve?domain=TGPoint_bot&start=${sessionId.value}`
+    telegramLink.value = `tg://resolve?domain=OPanel_bot&start=${sessionId.value}`
     showModal.value = true
     
     // Начинаем поллинг сразу при открытии модального окна
     startPolling()
   } catch (err) {
-    error.value = err.message || 'Ошибка при создании сессии'
+    const message = err instanceof Error ? err.message : 'Ошибка при создании сессии'
+    error.value = message
     console.error('Error generating session ID:', err)
   } finally {
     isLoading.value = false
@@ -104,9 +105,9 @@ const openTelegramModal = async () => {
 const closeModal = () => {
   // Останавливаем поллинг если он активен
   if (typeof stopPolling.value === 'function') {
-    stopPolling.value();
+    stopPolling.value()
   }
-  stopPolling.value = null;
+  stopPolling.value = null
 
   showModal.value = false;
   pollingStatus.value = '';
@@ -115,27 +116,31 @@ const closeModal = () => {
 
 const startPolling = () => {
   pollingStatus.value = 'Ожидание авторизации в Telegram...'
-  
-  stopPolling.value = apiService.pollForToken(sessionId.value, 
-    (data) => {
-      // Успешная авторизация
-      authStore.setTokens(data.access, data.refresh)
-      authStore.setUser(data.user)
-      closeModal()
-      router.push('/')
-    }, 
-    (err) => {
-      // Ошибка при поллинге
-      pollingError.value = err
-      console.error('Polling error:', err)
-    }
-  )
+  try {
+    stopPolling.value = apiService.pollForToken(sessionId.value, 
+      (data) => {
+        // Успешная авторизация
+        authStore.setTokens(data.access, data.refresh)
+        authStore.setUser(data.user)
+        closeModal()
+        router.push('/')
+      }, 
+      (err) => {
+        // Ошибка при поллинге
+        pollingError.value = err
+        console.error('Polling error:', err)
+      }
+    )
+  } catch (error) {
+    pollingError.value = error instanceof Error ? error.message : 'Ошибка при запуске поллинга'
+    console.error('Polling start error:', error)
+  }
 }
 </script>
 
 <style scoped>
 .login-page {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
   min-height: 100vh;
 }
 

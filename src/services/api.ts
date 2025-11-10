@@ -114,7 +114,7 @@ class ApiService {
     return this.handleResponse(response)
   }
 
-  async pollForToken(
+  pollForToken(
     sessionId: string, 
     onSuccess: (data: any) => void, 
     onError: (error: string) => void,
@@ -124,6 +124,7 @@ class ApiService {
     const pollInterval = 1000 // 1 секунда
     let attempts = 0
     let isPolling = true
+    let pollTimeout: ReturnType<typeof setTimeout> | null = null
     
     const poll = async () => {
       if (!isPolling) return // Остановка поллинга
@@ -150,7 +151,7 @@ class ApiService {
             onError('Время ожидания истекло (10 минут). Попробуйте еще раз.')
             return
           }
-          setTimeout(poll, pollInterval)
+          pollTimeout = setTimeout(poll, pollInterval)
         } else {
           // Если сервер вернул ошибку, но не статус success/pending
           if (data.error && data.error.includes('Invalid or expired session_id')) {
@@ -163,7 +164,7 @@ class ApiService {
               onError('Время ожидания истекло (10 минут). Попробуйте еще раз.')
               return
             }
-            setTimeout(poll, pollInterval)
+            pollTimeout = setTimeout(poll, pollInterval)
           } else {
             onError(data.error || 'Неизвестная ошибка')
           }
@@ -183,7 +184,7 @@ class ApiService {
             onError('Время ожидания истекло (10 минут). Попробуйте еще раз.')
             return
           }
-          setTimeout(poll, pollInterval)
+          pollTimeout = setTimeout(poll, pollInterval)
         } else {
           onError(error.message || 'Ошибка при получении токена')
         }
@@ -198,7 +199,28 @@ class ApiService {
     return () => {
       console.log('Stopping polling for session:', sessionId)
       isPolling = false
+      if (pollTimeout) {
+        clearTimeout(pollTimeout)
+        pollTimeout = null
+      }
     }
+  }
+
+  async getAuthStores() {
+    const response = await fetch(`${API_BASE_URL}/auth/stores/`, {
+      method: 'GET',
+      headers: this.getHeaders()
+    })
+    return this.handleResponse(response)
+  }
+
+  async createAuthStore(storeData: Record<string, unknown>) {
+    const response = await fetch(`${API_BASE_URL}/auth/stores/`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(storeData)
+    })
+    return this.handleResponse(response)
   }
 
   // Stores endpoints

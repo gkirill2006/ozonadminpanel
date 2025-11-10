@@ -24,6 +24,12 @@ const router = createRouter({
       meta: { requiresAuth: true }
     },
     {
+      path: '/store-settings',
+      name: 'store-settings',
+      component: () => import('../views/StoreSettingsView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
       path: '/products',
       name: 'products',
       component: () => import('../views/ProductsView.vue'),
@@ -45,6 +51,12 @@ const router = createRouter({
       path: '/settings',
       name: 'settings',
       component: () => import('../views/SettingsView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/workspace/:id/:section?',
+      name: 'store-workspace',
+      component: () => import('../views/StoreWorkspaceView.vue'),
       meta: { requiresAuth: true }
     }
   ]

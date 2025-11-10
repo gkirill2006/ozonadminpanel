@@ -2,21 +2,13 @@
 import { ref, onMounted, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useStoresStore } from '@/stores/stores'
-import Sidebar from './components/Sidebar.vue'
 import TopNavbar from './components/TopNavbar.vue'
 import router from './router'
 import { tryTelegramAutoLogin, initTelegramUI } from '@/utils/telegram'
 
 const authStore = useAuthStore()
 const storesStore = useStoresStore()
-const sidebarRef = ref()
 const isAppReady = ref(false)
-
-const toggleSidebar = () => {
-  if (sidebarRef.value) {
-    sidebarRef.value.toggleMobile()
-  }
-}
 
 onMounted(async () => {
   initTelegramUI()
@@ -59,9 +51,7 @@ watch(
     <template v-else>
       <!-- Show admin layout only if authenticated -->
       <template v-if="authStore.isAuthenticated">
-        <!-- Phoenix expects sidebar BEFORE topbar and content -->
-        <Sidebar ref="sidebarRef" />
-        <TopNavbar @toggle-sidebar="toggleSidebar" />
+        <TopNavbar />
         <div class="content">
           <router-view />
         </div>
@@ -79,5 +69,10 @@ watch(
 /* Простая заглушка-плейсхолдер пока инициализируем приложение */
 .app-loading {
   min-height: 100vh;
+}
+
+.content {
+  padding: 0 !important;
+  min-height: calc(100vh - var(--phoenix-navbar-top-height));
 }
 </style>

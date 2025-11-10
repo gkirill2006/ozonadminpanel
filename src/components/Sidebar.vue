@@ -15,101 +15,22 @@
       <div class="navbar-vertical-content" :style="navContentStyle">
         <ul class="navbar-nav flex-column sidebar-nav" id="navbarVerticalNav">
           
-          <template v-if="!isStoreContext">
-            <!-- Главная -->
-            <li class="nav-item">
+          <template v-if="!isWorkspaceRoute">
+            <li v-for="item in generalNavItems" :key="item.key" class="nav-item">
               <div class="nav-item-wrapper">
                 <router-link
-                  to="/"
                   class="nav-link label-1"
-                  :class="{ active: route.path === '/' }"
+                  :class="{ active: isGeneralNavActive(item) }"
+                  :to="item.to"
                   @click="onMenuItemClick"
                 >
                   <div class="d-flex align-items-center">
-                    <span class="nav-link-icon">
-                      <span data-feather="pie-chart"></span>
+                    <span v-if="item.icon" class="nav-link-icon">
+                      <span :data-feather="item.icon"></span>
                     </span>
-                    <span class="nav-link-text">Главная</span>
+                    <span class="nav-link-text">{{ item.label }}</span>
                   </div>
                 </router-link>
-              </div>
-            </li>
-
-            <!-- Лейбл -->
-            <li class="nav-item">
-              <p class="navbar-vertical-label">Управление</p>
-              <hr class="navbar-vertical-line" />
-            </li>
-
-            <!-- Группа: Управление (Phoenix-style) -->
-            <li class="nav-item">
-              <div class="nav-item-wrapper">
-                <a class="nav-link dropdown-indicator label-1" href="#nv-manage" role="button" data-bs-toggle="collapse" aria-controls="nv-manage" :aria-expanded="openGroups.manage ? 'true' : 'false'" @click.prevent="toggleGroup('manage')">
-                  <div class="d-flex align-items-center">
-                    <div class="dropdown-indicator-icon-wrapper">
-                      <span class="fas fa-caret-right dropdown-indicator-icon" :class="{ 'fa-rotate-90': openGroups.manage }"></span>
-                    </div>
-                    <span class="nav-link-icon">
-                      <span data-feather="settings"></span>
-                    </span>
-                    <span class="nav-link-text">Управление</span>
-                  </div>
-                </a>
-                <div class="parent-wrapper label-1">
-                  <ul class="nav collapse parent" :class="{ show: openGroups.manage }" id="nv-manage" data-bs-parent="#navbarVerticalCollapse">
-                    <li class="collapsed-nav-item-title d-none">Управление</li>
-                    <li class="nav-item">
-                      <router-link to="/stores" class="nav-link" @click="onMenuItemClick">
-                        <div class="d-flex align-items-center">
-                          <span class="nav-link-icon">
-                            <span data-feather="shopping-bag"></span>
-                          </span>
-                          <span class="nav-link-text">Магазины</span>
-                        </div>
-                      </router-link>
-                    </li>
-                    <li class="nav-item">
-                      <router-link :to="productsNavTarget" class="nav-link" @click="onMenuItemClick">
-                        <div class="d-flex align-items-center">
-                          <span class="nav-link-icon">
-                            <span data-feather="package"></span>
-                          </span>
-                          <span class="nav-link-text">Товары</span>
-                        </div>
-                      </router-link>
-                    </li>
-                    <li class="nav-item">
-                      <router-link to="/subscription" class="nav-link" @click="onMenuItemClick">
-                        <div class="d-flex align-items-center">
-                          <span class="nav-link-icon">
-                            <span data-feather="credit-card"></span>
-                          </span>
-                          <span class="nav-link-text">Подписки</span>
-                        </div>
-                      </router-link>
-                    </li>
-                    <li class="nav-item">
-                      <router-link to="/users" class="nav-link" @click="onMenuItemClick">
-                        <div class="d-flex align-items-center">
-                          <span class="nav-link-icon">
-                            <span data-feather="users"></span>
-                          </span>
-                          <span class="nav-link-text">Пользователи</span>
-                        </div>
-                      </router-link>
-                    </li>
-                    <li class="nav-item">
-                      <router-link to="/settings" class="nav-link" @click="onMenuItemClick">
-                        <div class="d-flex align-items-center">
-                          <span class="nav-link-icon">
-                            <span data-feather="sliders"></span>
-                          </span>
-                          <span class="nav-link-text">Настройки</span>
-                        </div>
-                      </router-link>
-                    </li>
-                  </ul>
-                </div>
               </div>
             </li>
           </template>
@@ -118,62 +39,52 @@
             <li class="nav-item">
               <div class="nav-item-wrapper">
                 <router-link
-                  v-if="storeNavPrimaryItem && storeNavPrimaryItem.to"
                   class="nav-link label-1"
-                  :class="{ active: isNavItemActive(storeNavPrimaryItem) }"
-                  :to="storeNavPrimaryItem.to"
+                  :to="{ path: '/' }"
                   @click="onMenuItemClick"
                 >
                   <div class="d-flex align-items-center">
-                    <span v-if="storeNavPrimaryItem.icon" class="nav-link-icon">
-                      <span :data-feather="storeNavPrimaryItem.icon"></span>
+                    <span class="nav-link-icon">
+                      <span data-feather="arrow-left-circle"></span>
                     </span>
-                    <span class="nav-link-text" :class="{ 'ms-2': storeNavPrimaryItem.icon }">{{ storeNavPrimaryItem.label }}</span>
+                    <span class="nav-link-text">Все магазины</span>
                   </div>
                 </router-link>
               </div>
             </li>
             <li class="nav-item">
-              <p class="navbar-vertical-label">Магазин</p>
+              <p class="navbar-vertical-label">Разделы</p>
               <hr class="navbar-vertical-line" />
             </li>
-            <li v-for="item in storeNavSecondaryItems" :key="item.key" class="nav-item">
+            <li v-for="section in workspaceSections" :key="section.key" class="nav-item">
               <div class="nav-item-wrapper">
-                <div class="nav-item-wrapper-inner">
-                  <router-link
-                    v-if="item.to && !item.disabled"
-                    class="nav-link label-1"
-                    :class="{ active: isNavItemActive(item) }"
-                    :to="item.to"
-                    @click="onMenuItemClick"
-                  >
-                    <div class="d-flex align-items-center">
-                    <span v-if="item.icon" class="nav-link-icon">
-                      <span :data-feather="item.icon"></span>
+                <router-link
+                  class="nav-link label-1"
+                  :class="{ active: isWorkspaceSectionActive(section.key) }"
+                  :to="workspaceRouteFor(section.key)"
+                  @click="onMenuItemClick"
+                >
+                  <div class="d-flex align-items-center">
+                    <span class="nav-link-icon">
+                      <span :data-feather="section.icon"></span>
                     </span>
-                    <span class="nav-link-text" :class="{ 'ms-2': item.icon }">{{ item.label }}</span>
-                    </div>
-                  </router-link>
-                  <div v-else class="nav-link label-1 store-nav-item disabled">
-                    <div class="d-flex align-items-center">
-                      <span class="nav-link-text">{{ item.label }}</span>
-                    </div>
+                    <span class="nav-link-text">{{ section.label }}</span>
                   </div>
-                </div>
+                </router-link>
               </div>
             </li>
           </template>
 
           <li class="nav-item sidebar-settings-item">
             <div class="nav-item-wrapper">
-              <button type="button" class="nav-link label-1 sidebar-settings-link" disabled>
+              <!-- <button type="button" class="nav-link label-1 sidebar-settings-link" disabled>
                 <div class="d-flex align-items-center">
                   <span class="nav-link-icon">
                     <span data-feather="settings"></span>
                   </span>
                   <span class="nav-link-text">Настройки</span>
                 </div>
-              </button>
+              </button> -->
             </div>
           </li>
 
@@ -200,69 +111,75 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
-import { useRoute, useRouter, RouteLocationRaw } from 'vue-router'
-import { storeToRefs } from 'pinia'
-import { useStoresStore } from '@/stores/stores'
+import { useRoute, useRouter, type RouteLocationRaw } from 'vue-router'
+import {
+  WORKSPACE_SECTIONS,
+  normalizeWorkspaceSection,
+  type WorkspaceSectionKey
+} from '@/constants/workspace'
 
-const isMobileOpen = ref(false)
-const isCollapsed = ref(false)
-const openGroups = ref<{ [key: string]: boolean }>({ manage: true })
-const collapseToggle = ref<HTMLButtonElement | null>(null)
+type GeneralNavItem = {
+  key: string
+  label: string
+  icon?: string
+  to: string
+  matchPrefix?: string
+}
+
+const generalNavItems: GeneralNavItem[] = [
+  { key: 'dashboard', label: 'Главная', icon: 'pie-chart', to: '/', matchPrefix: '/' }
+  // { key: 'stores', label: 'Магазины', icon: 'shopping-bag', to: '/stores', matchPrefix: '/stores' },
+  // { key: 'products', label: 'Товары', icon: 'package', to: '/products', matchPrefix: '/products' },
+  // { key: 'subscription', label: 'Подписки', icon: 'credit-card', to: '/subscription', matchPrefix: '/subscription' },
+  // { key: 'users', label: 'Пользователи', icon: 'users', to: '/users', matchPrefix: '/users' },
+  // { key: 'settings', label: 'Настройки', icon: 'sliders', to: '/settings', matchPrefix: '/settings' }
+] as const
+
+const workspaceSections = WORKSPACE_SECTIONS
+
 const route = useRoute()
 const router = useRouter()
-const storesStore = useStoresStore()
-const { activeStoreId } = storeToRefs(storesStore)
-const storeContextPaths = ['/stores', '/products']
-const isStoreContext = computed(() => {
-  if (!activeStoreId.value) return false
-  return storeContextPaths.some(prefix => route.path.startsWith(prefix))
-})
+const isMobileOpen = ref(false)
+const isCollapsed = ref(false)
+const collapseToggle = ref<HTMLButtonElement | null>(null)
 const isTelegramApp = ref(false)
 const viewportWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 0)
 
-const withStoreQuery = (path: string): RouteLocationRaw => {
-  if (activeStoreId.value) {
-    return { path, query: { store: activeStoreId.value } }
-  }
-  return path
-}
-
-const storeNavItems = computed(() => [
-  { key: 'store-home', label: 'Главная', icon: 'home', to: '/' },
-  { key: 'store-products', label: 'Товары', icon: 'shopping-bag', to: withStoreQuery('/products'), matchPrefix: '/products' },
-  { key: 'store-orders', label: '📦 Заказы', disabled: true },
-  { key: 'store-users', label: '👥 Пользователи', disabled: true },
-  { key: 'store-appearance', label: '🖼 Внешний вид', disabled: true },
-  { key: 'store-mailing', label: 'Рассылки', disabled: true },
-  { key: 'store-loyalty', label: 'Программа лояльности', disabled: true },
-  { key: 'store-settings', label: '⚙️ Настройки бизнеса', icon: 'sliders', to: withStoreQuery('/stores'), matchPrefix: '/stores' }
-])
-
-const storeNavPrimaryItem = computed(() => storeNavItems.value[0])
-const storeNavSecondaryItems = computed(() => storeNavItems.value.slice(1))
+const isWorkspaceRoute = computed(() => route.name === 'store-workspace')
+const currentWorkspaceId = computed(() =>
+  isWorkspaceRoute.value && route.params.id ? String(route.params.id) : null
+)
+const currentWorkspaceSection = computed<WorkspaceSectionKey | null>(() => {
+  if (!isWorkspaceRoute.value) return null
+  const value = typeof route.params.section === 'string' ? route.params.section : undefined
+  return normalizeWorkspaceSection(value)
+})
 
 const navContentStyle = computed(() => {
   if (!isTelegramApp.value) return {}
   const offset = viewportWidth.value >= 992 ? 22 : 172
+  return { paddingTop: `calc(env(safe-area-inset-top, 0px) + ${offset}px)` }
+})
+
+const isGeneralNavActive = (item: GeneralNavItem) => {
+  if (item.matchPrefix === '/') {
+    return route.path === '/'
+  }
+  return item.matchPrefix ? route.path.startsWith(item.matchPrefix) : route.path === item.to
+}
+
+const workspaceRouteFor = (sectionKey: WorkspaceSectionKey): RouteLocationRaw => {
+  if (!currentWorkspaceId.value) {
+    return { name: 'store-workspace', params: { id: '', section: sectionKey } }
+  }
   return {
-    paddingTop: `calc(env(safe-area-inset-top, 0px) + ${offset}px)`
+    name: 'store-workspace',
+    params: { id: currentWorkspaceId.value, section: sectionKey }
   }
-})
+}
 
-const productsNavTarget = computed(() => {
-  if (activeStoreId.value) {
-    return { path: '/products', query: { store: activeStoreId.value } }
-  }
-  return '/products'
-})
-
-const isNavItemActive = (item: any) => {
-  if (!item.to) return false
-  if (item.matchPrefix) {
-    return route.path.startsWith(item.matchPrefix)
-  }
-  const resolved = router.resolve(item.to)
-  return route.path === resolved.path
+const isWorkspaceSectionActive = (sectionKey: WorkspaceSectionKey) => {
+  return currentWorkspaceSection.value === sectionKey
 }
 
 onMounted(() => {
@@ -301,10 +218,6 @@ onMounted(() => {
   // Синхронизируем состояние с реальным DOM
   const htmlElement = document.documentElement
   isCollapsed.value = htmlElement.classList.contains('navbar-vertical-collapsed')
-
-  // Open the group that contains current route on load
-  syncGroupsWithRoute()
-
   // Слушаем событие Phoenix на самой кнопке (phoenix.js диспатчит его на элементе)
   collapseToggle.value?.addEventListener('navbar.vertical.toggle', () => {
     const collapsed = document.documentElement.classList.contains('navbar-vertical-collapsed')
@@ -337,10 +250,6 @@ const onMenuItemClick = () => {
   }, 250)
 }
 
-const toggleGroup = (key: string) => {
-  openGroups.value[key] = !openGroups.value[key]
-}
-
 const handleCollapseToggle = () => {
   const className = 'navbar-vertical-collapsed'
   const html = document.documentElement
@@ -356,19 +265,11 @@ const handleCollapseToggle = () => {
   collapseToggle.value?.dispatchEvent(event)
 }
 
-const syncGroupsWithRoute = () => {
-  const p = route.path
-  // Manage group contains these routes
-  const managePaths = ['/stores', '/products', '/subscription', '/users', '/settings']
-  openGroups.value.manage = managePaths.some(prefix => p.startsWith(prefix))
-}
-
-// Close mobile sidebar and sync groups on route change
+// Close mobile sidebar on route change
 watch(
-  () => route.path,
+  () => route.fullPath,
   () => {
     closeMobile()
-    syncGroupsWithRoute()
     if (!isTelegramApp.value) {
       isTelegramApp.value = document.body.classList.contains('tg-webapp') || document.documentElement.classList.contains('tg-webapp')
     }
@@ -376,15 +277,6 @@ watch(
     document.documentElement.classList.add('phoenix-hide-popouts')
     setTimeout(() => document.documentElement.classList.remove('phoenix-hide-popouts'), 250)
     // Re-render feather icons for dynamically shown elements
-    if (window.feather) {
-      window.feather.replace()
-    }
-  }
-)
-
-watch(
-  () => activeStoreId.value,
-  () => {
     if (window.feather) {
       window.feather.replace()
     }
@@ -453,16 +345,6 @@ defineExpose({
 :deep(html.phoenix-hide-popouts.navbar-vertical-collapsed) .navbar-vertical.navbar-expand-lg .nav-item-wrapper:hover .parent-wrapper.label-1,
 :deep(html.phoenix-hide-popouts.navbar-vertical-collapsed) .navbar-vertical.navbar-expand-lg .nav-item-wrapper:hover .nav-link-text-wrapper { display: none !important; }
 
-.store-nav-item {
-  justify-content: space-between;
-  opacity: 0.75;
-  cursor: default;
-}
-
-.store-nav-item.disabled {
-  opacity: 0.6;
-}
-
 
 :deep(.navbar-vertical .nav-item-wrapper > .nav-link),
 :deep(.navbar-vertical .nav-item-wrapper > .nav-link.dropdown-indicator) {
@@ -481,6 +363,11 @@ defineExpose({
 
 .sidebar-settings-link {
   cursor: default;
+}
+
+.sidebar-settings-wrapper {
+  margin-top: auto;
+  padding: 0.75rem 1rem 1rem;
 }
 
 .navbar-vertical-content {

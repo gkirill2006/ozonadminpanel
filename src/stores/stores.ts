@@ -4,7 +4,8 @@ import { apiService } from '@/services/api'
 
 export interface Store {
   id: string
-  name: string
+  name?: string | null
+  client_id?: string | number | null
   business_type?: string | null
   [key: string]: unknown
 }
@@ -75,6 +76,7 @@ export const useStoresStore = defineStore('stores', () => {
     createStore,
     clear,
     activeStoreId,
-    setActiveStoreId
+    setActiveStoreId,
+    upsertStore
   }
 })

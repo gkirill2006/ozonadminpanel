@@ -130,307 +130,13 @@
       </div>
     </div>
 
-    <div v-else class="store-settings__section">
-      <div class="page-header d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
-        <div>
-          <h1 class="mb-1">{{ storeDisplayName }}</h1>
-          <p class="text-body-secondary mb-0">Настройте свой магазин и заполните информацию для клиентов.</p>
+    <div v-else class="store-settings-placeholder">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body text-center py-5">
+          <h3 class="mb-3">Настройки магазина перенесены</h3>
+          <p class="text-body-secondary mb-4">Перейдите в раздел настроек, чтобы управлять параметрами магазина.</p>
+          <button type="button" class="btn btn-primary" @click="openSettings">Перейти к настройкам</button>
         </div>
-        <div class="d-flex gap-2">
-          <button type="button" class="btn btn-outline-secondary" @click="mainTab = 'overview'">
-            ← Обзор
-          </button>
-        </div>
-      </div>
-
-      <ul class="nav nav-pills gap-2 flex-wrap mb-4" role="tablist">
-        <li class="nav-item" role="presentation">
-          <button
-            type="button"
-            class="nav-link"
-            :class="{ active: activeTab === 'general' }"
-            role="tab"
-            @click="activeTab = 'general'"
-          >
-            Общие настройки
-          </button>
-        </li>
-        <li class="nav-item" role="presentation">
-          <button
-            type="button"
-            class="nav-link"
-            :class="{ active: activeTab === 'addresses', disabled: !storeDetail?.business_type }"
-            role="tab"
-            :disabled="!storeDetail?.business_type"
-            @click="activeTab = 'addresses'"
-          >
-            Адреса и точки
-          </button>
-        </li>
-      </ul>
-
-      <div v-if="activeTab === 'general'" class="tab-pane active" role="tabpanel">
-        <div class="card border-0 shadow-sm mb-4">
-          <div class="card-header bg-transparent py-3 d-flex align-items-center justify-content-between">
-            <h5 class="mb-0">Тип бизнеса</h5>
-          </div>
-          <div class="card-body">
-            <template v-if="storeDetail?.business_type">
-              <p class="mb-1">
-                Тип: <strong>{{ businessTypeLabel }}</strong>
-              </p>
-              <p class="text-body-secondary mb-0 small">Тип выбран и изменить его нельзя.</p>
-            </template>
-            <template v-else>
-              <p class="text-body-secondary">Выберите, что вы предлагаете клиентам. После выбора изменить тип нельзя.</p>
-              <div class="business-type-options mb-3">
-                <button
-                  v-for="type in businessTypes"
-                  :key="type.value"
-                  type="button"
-                  class="type-chip"
-                  :class="{ active: selectedBusinessType === type.value }"
-                  :disabled="typeSaveLoading"
-                  @click="selectedBusinessType = type.value"
-                >
-                  {{ type.label }}
-                </button>
-              </div>
-              <div v-if="businessTypesLoading" class="text-body-secondary small">Загружаем типы бизнеса…</div>
-              <div v-else-if="businessTypesError" class="alert alert-danger" role="alert">{{ businessTypesError }}</div>
-              <button
-                type="button"
-                class="btn btn-primary"
-                :disabled="typeSaveLoading || !selectedBusinessType"
-                @click="saveBusinessType"
-              >
-                <span v-if="typeSaveLoading" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                Сохранить тип
-              </button>
-              <div v-if="typeSaveError" class="alert alert-danger mt-3 mb-0" role="alert">
-                {{ typeSaveError }}
-              </div>
-            </template>
-          </div>
-        </div>
-
-        <div v-if="storeDetail?.business_type" class="card border-0 shadow-sm mb-4">
-          <div class="card-header bg-transparent py-3 d-flex align-items-center justify-content-between">
-            <h5 class="mb-0">Категория витрины</h5>
-          </div>
-          <div class="card-body">
-            <div class="row g-3">
-              <div class="col-12 col-md-6">
-                <label class="form-label">Категория</label>
-                <select
-                  class="form-select"
-                  v-model="selectedCategoryId"
-                  :disabled="categoriesLoading || categorySaveLoading"
-                  @change="handleCategorySelect"
-                >
-                  <option value="">Указать свою</option>
-                  <option v-for="category in categories" :key="category.id" :value="String(category.id)">
-                    {{ category.name }}
-                  </option>
-                </select>
-                <div v-if="categoriesLoading" class="text-body-secondary small mt-2">Загружаем возможные категории…</div>
-                <div v-else-if="categoriesError" class="text-danger small mt-2">{{ categoriesError }}</div>
-              </div>
-              <div class="col-12 col-md-6">
-                <label class="form-label">Своя категория</label>
-                <input
-                  v-model="customCategoryValue"
-                  type="text"
-                  class="form-control"
-                  placeholder="Например, Авторские изделия"
-                  :disabled="categorySaveLoading"
-                  @input="handleCustomCategoryInput"
-                />
-                <small class="text-body-secondary">Оставьте пустым, если выбрали категорию из списка.</small>
-              </div>
-            </div>
-            <div class="mt-3 d-flex flex-column flex-sm-row gap-2 align-items-sm-center">
-              <button
-                type="button"
-                class="btn btn-primary"
-                :disabled="categorySaveLoading"
-                @click="saveCategory"
-              >
-                <span v-if="categorySaveLoading" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                Сохранить категорию
-              </button>
-              <span v-if="categorySaveMessage" class="text-success small">{{ categorySaveMessage }}</span>
-            </div>
-            <div v-if="categorySaveError" class="alert alert-danger mt-3 mb-0" role="alert">
-              {{ categorySaveError }}
-            </div>
-          </div>
-        </div>
-
-        <div v-if="storeDetail?.business_type" class="card border-0 shadow-sm mb-4">
-          <div class="card-header bg-transparent py-3">
-            <h5 class="mb-0">Основная информация</h5>
-          </div>
-          <div class="card-body">
-            <form @submit.prevent="saveStore">
-              <div class="mb-3">
-                <label for="store-name" class="form-label">Название магазина</label>
-                <input
-                  id="store-name"
-                  v-model="storeForm.name"
-                  type="text"
-                  class="form-control"
-                  placeholder="Например, TGPoint Маркет"
-                  required
-                  :disabled="isSavingStore"
-                />
-              </div>
-              <button type="submit" class="btn btn-primary" :disabled="isSavingStore">
-                <span v-if="isSavingStore" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                Сохранить изменения
-              </button>
-              <div v-if="storeSaveMessage" class="alert alert-success mt-3 mb-0" role="alert">
-                {{ storeSaveMessage }}
-              </div>
-              <div v-if="storeSaveError" class="alert alert-danger mt-3 mb-0" role="alert">
-                {{ storeSaveError }}
-              </div>
-            </form>
-          </div>
-        </div>
-
-        <div v-if="storeDetail?.business_type" class="card border-0 shadow-sm mb-4">
-          <div class="card-header bg-transparent py-3 d-flex justify-content-between align-items-center">
-            <h5 class="mb-0">Телефоны магазина</h5>
-            <button type="button" class="btn btn-outline-primary btn-sm" @click="fetchPhones" :disabled="phonesLoading">
-              <span v-if="phonesLoading" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-              Обновить
-            </button>
-          </div>
-          <div class="card-body">
-            <div v-if="phonesLoading" class="d-flex align-items-center gap-2">
-              <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-              <span>Загрузка телефонов...</span>
-            </div>
-            <div v-else-if="phonesError" class="alert alert-danger" role="alert">
-              {{ phonesError }}
-            </div>
-            <div v-else>
-              <p v-if="!phones.length" class="text-body-secondary mb-0">Телефоны еще не добавлены.</p>
-              <ul v-else class="list-group list-group-flush">
-                <li v-for="phone in phones" :key="phone.id" class="list-group-item d-flex justify-content-between align-items-start gap-3">
-                  <div>
-                    <h6 class="mb-1">{{ phone.label || 'Без названия' }}</h6>
-                    <p class="mb-0 text-body-secondary">{{ phone.number }}</p>
-                  </div>
-                  <button type="button" class="btn btn-outline-danger btn-sm" @click="deletePhone(phone.id)" :disabled="deletingPhoneId === phone.id">
-                    <span v-if="deletingPhoneId === phone.id" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                    <span v-else>Удалить</span>
-                  </button>
-                </li>
-              </ul>
-            </div>
-          </div>
-        </div>
-
-        <div class="card border-0 shadow-sm mb-4">
-          <div class="card-header bg-transparent py-3">
-            <h5 class="mb-0">Добавить телефон</h5>
-          </div>
-          <div class="card-body">
-            <form @submit.prevent="createPhone">
-              <div class="mb-3">
-                <label for="phone-label" class="form-label">Название (опционально)</label>
-                <input id="phone-label" v-model="phoneForm.label" type="text" class="form-control" placeholder="Например, Для заказов" />
-              </div>
-              <div class="mb-3">
-                <label for="phone-number" class="form-label">Номер телефона</label>
-                <input id="phone-number" v-model="phoneForm.number" type="tel" class="form-control" placeholder="+7 900 000-00-00" required />
-              </div>
-              <button type="submit" class="btn btn-primary" :disabled="isCreatingPhone">
-                <span v-if="isCreatingPhone" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                Добавить телефон
-              </button>
-              <div v-if="phoneCreateError" class="alert alert-danger mt-3 mb-0" role="alert">
-                {{ phoneCreateError }}
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-
-      <div v-else-if="activeTab === 'addresses'" class="tab-pane active" role="tabpanel">
-        <template v-if="storeDetail?.business_type">
-          <div class="row g-4">
-            <div class="col-12 col-xl-7">
-              <div class="card border-0 shadow-sm h-100">
-                <div class="card-header bg-transparent py-3 d-flex justify-content-between align-items-center">
-                  <h5 class="mb-0">Адреса магазина</h5>
-                  <button type="button" class="btn btn-outline-primary btn-sm" @click="fetchAddresses" :disabled="addressesLoading">
-                    <span v-if="addressesLoading" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                    Обновить
-                  </button>
-                </div>
-                <div class="card-body">
-                  <div v-if="addressesLoading" class="d-flex align-items-center gap-2">
-                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                    <span>Загрузка адресов...</span>
-                  </div>
-                  <div v-else-if="addressesError" class="alert alert-danger" role="alert">
-                    {{ addressesError }}
-                  </div>
-                  <div v-else>
-                    <p v-if="!addresses.length" class="text-body-secondary mb-0">Адреса еще не добавлены.</p>
-                    <ul v-else class="list-group list-group-flush">
-                      <li v-for="address in addresses" :key="address.id" class="list-group-item d-flex justify-content-between align-items-start gap-3">
-                        <div>
-                          <h6 class="mb-1">{{ address.label || 'Без названия' }}</h6>
-                          <p class="mb-0 text-body-secondary">{{ address.address_text }}</p>
-                        </div>
-                        <button type="button" class="btn btn-outline-danger btn-sm" @click="deleteAddress(address.id)" :disabled="deletingAddressId === address.id">
-                          <span v-if="deletingAddressId === address.id" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                          <span v-else>Удалить</span>
-                        </button>
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="col-12 col-xl-5">
-              <div class="card border-0 shadow-sm h-100">
-                <div class="card-header bg-transparent py-3">
-                  <h5 class="mb-0">Добавить новый адрес</h5>
-                </div>
-                <div class="card-body">
-                  <form @submit.prevent="createAddress">
-                    <div class="mb-3">
-                      <label for="address-label" class="form-label">Название (опционально)</label>
-                      <input id="address-label" v-model="addressForm.label" type="text" class="form-control" placeholder="Например, Главный офис" />
-                    </div>
-                    <div class="mb-3">
-                      <label for="address-text" class="form-label">Адрес</label>
-                      <textarea id="address-text" v-model="addressForm.address_text" class="form-control" rows="3" placeholder="Город, улица, дом" required></textarea>
-                    </div>
-                    <button type="submit" class="btn btn-primary w-100" :disabled="isCreatingAddress">
-                      <span v-if="isCreatingAddress" class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                      Добавить адрес
-                    </button>
-                    <div v-if="addressCreateError" class="alert alert-danger mt-3 mb-0" role="alert">
-                      {{ addressCreateError }}
-                    </div>
-                  </form>
-                </div>
-              </div>
-            </div>
-          </div>
-        </template>
-
-        <template v-else>
-          <div class="alert alert-info" role="alert">
-            Выберите тип бизнеса, чтобы продолжить настройку магазина.
-          </div>
-        </template>
       </div>
     </div>
   </div>
@@ -468,13 +174,16 @@ const mainTab = ref<'overview' | 'settings'>('overview')
 const isSavingStore = ref(false)
 const storeSaveMessage = ref<string | null>(null)
 const storeSaveError = ref<string | null>(null)
-const activeTab = ref<'general' | 'addresses'>('general')
 const isLinkCopied = ref(false)
 const hasTelegramBackButton = ref(typeof window !== 'undefined' && !!window.Telegram?.WebApp?.BackButton)
 let copyTimeout: number | undefined
 
 const storeForm = reactive({
-  name: ''
+  name: '',
+  email: '',
+  publicUrl: '',
+  telegramBotUsername: '',
+  telegramBotToken: ''
 })
 
 const addresses = ref<StoreAddress[]>([])
@@ -545,7 +254,7 @@ const storePublicLink = computed(() => {
   }
   const slug = store.slug || store.theme || store.alias
   if (slug && typeof slug === 'string') {
-    return `https://tgpoint.app/store/${slug}`
+    return `https://opanel.app/store/${slug}`
   }
   if (store.telegram_bot_username) {
     return `https://t.me/${store.telegram_bot_username}`
@@ -626,13 +335,11 @@ const goToProducts = () => {
 }
 
 const openSettings = () => {
-  mainTab.value = 'settings'
-  nextTick(() => {
-    if (typeof window !== 'undefined') {
-      window.scrollTo({ top: 0, behavior: 'smooth' })
-    }
-    refreshFeather()
-  })
+  const query: Record<string, string> = {}
+  if (currentStoreId.value) {
+    query.store = currentStoreId.value
+  }
+  router.push({ name: 'store-settings', query })
 }
 
 const copyStoreLink = async () => {
@@ -1282,21 +989,12 @@ onUnmounted(() => {
   height: 24px;
 }
 
-.store-settings__section .page-header h1 {
-  font-size: 1.75rem;
+.store-settings-placeholder .card {
+  border-radius: 18px;
 }
 
-.store-settings__section .nav-pills .nav-link {
-  border-radius: 999px;
-}
-
-.store-settings__section .list-group-item {
-  border: none;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-}
-
-.store-settings__section .list-group-item:last-child {
-  border-bottom: none;
+.store-settings-placeholder .card-body {
+  padding: 2.5rem 1.5rem;
 }
 
 .business-type-options {

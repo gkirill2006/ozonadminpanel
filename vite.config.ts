@@ -24,17 +24,17 @@ export default defineConfig({
     cors: true,
     proxy: {
       '/auth': {
-        target: 'http://localhost:9000',
+        target: 'http://localhost:9006',
         changeOrigin: true,
         secure: false,
       },
       '/stores': {
-        target: 'http://localhost:9000',
+        target: 'http://localhost:9006',
         changeOrigin: true,
         secure: false,
       },
       '/dashboard': {
-        target: 'http://localhost:9000',
+        target: 'http://localhost:9006',
         changeOrigin: true,
         secure: false,
       }
