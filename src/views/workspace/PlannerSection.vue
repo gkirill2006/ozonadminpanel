@@ -124,9 +124,33 @@
     </section>
 
     <section class="card shadow-sm planner-card planner-card--table">
-      <div class="card-header д-flex align-items-center justify-content-between flex-wrap gap-2">
-        <h5 class="mb-0">Таблица планирования</h5>
-        <span class="text-muted small">Показано {{ plannerRows.length }} SKU</span>
+      <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <div class="planner-tabs btn-group btn-group-sm order-1 order-md-0" role="group">
+          <button
+            type="button"
+            class="btn"
+            :class="activeTable === 'planner' ? 'btn-primary' : 'btn-outline-secondary'"
+            @click="activeTable = 'planner'"
+          >
+            Планирование
+          </button>
+          <button
+            type="button"
+            class="btn"
+            :class="activeTable === 'summary' ? 'btn-primary' : 'btn-outline-secondary'"
+            @click="activeTable = 'summary'"
+          >
+            Заказать товар
+          </button>
+        </div>
+        <div class="order-0 order-md-1 text-end text-md-start">
+          <h5 class="mb-1">
+            {{ activeTable === 'planner' ? 'Таблица планирования' : 'Заказать товар' }}
+          </h5>
+          <span class="text-muted small">
+            {{ activeTable === 'planner' ? `Показано ${plannerRows.length} SKU` : `Показано ${summaryRows.length} товаров` }}
+          </span>
+        </div>
       </div>
       <div class="card-body p-0">
         <div v-if="plannerError" class="alert alert-danger py-1 px-2 m-2 mb-0">
@@ -141,7 +165,10 @@
             <span class="spinner-border spinner-border-sm me-2"></span>
             Готовим таблицу...
           </div>
-          <table v-if="plannerRows.length || !isPlannerLoading" class="planner-table">
+          <table
+            v-if="activeTable === 'planner' && (plannerRows.length || !isPlannerLoading)"
+            class="planner-table"
+          >
             <thead>
               <tr>
                 <th
@@ -236,6 +263,30 @@
                 <td :colspan="plannerHeaders.length" class="text-center text-muted py-4">
                   Нет данных для отображения
                 </td>
+              </tr>
+            </tbody>
+          </table>
+          <table
+            v-if="activeTable === 'summary' && (summaryRows.length || !isPlannerLoading)"
+            class="planner-table planner-table--summary"
+          >
+            <thead>
+              <tr>
+                <th class="header-soft-yellow">Артикул</th>
+                <th class="header-soft-yellow">ШК</th>
+                <th class="header-soft-green">Количество, шт</th>
+              </tr>
+            </thead>
+            <tbody v-if="summaryRows.length">
+              <tr v-for="item in summaryRows" :key="item.id">
+                <td>{{ item.offerId || '—' }}</td>
+                <td>{{ item.barcode || '—' }}</td>
+                <td class="quantity-last">{{ formatNumber(item.totalForDelivery) }}</td>
+              </tr>
+            </tbody>
+            <tbody v-else>
+              <tr>
+                <td colspan="3" class="text-center text-muted py-4">Нет данных для отображения</td>
               </tr>
             </tbody>
           </table>
@@ -434,8 +485,10 @@ const showExcludedModal = ref(false)
 const lastSyncedRequired = ref<RequiredProduct[]>([])
 const lastSyncedExcluded = ref<ExcludedProduct[]>([])
 const plannerRows = ref<PlannerRow[]>([])
+const summaryRows = ref<PlannerSummaryRow[]>([])
 const isPlannerLoading = ref(false)
 const plannerError = ref<string | null>(null)
+const activeTable = ref<'planner' | 'summary'>('planner')
 const createTooltipState = () => reactive({
   visible: false,
   text: '',
@@ -574,6 +627,13 @@ interface PlannerRow {
   article: string
   barcode2: string
   shipmentQty: number | null
+}
+
+interface PlannerSummaryRow {
+  id: string
+  offerId: string
+  barcode: string
+  totalForDelivery: number | null
 }
 
 const fallbackPhoto = 'https://via.placeholder.com/64?text=SKU'
@@ -781,11 +841,13 @@ const toStringSafe = (value: unknown): string => {
   return String(value)
 }
 
-const extractPlannerRows = (payload: unknown): PlannerRow[] => {
+const extractPlannerData = (payload: unknown): { rows: PlannerRow[]; summary: PlannerSummaryRow[] } => {
+  const rows: PlannerRow[] = []
+  const summary: PlannerSummaryRow[] = []
+
   if (payload && typeof payload === 'object') {
     const clusters = Array.isArray((payload as any).clusters) ? (payload as any).clusters : []
     if (clusters.length) {
-      const rows: PlannerRow[] = []
       clusters.forEach((cluster: any, clusterIndex: number) => {
         const products = Array.isArray(cluster?.products) ? cluster.products : []
         products.forEach((product: any, productIndex: number) => {
@@ -829,30 +891,41 @@ const extractPlannerRows = (payload: unknown): PlannerRow[] => {
           })
         })
       })
-      return rows
     }
+
+    const summaryList = Array.isArray((payload as any).summary) ? (payload as any).summary : []
+    summaryList.forEach((item: any, index: number) => {
+      summary.push({
+        id: `${item?.offer_id ?? item?.offerId ?? index}`,
+        offerId: toStringSafe(item?.offer_id ?? item?.offerId),
+        barcode: toStringSafe(item?.barcode),
+        totalForDelivery: toNullableNumber(item?.total_for_delivery ?? item?.totalForDelivery)
+      })
+    })
   }
 
-  if (Array.isArray(payload)) {
-    return payload as PlannerRow[]
+  if (Array.isArray(payload) && !rows.length) {
+    rows.push(...(payload as PlannerRow[]))
   }
 
-  if (payload && typeof payload === 'object') {
+  if (!rows.length && payload && typeof payload === 'object') {
     const candidateKeys = ['results', 'data', 'items', 'rows']
     for (const key of candidateKeys) {
       const collection = (payload as Record<string, unknown>)[key]
       if (Array.isArray(collection)) {
-        return collection as PlannerRow[]
+        rows.push(...(collection as PlannerRow[]))
+        break
       }
     }
   }
 
-  return []
+  return { rows, summary }
 }
 
 const fetchPlannerData = async () => {
   if (!props.storeId) {
     plannerRows.value = []
+    summaryRows.value = []
     return
   }
   try {
@@ -860,10 +933,13 @@ const fetchPlannerData = async () => {
     plannerError.value = null
     const response = await apiService.fetchPlannerData(props.storeId)
     console.log('[Planner] API response:', response)
-    plannerRows.value = extractPlannerRows(response)
+    const parsed = extractPlannerData(response)
+    plannerRows.value = parsed.rows
+    summaryRows.value = parsed.summary
   } catch (error) {
     plannerError.value = error instanceof Error ? error.message : 'Не удалось загрузить данные планера'
     plannerRows.value = []
+    summaryRows.value = []
   } finally {
     isPlannerLoading.value = false
   }
@@ -1135,6 +1211,11 @@ watch(
   font-size: 0.85rem;
 }
 
+.planner-table--summary {
+  min-width: unset;
+  width: 100%;
+}
+
 .planner-table th,
 .planner-table td {
   border-bottom: 1px solid rgba(15, 23, 42, 0.08);
@@ -1240,6 +1321,15 @@ watch(
 .type-text {
   display: inline-block;
   max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.planner-table--summary td:first-child,
+.planner-table--summary th:first-child {
+  min-width: 200px;
+  max-width: 200px;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }

@@ -88,7 +88,7 @@ const openTelegramModal = async () => {
     
     const data = await apiService.generateSessionId()
     sessionId.value = data.session_id
-    telegramLink.value = `tg://resolve?domain=OPanel_bot&start=${sessionId.value}`
+    telegramLink.value = `tg://resolve?domain=TGPoint_bot&start=${sessionId.value}`
     showModal.value = true
     
     // Начинаем поллинг сразу при открытии модального окна

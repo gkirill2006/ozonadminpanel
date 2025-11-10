@@ -30,7 +30,7 @@
               </div>
             </div>
           </a>
-          <div class="dropdown-menu dropdown-menu-end py-0">
+          <div class="dropdown-menu dropdown-menu-end py-0 dropdown-menu-user">
             <div class="bg-200 rounded-top-3 py-3 px-4">
               <h6 class="mb-0 text-900">{{ user?.username || 'Администратор' }}</h6>
             </div>
@@ -249,7 +249,18 @@ watch(
   }
 }
 
-:deep(.navbar-nav.navbar-nav-icons .dropdown-menu-end) {
-  transform: translateX(-2rem);
+.dropdown-menu-user {
+  min-width: 180px;
+}
+
+:deep(.navbar-nav.navbar-nav-icons .dropdown-menu-user) {
+  transform: translateX(-7rem);
+}
+
+@media (max-width: 576px) {
+  :deep(.navbar-nav.navbar-nav-icons .dropdown-menu-user) {
+    transform: translateX(0);
+    width: calc(100vw - 1.25rem);
+  }
 }
 </style>
