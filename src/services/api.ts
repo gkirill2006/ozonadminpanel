@@ -223,6 +223,23 @@ class ApiService {
     return this.handleResponse(response)
   }
 
+  async getStoreFilters(storeId: string | number) {
+    const response = await fetch(`${API_BASE_URL}/auth/stores/${storeId}/filters/`, {
+      method: 'GET',
+      headers: this.getHeaders()
+    })
+    return this.handleResponse(response)
+  }
+
+  async updateStoreFilters(storeId: string | number, payload: Record<string, unknown>) {
+    const response = await fetch(`${API_BASE_URL}/auth/stores/${storeId}/filters/`, {
+      method: 'PATCH',
+      headers: this.getHeaders(),
+      body: JSON.stringify(payload)
+    })
+    return this.handleResponse(response)
+  }
+
   // Stores endpoints
   async getStores() {
     const response = await fetch(`${API_BASE_URL}/stores/stores/`, {

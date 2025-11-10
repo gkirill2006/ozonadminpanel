@@ -13,7 +13,7 @@
         </div>
 
         <template v-else>
-          <PlannerSection v-if="activeSection === 'planner'" />
+          <PlannerSection v-if="activeSection === 'planner'" :store-id="storeId" />
           <SupplySection v-else-if="activeSection === 'supply'" />
           <div v-else class="section-body">
             <div class="section-placeholder">

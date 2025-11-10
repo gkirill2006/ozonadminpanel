@@ -5,35 +5,35 @@
         <h5 class="mb-0">Фильтры</h5>
       </div>
       <div class="card-body">
-        <div class="row g-2">
-          <div
-            class="col-12 col-md-6 col-lg-4"
-            v-for="field in numericFields"
-            :key="field.key"
-          >
-            <label class="form-label text-uppercase text-muted small fw-semibold">{{ field.label }}</label>
-            <input
-              type="number"
-              class="form-control form-control-sm"
-              :step="field.step || 1"
-              v-model.number="filters[field.key]"
-            />
-          </div>
-
-          <div class="col-12 col-md-6 col-lg-4">
-            <label class="form-label text-uppercase text-muted small fw-semibold">Показывать товары без потребности</label>
-            <div class="form-check form-switch mt-2">
+        <div v-if="filtersError" class="alert alert-danger py-1 px-2 mb-2">
+          {{ filtersError }}
+        </div>
+        <div class="row g-2 align-items-end">
+          <template v-for="field in numericFields" :key="field.key">
+            <div v-if="!field.isToggle" class="col-12 col-md-6 col-lg-4">
+              <label class="form-label text-uppercase text-muted small fw-semibold">{{ field.label }}</label>
               <input
-                class="form-check-input"
-                type="checkbox"
-                id="showNoNeedPlanner"
-                v-model="filters.showNoNeed"
-              >
-              <label class="form-check-label" for="showNoNeedPlanner">
-                {{ filters.showNoNeed ? 'Да' : 'Нет' }}
-              </label>
+                type="number"
+                class="form-control form-control-sm"
+                :step="field.step || 1"
+                v-model.number="filters[field.key]"
+              />
             </div>
-          </div>
+            <div v-else class="col-12 col-md-6 col-lg-4">
+              <label class="form-label text-uppercase text-muted small fw-semibold">{{ field.label }}</label>
+              <div class="form-check form-switch mt-2">
+                <input
+                  class="form-check-input"
+                  type="checkbox"
+                  :id="field.key"
+                  v-model="toggleBindings[field.key]"
+                >
+                <label class="form-check-label" :for="field.key">
+                  {{ toggleBindings[field.key] ? 'Да' : 'Нет' }}
+                </label>
+              </div>
+            </div>
+          </template>
 
           <div class="col-12 col-md-6 col-lg-4">
             <label class="form-label text-uppercase text-muted small fw-semibold">Сортировка</label>
@@ -43,32 +43,51 @@
               <option value="ozon-rec">Рек. Озона</option>
             </select>
           </div>
-        </div>
-        <div class="mt-2 d-flex flex-column flex-md-row align-items-start gap-2">
-          <div class="d-flex gap-2 flex-wrap">
-            <div v-for="limit in priceFields" :key="limit.key" class="limits-input">
-              <label class="form-label text-uppercase text-muted small fw-semibold">{{ limit.label }}</label>
+
+          <div
+            class="col-12 col-md-6 col-lg-4 range-field"
+            v-for="range in rangeFields"
+            :key="range.label"
+          >
+            <label class="form-label text-uppercase text-muted small fw-semibold">{{ range.label }}</label>
+            <div class="double-input">
               <input
                 type="number"
-                class="form-control form-control-sm"
-                v-model.number="filters[limit.key]"
+                class="form-control form-control-sm range-input"
+                placeholder="min"
+                v-model.number="filters[range.minKey]"
+              />
+              <input
+                type="number"
+                class="form-control form-control-sm range-input"
+                placeholder="max"
+                v-model.number="filters[range.maxKey]"
               />
             </div>
           </div>
-          <button class="btn btn-primary ms-md-auto" type="button" @click="applyFilters">
-            Применить
+        </div>
+
+        <div class="mt-2 text-end">
+          <button
+            class="btn btn-primary ms-md-auto"
+            type="button"
+            @click="handleSaveClick"
+            :disabled="isSaving || !hasStore"
+          >
+            <span v-if="isSaving" class="spinner-border spinner-border-sm me-1"></span>
+            {{ isSaving ? 'Сохраняем...' : 'Сохранить' }}
           </button>
         </div>
       </div>
     </section>
 
-    <section class="card shadow-sm planner-card">
-      <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <section class="card shadow-sm planner-card planner-card--table">
+      <div class="card-header д-flex align-items-center justify-content-between flex-wrap gap-2">
         <h5 class="mb-0">Таблица планирования</h5>
         <span class="text-muted small">Показано {{ plannerRows.length }} SKU</span>
       </div>
-      <div class="card-body">
-        <div class="planner-table-wrapper">          
+      <div class="card-body p-0">
+        <div class="planner-table-wrapper" ref="tableWrapperRef" :style="{ height: tableHeight }">
           <table class="planner-table">
             <thead>
               <tr>
@@ -127,8 +146,12 @@
 </template>
 
 <script setup lang="ts">
-import { reactive } from 'vue'
+import { reactive, ref, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
+import { apiService } from '@/services/api'
 
+const props = defineProps<{
+  storeId: string
+}>()
 
 interface FilterState {
   planningDays: number
@@ -144,7 +167,7 @@ interface FilterState {
   turnoverFromStock: number
 }
 
-const filters = reactive<FilterState>({
+const defaultFilters: FilterState = {
   planningDays: 28,
   analysisPeriod: 28,
   warehouseWeight: 1,
@@ -156,22 +179,43 @@ const filters = reactive<FilterState>({
   sortBy: 'orders',
   specificWeightThreshold: 0.01,
   turnoverFromStock: 5
-})
+}
 
-const numericFields: Array<{ key: keyof FilterState; label: string; step?: number }> = [
+const filters = reactive<FilterState>({ ...defaultFilters }) as FilterState
+const writableFilters = filters as Record<keyof FilterState, FilterState[keyof FilterState]>
+
+const numericFields: Array<{ key: keyof FilterState; label: string; step?: number; isToggle?: boolean }> = [
   { key: 'planningDays', label: 'На сколько дн. планируем' },
   { key: 'analysisPeriod', label: 'Анализируемый период' },
-  { key: 'warehouseWeight', label: 'Учитывать вес склада' },
-  { key: 'turnoverMin', label: 'Оборачиваемость MIN' },
-  { key: 'turnoverMax', label: 'Оборачиваемость MAX' },
+  { key: 'warehouseWeight', label: 'Учитывать вес склада', isToggle: true },
   { key: 'specificWeightThreshold', label: 'Если уд. вес <N, то он =', step: 0.01 },
-  { key: 'turnoverFromStock', label: 'Оборач. от N остатков' }
+  { key: 'turnoverFromStock', label: 'Оборач. от N остатков' },
+  { key: 'showNoNeed', label: 'Показывать товары без потребности', isToggle: true }
 ]
 
-const priceFields: Array<{ key: keyof FilterState; label: string }> = [
-  { key: 'priceMin', label: 'Цена MIN' },
-  { key: 'priceMax', label: 'Цена MAX' }
+const rangeFields: Array<{ label: string; minKey: keyof FilterState; maxKey: keyof FilterState }> = [
+  { label: 'Цена (min, max)', minKey: 'priceMin', maxKey: 'priceMax' },
+  { label: 'Оборачиваемость (min, max)', minKey: 'turnoverMin', maxKey: 'turnoverMax' }
 ]
+
+const toggleBindings = reactive<Record<string, boolean>>({
+  warehouseWeight: Boolean(filters.warehouseWeight),
+  showNoNeed: filters.showNoNeed
+})
+
+watch(
+  () => toggleBindings.warehouseWeight,
+  (value) => {
+    filters.warehouseWeight = value ? 1 : 0
+  }
+)
+
+watch(
+  () => toggleBindings.showNoNeed,
+  (value) => {
+    filters.showNoNeed = value
+  }
+)
 
 const plannerHeaders = [
   'Фото',
@@ -274,11 +318,150 @@ const plannerRows: PlannerRow[] = Array.from({ length: 15 }).map((_, index) => (
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(value)
 
-const applyFilters = () => {
-  console.log('apply planner filters', { ...filters })
+const filtersRef = ref<HTMLElement | null>(null)
+const tableWrapperRef = ref<HTMLElement | null>(null)
+const tableHeight = ref('60vh')
+const filtersError = ref<string | null>(null)
+const isSaving = ref(false)
+const hasStore = ref(false)
+const lastSyncedFilters = ref<FilterState | null>(null)
+
+const parseCssVar = (value: string | null) => {
+  if (!value) return 0
+  const parsed = parseFloat(value)
+  return Number.isNaN(parsed) ? 0 : parsed
 }
 
+const updateTableHeight = () => {
+  const viewport = window.innerHeight
+  const navbarOffset = parseCssVar(
+    getComputedStyle(document.documentElement).getPropertyValue('--workspace-sticky-offset')
+  )
+  const filtersHeight = filtersRef.value?.offsetHeight ?? 0
+  const padding = 12
+  const height = Math.max(240, viewport - navbarOffset - filtersHeight - padding)
+  tableHeight.value = `${height}px`
+}
 
+const handleResize = () => {
+  updateTableHeight()
+}
+
+onMounted(() => {
+  nextTick(() => updateTableHeight())
+  window.addEventListener('resize', handleResize)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleResize)
+})
+
+const apiFieldMap: Record<keyof FilterState, string> = {
+  planningDays: 'planning_days',
+  analysisPeriod: 'analysis_period',
+  warehouseWeight: 'warehouse_weight',
+  priceMin: 'price_min',
+  priceMax: 'price_max',
+  turnoverMin: 'turnover_min',
+  turnoverMax: 'turnover_max',
+  showNoNeed: 'show_no_need',
+  sortBy: 'sort_by',
+  specificWeightThreshold: 'specific_weight_threshold',
+  turnoverFromStock: 'turnover_from_stock'
+}
+
+const normalizeValue = (key: keyof FilterState, value: unknown) => {
+  if (typeof defaultFilters[key] === 'number') {
+    const normalized = Number(value)
+    return Number.isNaN(normalized) ? filters[key] : normalized
+  }
+  if (typeof defaultFilters[key] === 'boolean') {
+    return Boolean(value)
+  }
+  return value as FilterState[typeof key]
+}
+
+const setFiltersFromApi = (data: Record<string, unknown>) => {
+  (Object.keys(apiFieldMap) as Array<keyof FilterState>).forEach((key) => {
+    const apiKey = apiFieldMap[key]
+    if (apiKey in data) {
+      writableFilters[key] = normalizeValue(key, data[apiKey]) as FilterState[typeof key]
+    }
+  })
+  lastSyncedFilters.value = JSON.parse(JSON.stringify(filters))
+  toggleBindings.warehouseWeight = Boolean(filters.warehouseWeight)
+  toggleBindings.showNoNeed = filters.showNoNeed
+}
+
+const toApiPayload = (partial: Partial<FilterState>) => {
+  const payload: Record<string, unknown> = {}
+  Object.entries(partial).forEach(([key, value]) => {
+    const apiKey = apiFieldMap[key as keyof FilterState]
+    if (apiKey && typeof value !== 'undefined') {
+      payload[apiKey] = value as FilterState[keyof FilterState]
+    }
+  })
+  return payload
+}
+
+const fetchFilters = async () => {
+  if (!props.storeId) {
+    hasStore.value = false
+    return
+  }
+  try {
+    hasStore.value = true
+    filtersError.value = null
+    const response = await apiService.getStoreFilters(props.storeId)
+    setFiltersFromApi(response)
+  } catch (error) {
+    filtersError.value = error instanceof Error ? error.message : 'Не удалось загрузить фильтры'
+  }
+}
+
+const filterKeys = Object.keys(filters) as Array<keyof FilterState>
+
+const getChangedFields = () => {
+  if (!lastSyncedFilters.value) {
+    return { ...filters }
+  }
+  const diff: Partial<Record<keyof FilterState, FilterState[keyof FilterState]>> = {}
+  filterKeys.forEach((key) => {
+    if (filters[key] !== lastSyncedFilters.value![key]) {
+      diff[key] = filters[key]
+    }
+  })
+  return diff as Partial<FilterState>
+}
+
+const saveFilters = async () => {
+  if (!props.storeId) return
+  const diff = getChangedFields()
+  if (Object.keys(diff).length === 0) return
+  try {
+    isSaving.value = true
+    filtersError.value = null
+    const payload = toApiPayload(diff)
+    const response = await apiService.updateStoreFilters(props.storeId, payload)
+    setFiltersFromApi(response)
+  } catch (error) {
+    filtersError.value = error instanceof Error ? error.message : 'Не удалось сохранить фильтры'
+  } finally {
+    isSaving.value = false
+  }
+}
+
+const handleSaveClick = () => {
+  saveFilters()
+}
+
+watch(
+  () => props.storeId,
+  () => {
+    fetchFilters()
+  },
+  { immediate: true }
+)
 </script>
 
 <style scoped>
@@ -315,6 +498,25 @@ const applyFilters = () => {
 
 .limits-input {
   min-width: 120px;
+}
+
+.range-field .double-input {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.range-input {
+  background: #f5f5f7;
+  border: none;
+  border-radius: 18px;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.06);
+  padding: 0.4rem 0.75rem;
+}
+
+.range-input:focus {
+  border: none;
+  box-shadow: inset 0 0 0 2px #1e1b4b;
+  background: #fff;
 }
 
 .planner-table-wrapper {
