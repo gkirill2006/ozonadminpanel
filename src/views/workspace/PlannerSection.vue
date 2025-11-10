@@ -149,7 +149,8 @@
                   :key="header"
                   :class="{
                     'sticky-col photo-col': idx === 0,
-                    'sticky-col supplier-col': idx === 1
+                    'sticky-col supplier-col': idx === 1,
+                    'sticky-col category-col': idx === 4
                   }"
                 >
                   {{ header }}
@@ -164,7 +165,12 @@
                 <td class="sticky-col supplier-col">{{ row.supplierSku || '—' }}</td>
                 <td>{{ formatCurrency(row.price) }}</td>
                 <td>{{ row.barcode || '—' }}</td>
-                <td>{{ row.category || '—' }}</td>
+                
+                <td class="category-col" :title="row.category || '—'">
+                  <span class="category-text">{{ row.category || '—' }}</span>
+                </td>
+                
+                
                 <td>{{ row.productType || '—' }}</td>
                 <td>
                   <a v-if="row.link" :href="row.link" target="_blank" rel="noopener">Открыть</a>
@@ -1048,6 +1054,66 @@ watch(
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.planner-table .category-col {
+  min-width: 200px;
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.category-text {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: inherit;
+}
+.planner-table .category-col {
+  left: 90px;
+  width: 100px;
+  min-width: 100px;
+  max-width: 100px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  position: sticky;
+  background: #fff;
+  cursor: default;
+}
+
+/* внутренний контейнер для тултипа */
+.planner-table .category-wrapper {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+
+/* подсказка */
+.planner-table .category-wrapper .tooltip {
+  visibility: hidden;
+  opacity: 0;
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  font-size: 12px;
+  z-index: 999;
+  transform: translateY(-4px);
+  transition: opacity 0.2s ease;
+}
+
+/* при наведении — показываем тултип */
+.planner-table .category-wrapper:hover .tooltip {
+  visibility: visible;
+  opacity: 1;
+}
+
 
 .planner-table tbody .photo-col,
 .planner-table tbody .supplier-col {
