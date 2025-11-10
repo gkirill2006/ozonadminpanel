@@ -151,8 +151,7 @@
                     headerColorClasses[idx],
                     {
                       'sticky-col photo-col': idx === 0,
-                      'sticky-col supplier-col': idx === 1,
-                      'sticky-col category-col': idx === 4
+                      'sticky-col supplier-col': idx === 1
                     }
                   ]"
                 >
