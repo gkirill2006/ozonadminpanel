@@ -147,11 +147,14 @@
                 <th
                   v-for="(header, idx) in plannerHeaders"
                   :key="header"
-                  :class="{
-                    'sticky-col photo-col': idx === 0,
-                    'sticky-col supplier-col': idx === 1,
-                    'sticky-col category-col': idx === 4
-                  }"
+                  :class="[
+                    headerColorClasses[idx],
+                    {
+                      'sticky-col photo-col': idx === 0,
+                      'sticky-col supplier-col': idx === 1,
+                      'sticky-col category-col': idx === 4
+                    }
+                  ]"
                 >
                   {{ header }}
                 </th>
@@ -177,7 +180,15 @@
                 </td>
                 
                 
-                <td>{{ row.productType || '—' }}</td>
+                <td class="type-col">
+                  <span
+                    class="type-text"
+                    @mouseenter="showTypeTooltip($event, row.productType)"
+                    @mouseleave="hideTypeTooltip"
+                  >
+                    {{ row.productType || '—' }}
+                  </span>
+                </td>
                 <td>
                   <a v-if="row.link" :href="row.link" target="_blank" rel="noopener">Открыть</a>
                   <span v-else class="text-muted">—</span>
@@ -218,7 +229,7 @@
                 <td class="text-end">{{ formatNumber(row.toSupply) }}</td>
                 <td>{{ row.article || '—' }}</td>
                 <td>{{ row.barcode2 || row.barcode || '—' }}</td>
-                <td class="text-end">{{ formatNumber(row.shipmentQty) }}</td>
+                <td class="quantity-last">{{ formatNumber(row.shipmentQty) }}</td>
               </tr>
             </tbody>
             <tbody v-else>
@@ -242,6 +253,16 @@
         }"
       >
         {{ categoryTooltip.text }}
+      </div>
+      <div
+        v-if="typeTooltip.visible"
+        class="category-global-tooltip"
+        :style="{
+          top: `${typeTooltip.y}px`,
+          left: `${typeTooltip.x}px`
+        }"
+      >
+        {{ typeTooltip.text }}
       </div>
     </Teleport>
     <Modal v-if="showExcludedModal" @close="closeExcludedModal">
@@ -416,12 +437,15 @@ const lastSyncedExcluded = ref<ExcludedProduct[]>([])
 const plannerRows = ref<PlannerRow[]>([])
 const isPlannerLoading = ref(false)
 const plannerError = ref<string | null>(null)
-const categoryTooltip = reactive({
+const createTooltipState = () => reactive({
   visible: false,
   text: '',
   x: 0,
   y: 0
 })
+
+const categoryTooltip = createTooltipState()
+const typeTooltip = createTooltipState()
 
 const numericFields: Array<{ key: keyof FilterState; label: string; step?: number; isToggle?: boolean }> = [
   { key: 'planningDays', label: 'На сколько дн. планируем' },
@@ -488,6 +512,38 @@ const plannerHeaders = [
   'Количество, шт.'
 ]
 
+const headerColorClasses = [
+  'header-soft-yellow', // Фото
+  'header-soft-yellow', // Артикул поставщика
+  'header-soft-yellow', // Цена товара
+  'header-soft-yellow', // Баркод
+  'header-soft-yellow', // Категория
+  'header-soft-yellow', // Тип товара
+  'header-soft-yellow', // Ссылка
+  'header-soft-green',  // Свой склад
+  'header-soft-rose',   // Количество, шт.
+  'header-soft-rose',   // Выручка, руб.
+  'header-soft-rose',   // Среднесуточ., шт
+  'header-soft-rose',   // Оборачиваемость, дн
+  'header-soft-blue',   // Кластер
+  'header-strong-blue', // Ср. время до покупателя
+  'header-strong-blue', // Доля влияния, %
+  'header-strong-blue', // Ср. время товара
+  'header-strong-blue', // Доля влияния на товар, %
+  'header-strong-blue', // Рекомендации
+  'header-soft-blue',   // Выручка, руб. (вторая)
+  'header-soft-blue',   // Общее кол-во, шт.
+  'header-soft-blue',   // Среднесуточные продажи, руб.
+  'header-soft-blue',   // Среднесуточные продажи, шт.
+  'header-soft-blue',   // Доля от общ. среднесуточных, %
+  'header-soft-blue',   // Остаток
+  'header-soft-blue',   // Потребность
+  'header-soft-blue',   // К поставке
+  '',                   // Артикул
+  '',                   // ШК
+  ''                    // Количество, шт. (последний)
+]
+
 interface PlannerRow {
   id: string
   photo: string | null
@@ -544,23 +600,41 @@ const toNullableNumber = (value: unknown): number | null => {
   return Number.isNaN(num) ? null : num
 }
 
+const positionTooltip = (event: MouseEvent, tooltip: { text: string; x: number; y: number; visible: boolean }) => {
+  const target = event.currentTarget as HTMLElement | null
+  if (!target) return
+  const rect = target.getBoundingClientRect()
+  tooltip.x = rect.left + rect.width / 2
+  tooltip.y = rect.bottom + 10
+  tooltip.visible = true
+}
+
 const showCategoryTooltip = (event: MouseEvent, text?: string | null) => {
   const content = (text || '').trim()
   if (!content) {
     categoryTooltip.visible = false
     return
   }
-  const target = event.currentTarget as HTMLElement | null
-  if (!target) return
-  const rect = target.getBoundingClientRect()
   categoryTooltip.text = content
-  categoryTooltip.x = rect.left + rect.width / 2
-  categoryTooltip.y = rect.bottom + 10
-  categoryTooltip.visible = true
+  positionTooltip(event, categoryTooltip)
 }
 
 const hideCategoryTooltip = () => {
   categoryTooltip.visible = false
+}
+
+const showTypeTooltip = (event: MouseEvent, text?: string | null) => {
+  const content = (text || '').trim()
+  if (!content) {
+    typeTooltip.visible = false
+    return
+  }
+  typeTooltip.text = content
+  positionTooltip(event, typeTooltip)
+}
+
+const hideTypeTooltip = () => {
+  typeTooltip.visible = false
 }
 
 const filtersRef = ref<HTMLElement | null>(null)
@@ -591,11 +665,13 @@ const updateTableHeight = () => {
 const handleResize = () => {
   updateTableHeight()
   hideCategoryTooltip()
+  hideTypeTooltip()
 }
 
 const handleGlobalScroll = () => {
-  if (categoryTooltip.visible) {
+  if (categoryTooltip.visible || typeTooltip.visible) {
     categoryTooltip.visible = false
+    typeTooltip.visible = false
   }
 }
 
@@ -1080,14 +1156,43 @@ watch(
   box-shadow: 0 2px 2px rgba(15, 23, 42, 0.06);
 }
 
-.planner-table .sticky-col {
-  position: sticky;
-  background: #fff;
+.planner-table th.header-soft-yellow {
+  background: #fff2cc;
 }
 
-.planner-table th.sticky-col {
-  background: #f8fafc;
+.planner-table th.header-soft-green {
+  background: #d9ead3;
+}
+
+.planner-table th.header-soft-rose {
+  background: #f4cccc;
+}
+
+.planner-table th.header-soft-blue {
+  background: #c9daf8;
+}
+
+.planner-table th.header-strong-blue {
+  background: #0000ff;
+  color: #fff;
+}
+
+.planner-table .sticky-col {
+  position: sticky;
+}
+
+.planner-table thead .sticky-col {
   z-index: 12;
+}
+
+.planner-table tbody .sticky-col {
+  background: #fff;
+  z-index: 8;
+}
+
+.planner-table td.quantity-last {
+  text-align: center;
+  font-weight: 600;
 }
 
 .planner-table .photo-col {
@@ -1107,20 +1212,37 @@ watch(
   text-overflow: ellipsis;
 }
 
-.planner-table .category-col {
+.planner-table tbody .category-col {
   min-width: 200px;
   max-width: 200px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  background-color: transparent !important;
 }
 
-.category-text {
+.planner-table tbody .category-text {
   display: inline-block;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: inherit;
+  background-color: transparent;
+}
+
+.planner-table .type-col {
+  min-width: 100px;
+  max-width: 100px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.type-text {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .category-global-tooltip {
