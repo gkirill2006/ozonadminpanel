@@ -166,8 +166,14 @@
                 <td>{{ formatCurrency(row.price) }}</td>
                 <td>{{ row.barcode || '—' }}</td>
                 
-                <td class="category-col" :title="row.category || '—'">
-                  <span class="category-text">{{ row.category || '—' }}</span>
+                <td class="category-col">
+                  <span
+                    class="category-text"
+                    @mouseenter="showCategoryTooltip($event, row.category)"
+                    @mouseleave="hideCategoryTooltip"
+                  >
+                    {{ row.category || '—' }}
+                  </span>
                 </td>
                 
                 
@@ -226,6 +232,18 @@
         </div>
       </div>
     </section>
+    <Teleport to="body">
+      <div
+        v-if="categoryTooltip.visible"
+        class="category-global-tooltip"
+        :style="{
+          top: `${categoryTooltip.y}px`,
+          left: `${categoryTooltip.x}px`
+        }"
+      >
+        {{ categoryTooltip.text }}
+      </div>
+    </Teleport>
     <Modal v-if="showExcludedModal" @close="closeExcludedModal">
       <div class="list-modal">
         <h5 class="mb-3">Список исключений</h5>
@@ -398,6 +416,12 @@ const lastSyncedExcluded = ref<ExcludedProduct[]>([])
 const plannerRows = ref<PlannerRow[]>([])
 const isPlannerLoading = ref(false)
 const plannerError = ref<string | null>(null)
+const categoryTooltip = reactive({
+  visible: false,
+  text: '',
+  x: 0,
+  y: 0
+})
 
 const numericFields: Array<{ key: keyof FilterState; label: string; step?: number; isToggle?: boolean }> = [
   { key: 'planningDays', label: 'На сколько дн. планируем' },
@@ -520,6 +544,25 @@ const toNullableNumber = (value: unknown): number | null => {
   return Number.isNaN(num) ? null : num
 }
 
+const showCategoryTooltip = (event: MouseEvent, text?: string | null) => {
+  const content = (text || '').trim()
+  if (!content) {
+    categoryTooltip.visible = false
+    return
+  }
+  const target = event.currentTarget as HTMLElement | null
+  if (!target) return
+  const rect = target.getBoundingClientRect()
+  categoryTooltip.text = content
+  categoryTooltip.x = rect.left + rect.width / 2
+  categoryTooltip.y = rect.bottom + 10
+  categoryTooltip.visible = true
+}
+
+const hideCategoryTooltip = () => {
+  categoryTooltip.visible = false
+}
+
 const filtersRef = ref<HTMLElement | null>(null)
 const tableWrapperRef = ref<HTMLElement | null>(null)
 const tableHeight = ref('60vh')
@@ -547,15 +590,24 @@ const updateTableHeight = () => {
 
 const handleResize = () => {
   updateTableHeight()
+  hideCategoryTooltip()
+}
+
+const handleGlobalScroll = () => {
+  if (categoryTooltip.visible) {
+    categoryTooltip.visible = false
+  }
 }
 
 onMounted(() => {
   nextTick(() => updateTableHeight())
   window.addEventListener('resize', handleResize)
+  window.addEventListener('scroll', handleGlobalScroll, true)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize)
+  window.removeEventListener('scroll', handleGlobalScroll, true)
 })
 
 const apiFieldMap: Record<keyof FilterState, string> = {
@@ -1069,6 +1121,21 @@ watch(
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: inherit;
+}
+
+.category-global-tooltip {
+  position: fixed;
+  transform: translate(-50%, 0);
+  background: #0f172a;
+  color: #fff;
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.2);
+  pointer-events: none;
+  z-index: 9999;
+  max-width: min(320px, 90vw);
+  text-align: center;
 }
 .planner-table .category-col {
   left: 90px;
