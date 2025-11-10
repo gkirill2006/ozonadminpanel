@@ -240,9 +240,18 @@ class ApiService {
     return this.handleResponse(response)
   }
 
+  async fetchPlannerData(storeId: string | number) {
+    const response = await fetch(`${API_BASE_URL}/api/ozon/planner/`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ store_id: storeId })
+    })
+    return this.handleResponse(response)
+  }
+
   // Stores endpoints
   async getStores() {
-    const response = await fetch(`${API_BASE_URL}/stores/stores/`, {
+    const response = await fetch(`${API_BASE_URL}/auth/stores/`, {
       method: 'GET',
       headers: this.getHeaders()
     })
@@ -250,7 +259,7 @@ class ApiService {
   }
 
   async getStore(storeId: string) {
-    const response = await fetch(`${API_BASE_URL}/stores/stores/${storeId}/`, {
+    const response = await fetch(`${API_BASE_URL}/auth/stores/${storeId}/`, {
       method: 'GET',
       headers: this.getHeaders()
     })
@@ -258,7 +267,7 @@ class ApiService {
   }
 
   async createStore(storeData: any) {
-    const response = await fetch(`${API_BASE_URL}/stores/stores/`, {
+    const response = await fetch(`${API_BASE_URL}/auth/stores/`, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify(storeData)
@@ -267,7 +276,7 @@ class ApiService {
   }
 
   async updateStore(storeId: string, storeData: any) {
-    const response = await fetch(`${API_BASE_URL}/stores/stores/${storeId}/`, {
+    const response = await fetch(`${API_BASE_URL}/auth/stores/${storeId}/`, {
       method: 'PATCH',
       headers: this.getHeaders(),
       body: JSON.stringify(storeData)
@@ -276,7 +285,7 @@ class ApiService {
   }
 
   async deleteStore(storeId: string) {
-    const response = await fetch(`${API_BASE_URL}/stores/stores/${storeId}/`, {
+    const response = await fetch(`${API_BASE_URL}/auth/stores/${storeId}/`, {
       method: 'DELETE',
       headers: this.getHeaders()
     })

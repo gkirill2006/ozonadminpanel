@@ -8,7 +8,7 @@
         <div v-if="filtersError" class="alert alert-danger py-1 px-2 mb-2">
           {{ filtersError }}
         </div>
-        <div class="row g-2 align-items-end">
+        <div class="row g-2">
           <template v-for="field in numericFields" :key="field.key">
             <div v-if="!field.isToggle" class="col-12 col-md-6 col-lg-4">
               <label class="form-label text-uppercase text-muted small fw-semibold">{{ field.label }}</label>
@@ -65,6 +65,48 @@
               />
             </div>
           </div>
+
+          <div class="col-12 col-lg-6">
+            <div
+              class="list-card list-card--excluded list-card--clickable"
+              role="button"
+              tabindex="0"
+              @click="openExcludedModal"
+              @keydown.enter.prevent="openExcludedModal"
+              @keydown.space.prevent="openExcludedModal"
+            >
+              <div class="list-card__header">
+                <span>Список исключений</span>
+              </div>
+              <div class="list-card__body list-card__body--summary">
+                <span v-if="excludedProducts.length">
+                  {{ excludedProducts.length }} позиций
+                </span>
+                <span v-else class="text-muted small">Не задано</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12 col-lg-6">
+            <div
+              class="list-card list-card--required list-card--clickable"
+              role="button"
+              tabindex="0"
+              @click="openRequiredModal"
+              @keydown.enter.prevent="openRequiredModal"
+              @keydown.space.prevent="openRequiredModal"
+            >
+              <div class="list-card__header">
+                <span>Список обязательных товаров</span>
+              </div>
+              <div class="list-card__body list-card__body--summary">
+                <span v-if="requiredProducts.length">
+                  {{ requiredProducts.length }} позиций
+                </span>
+                <span v-else class="text-muted small">Не задано</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="mt-2 text-end">
@@ -75,7 +117,7 @@
             :disabled="isSaving || !hasStore"
           >
             <span v-if="isSaving" class="spinner-border spinner-border-sm me-1"></span>
-            {{ isSaving ? 'Сохраняем...' : 'Сохранить' }}
+            {{ isSaving ? 'Сохраняем...' : 'Применить' }}
           </button>
         </div>
       </div>
@@ -87,8 +129,19 @@
         <span class="text-muted small">Показано {{ plannerRows.length }} SKU</span>
       </div>
       <div class="card-body p-0">
+        <div v-if="plannerError" class="alert alert-danger py-1 px-2 m-2 mb-0">
+          {{ plannerError }}
+        </div>
         <div class="planner-table-wrapper" ref="tableWrapperRef" :style="{ height: tableHeight }">
-          <table class="planner-table">
+          <div v-if="isPlannerLoading && plannerRows.length" class="planner-table-loading">
+            <span class="spinner-border spinner-border-sm me-2"></span>
+            Загружаем данные...
+          </div>
+          <div v-if="isPlannerLoading && !plannerRows.length" class="planner-table-splash">
+            <span class="spinner-border spinner-border-sm me-2"></span>
+            Готовим таблицу...
+          </div>
+          <table v-if="plannerRows.length || !isPlannerLoading" class="planner-table">
             <thead>
               <tr>
                 <th
@@ -103,50 +156,184 @@
                 </th>
               </tr>
             </thead>
-            <tbody>
+            <tbody v-if="plannerRows.length">
               <tr v-for="row in plannerRows" :key="row.id">
                 <td class="sticky-col photo-col">
-                  <img :src="row.photo" alt="photo" class="product-photo" />
+                  <img :src="row.photo || fallbackPhoto" alt="photo" class="product-photo" />
                 </td>
-                <td class="sticky-col supplier-col">{{ row.supplierSku }}</td>
+                <td class="sticky-col supplier-col">{{ row.supplierSku || '—' }}</td>
                 <td>{{ formatCurrency(row.price) }}</td>
-                <td>{{ row.barcode }}</td>
-                <td>{{ row.category }}</td>
-                <td>{{ row.productType }}</td>
-                <td><a :href="row.link" target="_blank" rel="noopener">Открыть</a></td>
-                <td class="text-end">{{ row.ownStock }}</td>
-                <td class="text-end">{{ row.quantity }}</td>
+                <td>{{ row.barcode || '—' }}</td>
+                <td>{{ row.category || '—' }}</td>
+                <td>{{ row.productType || '—' }}</td>
+                <td>
+                  <a v-if="row.link" :href="row.link" target="_blank" rel="noopener">Открыть</a>
+                  <span v-else class="text-muted">—</span>
+                </td>
+                <td class="text-end">{{ formatNumber(row.ownStock) }}</td>
+                <td class="text-end">{{ formatNumber(row.quantity) }}</td>
                 <td class="text-end">{{ formatCurrency(row.revenue) }}</td>
-                <td class="text-end">{{ row.dailyUnits }}</td>
-                <td class="text-end">{{ row.turnoverDays }}</td>
-                <td>{{ row.cluster }}</td>
-                <td class="text-end">{{ row.avgDeliveryHours }}</td>
-                <td class="text-end">{{ row.influenceShare }}%</td>
-                <td class="text-end">{{ row.avgDeliveryItemHours }}</td>
-                <td class="text-end">{{ row.influenceItemShare }}%</td>
-                <td class="text-end">{{ row.recommendations }}</td>
+                <td class="text-end">{{ formatNumber(row.dailyUnits) }}</td>
+                <td class="text-end">{{ formatNumber(row.turnoverDays) }}</td>
+                <td>{{ row.cluster || '—' }}</td>
+                <td class="text-end">{{ formatNumber(row.avgDeliveryHours) }}</td>
+                <td class="text-end">
+                  <span v-if="isNumber(row.influenceShare)">
+                    {{ formatNumber(row.influenceShare, { maximumFractionDigits: 2 }) }}%
+                  </span>
+                  <span v-else>—</span>
+                </td>
+                <td class="text-end">{{ formatNumber(row.avgDeliveryItemHours) }}</td>
+                <td class="text-end">
+                  <span v-if="isNumber(row.influenceItemShare)">
+                    {{ formatNumber(row.influenceItemShare, { maximumFractionDigits: 2 }) }}%
+                  </span>
+                  <span v-else>—</span>
+                </td>
+                <td class="text-end">{{ formatNumber(row.recommendations) }}</td>
                 <td class="text-end">{{ formatCurrency(row.recommendationRevenue) }}</td>
-                <td class="text-end">{{ row.totalQty }}</td>
+                <td class="text-end">{{ formatNumber(row.totalQty) }}</td>
                 <td class="text-end">{{ formatCurrency(row.dailyRevenue) }}</td>
-                <td class="text-end">{{ row.dailyUnitsTotal }}</td>
-                <td class="text-end">{{ row.dailySharePercent }}%</td>
-                <td class="text-end">{{ row.stockWithTransit }}</td>
-                <td class="text-end">{{ row.demand }}</td>
-                <td class="text-end">{{ row.toSupply }}</td>
-                <td>{{ row.article }}</td>
-                <td>{{ row.barcode2 }}</td>
-                <td class="text-end">{{ row.shipmentQty }}</td>
+                <td class="text-end">{{ formatNumber(row.dailyUnitsTotal) }}</td>
+                <td class="text-end">
+                  <span v-if="isNumber(row.dailySharePercent)">
+                    {{ formatNumber(row.dailySharePercent, { maximumFractionDigits: 3 }) }}%
+                  </span>
+                  <span v-else>—</span>
+                </td>
+                <td class="text-end">{{ formatNumber(row.stockWithTransit) }}</td>
+                <td class="text-end">{{ formatNumber(row.demand) }}</td>
+                <td class="text-end">{{ formatNumber(row.toSupply) }}</td>
+                <td>{{ row.article || '—' }}</td>
+                <td>{{ row.barcode2 || row.barcode || '—' }}</td>
+                <td class="text-end">{{ formatNumber(row.shipmentQty) }}</td>
+              </tr>
+            </tbody>
+            <tbody v-else>
+              <tr>
+                <td :colspan="plannerHeaders.length" class="text-center text-muted py-4">
+                  Нет данных для отображения
+                </td>
               </tr>
             </tbody>
           </table>
         </div>
       </div>
     </section>
+    <Modal v-if="showExcludedModal" @close="closeExcludedModal">
+      <div class="list-modal">
+        <h5 class="mb-3">Список исключений</h5>
+        <div class="table-responsive">
+          <table class="list-table">
+            <thead>
+              <tr>
+                <th>Артикул</th>
+                <th class="text-end">Действия</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(item, index) in excludedDraft" :key="`excluded-row-${index}`">
+                <td>
+                  <input
+                    type="text"
+                    class="form-control form-control-sm"
+                    v-model.trim="item.article"
+                    placeholder="Артикул"
+                  />
+                </td>
+                <td class="text-end">
+                  <button
+                    class="btn btn-link btn-sm text-danger"
+                    type="button"
+                    @click="removeExcludedRow(index)"
+                  >
+                    Удалить
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="d-flex justify-content-between align-items-center mt-3">
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="addExcludedRow">
+            Добавить строку
+          </button>
+          <div class="d-flex gap-2">
+            <button class="btn btn-link btn-sm" type="button" @click="closeExcludedModal">
+              Отмена
+            </button>
+            <button class="btn btn-primary btn-sm" type="button" @click="applyExcludedDraft">
+              Готово
+            </button>
+          </div>
+        </div>
+      </div>
+    </Modal>
+
+    <Modal v-if="showRequiredModal" @close="closeRequiredModal">
+      <div class="list-modal">
+        <h5 class="mb-3">Список обязательных товаров</h5>
+        <div class="table-responsive">
+          <table class="list-table">
+            <thead>
+              <tr>
+                <th>Артикул</th>
+                <th style="width: 120px;">Кол-во</th>
+                <th class="text-end">Действия</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(item, index) in requiredDraft" :key="`required-row-${index}`">
+                <td>
+                  <input
+                    type="text"
+                    class="form-control form-control-sm"
+                    v-model.trim="item.article"
+                    placeholder="Артикул"
+                  />
+                </td>
+                <td>
+                  <input
+                    type="number"
+                    min="1"
+                    class="form-control form-control-sm"
+                    v-model.number="item.quantity"
+                  />
+                </td>
+                <td class="text-end">
+                  <button
+                    class="btn btn-link btn-sm text-danger"
+                    type="button"
+                    @click="removeRequiredRow(index)"
+                  >
+                    Удалить
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="d-flex justify-content-between align-items-center mt-3">
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="addRequiredRow">
+            Добавить строку
+          </button>
+          <div class="d-flex gap-2">
+            <button class="btn btn-link btn-sm" type="button" @click="closeRequiredModal">
+              Отмена
+            </button>
+            <button class="btn btn-primary btn-sm" type="button" @click="applyRequiredDraft">
+              Готово
+            </button>
+          </div>
+        </div>
+      </div>
+    </Modal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { reactive, ref, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
+import Modal from '@/components/Modal.vue'
 import { apiService } from '@/services/api'
 
 const props = defineProps<{
@@ -167,6 +354,17 @@ interface FilterState {
   turnoverFromStock: number
 }
 
+interface RequiredProduct {
+  id?: number
+  article: string
+  quantity: number
+}
+
+interface ExcludedProduct {
+  id?: number
+  article: string
+}
+
 const defaultFilters: FilterState = {
   planningDays: 28,
   analysisPeriod: 28,
@@ -183,6 +381,17 @@ const defaultFilters: FilterState = {
 
 const filters = reactive<FilterState>({ ...defaultFilters }) as FilterState
 const writableFilters = filters as Record<keyof FilterState, FilterState[keyof FilterState]>
+const requiredProducts = ref<RequiredProduct[]>([])
+const excludedProducts = ref<ExcludedProduct[]>([])
+const requiredDraft = ref<RequiredProduct[]>([])
+const excludedDraft = ref<ExcludedProduct[]>([])
+const showRequiredModal = ref(false)
+const showExcludedModal = ref(false)
+const lastSyncedRequired = ref<RequiredProduct[]>([])
+const lastSyncedExcluded = ref<ExcludedProduct[]>([])
+const plannerRows = ref<PlannerRow[]>([])
+const isPlannerLoading = ref(false)
+const plannerError = ref<string | null>(null)
 
 const numericFields: Array<{ key: keyof FilterState; label: string; step?: number; isToggle?: boolean }> = [
   { key: 'planningDays', label: 'На сколько дн. планируем' },
@@ -250,73 +459,60 @@ const plannerHeaders = [
 ]
 
 interface PlannerRow {
-  id: number
-  photo: string
+  id: string
+  photo: string | null
   supplierSku: string
-  price: number
+  price: number | null
   barcode: string
   category: string
   productType: string
   link: string
-  ownStock: number
-  quantity: number
-  revenue: number
-  dailyUnits: number
-  turnoverDays: number
+  ownStock: number | null
+  quantity: number | null
+  revenue: number | null
+  dailyUnits: number | null
+  turnoverDays: number | null
   cluster: string
-  avgDeliveryHours: number
-  influenceShare: number
-  avgDeliveryItemHours: number
-  influenceItemShare: number
-  recommendations: number
-  recommendationRevenue: number
-  totalQty: number
-  dailyRevenue: number
-  dailyUnitsTotal: number
-  dailySharePercent: number
-  stockWithTransit: number
-  demand: number
-  toSupply: number
+  avgDeliveryHours: number | null
+  influenceShare: number | null
+  avgDeliveryItemHours: number | null
+  influenceItemShare: number | null
+  recommendations: number | null
+  recommendationRevenue: number | null
+  totalQty: number | null
+  dailyRevenue: number | null
+  dailyUnitsTotal: number | null
+  dailySharePercent: number | null
+  stockWithTransit: number | null
+  demand: number | null
+  toSupply: number | null
   article: string
   barcode2: string
-  shipmentQty: number
+  shipmentQty: number | null
 }
 
-const plannerRows: PlannerRow[] = Array.from({ length: 15 }).map((_, index) => ({
-  id: index + 1,
-  photo: `https://picsum.photos/seed/planner-${index}/64/64`,
-  supplierSku: `SKU-${1000 + index}`,
-  price: 1200 + index * 42,
-  barcode: `4600${123450 + index}`,
-  category: index % 2 === 0 ? 'Декор' : 'Стройматериалы',
-  productType: index % 2 === 0 ? 'FBO' : 'FBS',
-  link: 'https://example.com',
-  ownStock: 40 + index * 3,
-  quantity: 120 + index * 5,
-  revenue: 400000 + index * 12000,
-  dailyUnits: 12 + index,
-  turnoverDays: 25 - index,
-  cluster: index % 3 === 0 ? 'Москва' : 'СПБ',
-  avgDeliveryHours: 36 - index,
-  influenceShare: 12 + index,
-  avgDeliveryItemHours: 30 + index,
-  influenceItemShare: 8 + (index % 5),
-  recommendations: 20 + index,
-  recommendationRevenue: 150000 + index * 8000,
-  totalQty: 500 + index * 15,
-  dailyRevenue: 12000 + index * 400,
-  dailyUnitsTotal: 60 + index * 2,
-  dailySharePercent: 5 + index * 0.3,
-  stockWithTransit: 350 + index * 10,
-  demand: 420 + index * 12,
-  toSupply: 70 + index * 4,
-  article: `ARTICLE-${index + 10}`,
-  barcode2: `200${456789 + index}`,
-  shipmentQty: 80 + index * 3
-}))
+const fallbackPhoto = 'https://via.placeholder.com/64?text=SKU'
 
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(value)
+const formatCurrency = (value: number | null | undefined) =>
+  new Intl.NumberFormat('ru-RU', {
+    style: 'currency',
+    currency: 'RUB',
+    maximumFractionDigits: 0
+  }).format(Number.isFinite(Number(value)) ? Number(value) : 0)
+
+const formatNumber = (value: number | null | undefined, options?: Intl.NumberFormatOptions) => {
+  const num = Number(value)
+  if (!Number.isFinite(num)) return '—'
+  return new Intl.NumberFormat('ru-RU', options).format(num)
+}
+
+const isNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value)
+
+const toNullableNumber = (value: unknown): number | null => {
+  if (value === null || typeof value === 'undefined') return null
+  const num = Number(value)
+  return Number.isNaN(num) ? null : num
+}
 
 const filtersRef = ref<HTMLElement | null>(null)
 const tableWrapperRef = ref<HTMLElement | null>(null)
@@ -381,6 +577,21 @@ const normalizeValue = (key: keyof FilterState, value: unknown) => {
   return value as FilterState[typeof key]
 }
 
+const sanitizeRequiredList = (list: RequiredProduct[]) =>
+  list
+    .map((item) => ({
+      article: (item.article || '').trim(),
+      quantity: Math.max(1, Number(item.quantity) || 1)
+    }))
+    .filter((item) => item.article)
+
+const sanitizeExcludedList = (list: ExcludedProduct[]) =>
+  list
+    .map((item) => ({
+      article: (item.article || '').trim()
+    }))
+    .filter((item) => item.article)
+
 const setFiltersFromApi = (data: Record<string, unknown>) => {
   (Object.keys(apiFieldMap) as Array<keyof FilterState>).forEach((key) => {
     const apiKey = apiFieldMap[key]
@@ -391,6 +602,16 @@ const setFiltersFromApi = (data: Record<string, unknown>) => {
   lastSyncedFilters.value = JSON.parse(JSON.stringify(filters))
   toggleBindings.warehouseWeight = Boolean(filters.warehouseWeight)
   toggleBindings.showNoNeed = filters.showNoNeed
+  requiredProducts.value = sanitizeRequiredList(
+    Array.isArray((data as any).required_products) ? (data as any).required_products : []
+  )
+  excludedProducts.value = sanitizeExcludedList(
+    Array.isArray((data as any).excluded_products) ? (data as any).excluded_products : []
+  )
+  lastSyncedRequired.value = JSON.parse(JSON.stringify(requiredProducts.value))
+  lastSyncedExcluded.value = JSON.parse(JSON.stringify(excludedProducts.value))
+  requiredDraft.value = JSON.parse(JSON.stringify(requiredProducts.value))
+  excludedDraft.value = JSON.parse(JSON.stringify(excludedProducts.value))
 }
 
 const toApiPayload = (partial: Partial<FilterState>) => {
@@ -421,6 +642,100 @@ const fetchFilters = async () => {
 
 const filterKeys = Object.keys(filters) as Array<keyof FilterState>
 
+const toStringSafe = (value: unknown): string => {
+  if (typeof value === 'string') return value
+  if (value === null || typeof value === 'undefined') return ''
+  return String(value)
+}
+
+const extractPlannerRows = (payload: unknown): PlannerRow[] => {
+  if (payload && typeof payload === 'object') {
+    const clusters = Array.isArray((payload as any).clusters) ? (payload as any).clusters : []
+    if (clusters.length) {
+      const rows: PlannerRow[] = []
+      clusters.forEach((cluster: any, clusterIndex: number) => {
+        const products = Array.isArray(cluster?.products) ? cluster.products : []
+        products.forEach((product: any, productIndex: number) => {
+          const barcodes: string[] = Array.isArray(product?.barcodes)
+            ? product.barcodes.map((code: unknown) => toStringSafe(code)).filter(Boolean)
+            : []
+          const primaryBarcode = barcodes[0] || ''
+          const secondaryBarcode = barcodes[1] || primaryBarcode
+          rows.push({
+            id: `${clusterIndex}-${productIndex}-${product?.sku ?? product?.offer_id ?? productIndex}`,
+            photo: typeof product?.photo === 'string' ? product.photo : null,
+            supplierSku:
+              toStringSafe(product?.offer_id) || toStringSafe(product?.name) || toStringSafe(product?.sku),
+            price: toNullableNumber(product?.price),
+            barcode: primaryBarcode,
+            category: toStringSafe(product?.category),
+            productType: toStringSafe(product?.type_name),
+            link: typeof product?.ozon_link === 'string' ? product.ozon_link : '',
+            ownStock: toNullableNumber(product?.fbs_stock_total_qty),
+            quantity: toNullableNumber(product?.sales_qty_cluster),
+            revenue: toNullableNumber(product?.product_total_revenue_fbo_fbs),
+            dailyUnits: toNullableNumber(product?.avg_daily_sales_fbo_fbs),
+            turnoverDays: toNullableNumber(product?.oborachivaemost),
+            cluster: toStringSafe(cluster?.cluster_name),
+            avgDeliveryHours: toNullableNumber(product?.average_delivery_time),
+            influenceShare: toNullableNumber(cluster?.cluster_share_percent),
+            avgDeliveryItemHours: toNullableNumber(product?.average_delivery_time_item),
+            influenceItemShare: toNullableNumber(product?.impact_share_item),
+            recommendations: toNullableNumber(product?.recommended_supply_item),
+            recommendationRevenue: toNullableNumber(product?.payout_total),
+            totalQty: toNullableNumber(product?.stock_total_cluster),
+            dailyRevenue: toNullableNumber(product?.avg_daily_sales_cluster_rub),
+            dailyUnitsTotal: toNullableNumber(product?.avg_daily_sales_cluster_qty),
+            dailySharePercent: toNullableNumber(product?.share_of_total_daily_average),
+            stockWithTransit: toNullableNumber(product?.stock_total_cluster),
+            demand: toNullableNumber(product?.need_goods),
+            toSupply: toNullableNumber(product?.for_delivery),
+            article: toStringSafe(product?.sku) || toStringSafe(product?.offer_id),
+            barcode2: secondaryBarcode,
+            shipmentQty: toNullableNumber(product?.sales_total_fbo_fbs)
+          })
+        })
+      })
+      return rows
+    }
+  }
+
+  if (Array.isArray(payload)) {
+    return payload as PlannerRow[]
+  }
+
+  if (payload && typeof payload === 'object') {
+    const candidateKeys = ['results', 'data', 'items', 'rows']
+    for (const key of candidateKeys) {
+      const collection = (payload as Record<string, unknown>)[key]
+      if (Array.isArray(collection)) {
+        return collection as PlannerRow[]
+      }
+    }
+  }
+
+  return []
+}
+
+const fetchPlannerData = async () => {
+  if (!props.storeId) {
+    plannerRows.value = []
+    return
+  }
+  try {
+    isPlannerLoading.value = true
+    plannerError.value = null
+    const response = await apiService.fetchPlannerData(props.storeId)
+    console.log('[Planner] API response:', response)
+    plannerRows.value = extractPlannerRows(response)
+  } catch (error) {
+    plannerError.value = error instanceof Error ? error.message : 'Не удалось загрузить данные планера'
+    plannerRows.value = []
+  } finally {
+    isPlannerLoading.value = false
+  }
+}
+
 const getChangedFields = () => {
   if (!lastSyncedFilters.value) {
     return { ...filters }
@@ -434,31 +749,97 @@ const getChangedFields = () => {
   return diff as Partial<FilterState>
 }
 
-const saveFilters = async () => {
-  if (!props.storeId) return
+const saveFilters = async (): Promise<boolean> => {
+  if (!props.storeId) return false
   const diff = getChangedFields()
-  if (Object.keys(diff).length === 0) return
+  const payload = toApiPayload(diff)
+  const requiredSanitized = sanitizeRequiredList(requiredProducts.value)
+  const excludedSanitized = sanitizeExcludedList(excludedProducts.value)
+  const listsChanged =
+    JSON.stringify(requiredSanitized) !== JSON.stringify(lastSyncedRequired.value) ||
+    JSON.stringify(excludedSanitized) !== JSON.stringify(lastSyncedExcluded.value)
+  if (listsChanged) {
+    payload.required_products = requiredSanitized
+    payload.excluded_products = excludedSanitized
+  }
+  if (Object.keys(payload).length === 0) return true
   try {
     isSaving.value = true
     filtersError.value = null
-    const payload = toApiPayload(diff)
     const response = await apiService.updateStoreFilters(props.storeId, payload)
     setFiltersFromApi(response)
+    return true
   } catch (error) {
     filtersError.value = error instanceof Error ? error.message : 'Не удалось сохранить фильтры'
+    return false
   } finally {
     isSaving.value = false
   }
 }
 
-const handleSaveClick = () => {
-  saveFilters()
+const handleSaveClick = async () => {
+  if (!props.storeId || isSaving.value) return
+  const saved = await saveFilters()
+  if (saved) {
+    await fetchPlannerData()
+  }
+}
+
+const openRequiredModal = () => {
+  requiredDraft.value = JSON.parse(JSON.stringify(requiredProducts.value))
+  showRequiredModal.value = true
+}
+
+const openExcludedModal = () => {
+  excludedDraft.value = JSON.parse(JSON.stringify(excludedProducts.value))
+  showExcludedModal.value = true
+}
+
+const closeRequiredModal = () => {
+  showRequiredModal.value = false
+}
+
+const closeExcludedModal = () => {
+  showExcludedModal.value = false
+}
+
+const applyRequiredDraft = () => {
+  requiredProducts.value = sanitizeRequiredList(requiredDraft.value)
+  showRequiredModal.value = false
+}
+
+const applyExcludedDraft = () => {
+  excludedProducts.value = sanitizeExcludedList(excludedDraft.value)
+  showExcludedModal.value = false
+}
+
+const addRequiredRow = () => {
+  requiredDraft.value = [
+    ...requiredDraft.value,
+    { article: '', quantity: 1 }
+  ]
+}
+
+const addExcludedRow = () => {
+  excludedDraft.value = [
+    ...excludedDraft.value,
+    { article: '' }
+  ]
+}
+
+const removeRequiredRow = (index: number) => {
+  requiredDraft.value.splice(index, 1)
+}
+
+const removeExcludedRow = (index: number) => {
+  excludedDraft.value.splice(index, 1)
 }
 
 watch(
   () => props.storeId,
-  () => {
-    fetchFilters()
+  async () => {
+    await fetchFilters()
+    await fetchPlannerData()
   },
   { immediate: true }
 )
@@ -519,6 +900,90 @@ watch(
   background: #fff;
 }
 
+.list-card {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 12px;
+  padding: 0.75rem;
+  height: 100%;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.list-card--clickable {
+  cursor: pointer;
+}
+
+.list-card--clickable:hover {
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.1);
+  transform: translateY(-1px);
+}
+
+.list-card--clickable:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.list-card--excluded {
+  background: #fdecef;
+}
+
+.list-card--required {
+  background: #ecf2ff;
+}
+
+.list-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+}
+
+.list-card__body {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-height: 6rem;
+  overflow: auto;
+}
+
+.list-card__body--summary {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  max-height: none;
+  overflow: visible;
+  min-height: 1.5rem;
+}
+
+.list-modal {
+  width: fit-content;
+  max-width: 90vw;
+  min-width: 360px;
+}
+
+.list-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.list-table th,
+.list-table td {
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  padding: 0.4rem;
+}
+
+.list-table input {
+  background: #f8f9fb;
+}
+
 .planner-table-wrapper {
   max-height: calc(100vh - 175px);
   /* height: calc(100vh - var(--workspace-sticky-offset, 5rem) - 0.5rem); */
@@ -526,6 +991,7 @@ watch(
   border: 1px solid rgba(15, 23, 42, 0.05);
   border-radius: 10px;
   margin: 0;
+  position: relative;
 }
 
 .planner-table {
@@ -575,7 +1041,12 @@ watch(
 
 .planner-table .supplier-col {
   left: 90px;
-  min-width: 220px;
+  width: 170px;
+  min-width: 170px;
+  max-width: 170px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .planner-table tbody .photo-col,
@@ -603,6 +1074,39 @@ watch(
 
 .planner-table td a:hover {
   text-decoration: underline;
+}
+
+.planner-table-splash {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #0f172a;
+  font-weight: 600;
+  gap: 0.5rem;
+}
+
+.planner-table-loading {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  z-index: 25;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.planner-table-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #94a3b8;
+  font-weight: 500;
+  padding: 1.5rem;
 }
 
 @media (max-width: 768px) {
