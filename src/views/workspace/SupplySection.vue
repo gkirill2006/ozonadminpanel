@@ -1,23 +1,54 @@
 <template>
   <div class="planner">
-    <section class="card shadow-sm planner-card">
-      <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
-        <h5 class="mb-0">Поставка</h5>
-        <span class="text-muted small">Кластеров: {{ clusterHeaders.length }} · Товаров: {{ products.length }}</span>
-      </div>
-      <div class="card-body">
-        <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
-          <button class="btn btn-primary btn-sm" type="button" @click="fetchPivotData" :disabled="isLoading || !storeId">
-            <span v-if="isLoading" class="spinner-border spinner-border-sm me-1"></span>
-            {{ isLoading ? 'Обновляем...' : 'Обновить' }}
-          </button>
-          <span v-if="loadError" class="text-danger small">{{ loadError }}</span>
+      <section class="card shadow-sm planner-card">
+        <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+          <h5 class="mb-0">Поставка</h5>
+          <span class="text-muted small">Кластеров: {{ clusterHeaders.length }} · Товаров: {{ products.length }}</span>
         </div>
+        <div class="card-body">
+          <div v-if="loadError" class="alert alert-danger py-1 px-2 mb-2">
+            {{ loadError }}
+          </div>
 
-        <div class="table-wrapper mt-2">
-          <div v-if="isLoading && !products.length" class="planner-table-splash">
-            <span class="spinner-border spinner-border-sm me-2"></span>
-            Готовим таблицу...
+          <div class="d-flex flex-wrap gap-2 align-items-end mb-2 selection-bar">
+            <div class="range-inputs d-flex gap-2 align-items-end">
+              <div>
+                <label class="form-label text-uppercase text-muted small fw-semibold mb-1">С строки</label>
+                <input
+                  type="number"
+                  min="1"
+                  :max="products.length || 1"
+                  class="form-control form-control-sm"
+                  v-model="rangeFrom"
+                />
+              </div>
+              <div>
+                <label class="form-label text-uppercase text-muted small fw-semibold mb-1">По строку</label>
+                <input
+                  type="number"
+                  min="1"
+                  :max="products.length || 1"
+                  class="form-control form-control-sm"
+                  v-model="rangeTo"
+                />
+              </div>
+            </div>
+            <div class="selection-actions d-flex gap-2 align-items-end">
+              <button class="btn btn-outline-secondary btn-sm" type="button" @click="selectRange">Выделить</button>
+              <button class="btn btn-outline-secondary btn-sm" type="button" @click="resetSelection" :disabled="!selectedRowsSize">Сброс</button>
+            </div>
+            <div class="ms-md-auto d-flex gap-2 align-items-end">
+              <span class="text-muted small">Выбрано строк: {{ selectedRowsSize }}</span>
+              <button class="btn btn-success btn-sm" type="button" :disabled="!selectedRowsSize" @click="openShipmentDialog">
+                Сформировать отгрузку
+              </button>
+            </div>
+          </div>
+
+          <div class="table-wrapper mt-2">
+            <div v-if="isLoading && !products.length" class="planner-table-splash">
+              <span class="spinner-border spinner-border-sm me-2"></span>
+              Готовим таблицу...
           </div>
           <table v-if="products.length || !isLoading" class="planner-table pivot-table">
             <thead>
@@ -32,7 +63,12 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(row, idx) in products" :key="row.id">
+              <tr
+                v-for="(row, idx) in products"
+                :key="row.id"
+                :class="{ 'row-selected': isRowSelected(idx + 1) }"
+                @click="toggleRow(idx + 1)"
+              >
                 <td class="sticky-col index-col">{{ idx + 1 }}</td>
                 <td class="sticky-col name-col">
                   <div class="d-flex align-items-center gap-2">
@@ -65,7 +101,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { apiService } from '@/services/api'
 
 const props = defineProps<{ storeId: string }>()
@@ -86,6 +122,10 @@ const clusterHeaders = ref<string[]>([])
 const products = ref<PivotProduct[]>([])
 const isLoading = ref(false)
 const loadError = ref<string | null>(null)
+const selectedRows = ref<Set<number>>(new Set())
+const rangeFrom = ref('')
+const rangeTo = ref('')
+const selectedRowsSize = computed(() => selectedRows.value.size)
 
 const formatNumber = (value: number | null | undefined) => {
   const num = Number(value)
@@ -137,9 +177,46 @@ watch(
     if (!next) return
     products.value = []
     clusterHeaders.value = []
+    selectedRows.value = new Set()
+    rangeFrom.value = ''
+    rangeTo.value = ''
     fetchPivotData()
   }
 )
+
+const selectRange = () => {
+  const from = Number(rangeFrom.value)
+  const to = Number(rangeTo.value)
+  if (Number.isNaN(from) || Number.isNaN(to) || from < 1 || to < from || to > products.value.length) return
+  const next = new Set(selectedRows.value)
+  for (let i = from; i <= to; i++) {
+    next.add(i)
+  }
+  selectedRows.value = next
+}
+
+const resetSelection = () => {
+  selectedRows.value = new Set()
+  rangeFrom.value = ''
+  rangeTo.value = ''
+}
+
+const toggleRow = (rowNumber: number) => {
+  const next = new Set(selectedRows.value)
+  if (next.has(rowNumber)) {
+    next.delete(rowNumber)
+  } else {
+    next.add(rowNumber)
+  }
+  selectedRows.value = next
+}
+
+const isRowSelected = (rowNumber: number) => selectedRows.value.has(rowNumber)
+
+const openShipmentDialog = () => {
+  if (!selectedRows.value.size) return
+  console.log('Сформировать отгрузку для строк:', Array.from(selectedRows.value))
+}
 </script>
 
 <style scoped>
@@ -158,6 +235,10 @@ watch(
 .planner-card .card-body,
 .planner-card .card-header {
   padding: 0.35rem 0.5rem;
+}
+
+.selection-bar {
+  align-items: flex-end !important;
 }
 
 .table-wrapper {
@@ -217,7 +298,7 @@ watch(
 .planner-table .name-col {
   left: 60px;
   min-width: 120px;
-  max-width: 200px;
+  max-width: 220px;
 }
 
 .planner-table .barcode-col {
@@ -230,6 +311,19 @@ watch(
 
 .planner-table tbody tr:hover {
   background: rgba(15, 23, 42, 0.03);
+}
+
+.planner-table tbody tr {
+  cursor: pointer;
+}
+
+.planner-table tbody tr.row-selected {
+  background: rgba(34, 197, 94, 0.15);
+}
+
+.planner-table tbody tr.row-selected .sticky-col {
+  background: #d9fbe7;
+  box-shadow: inset -1px 0 rgba(15, 23, 42, 0.08);
 }
 
 .planner-table-empty {
@@ -267,5 +361,19 @@ watch(
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.selection-bar .form-control {
+  min-width: 110px;
+}
+
+.selection-bar .btn {
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.selection-actions {
+  align-self: flex-end;
 }
 </style>
