@@ -38,6 +38,11 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
+      '/ozon': {
+        target: 'http://localhost:9006',
+        changeOrigin: true,
+        secure: false,
+      },
       '/api': {
         target: 'http://localhost:9006',
         changeOrigin: true,

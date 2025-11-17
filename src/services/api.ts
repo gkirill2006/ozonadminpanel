@@ -249,6 +249,15 @@ class ApiService {
     return this.handleResponse(response)
   }
 
+  async fetchPlannerPivot(storeId: string | number) {
+    const response = await fetch(`${API_BASE_URL}/api/ozon/planner/pivot/`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ store_id: storeId })
+    })
+    return this.handleResponse(response)
+  }
+
   // Stores endpoints
   async getStores() {
     const response = await fetch(`${API_BASE_URL}/auth/stores/`, {

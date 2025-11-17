@@ -157,11 +157,31 @@
           {{ plannerError }}
         </div>
         <div class="planner-table-wrapper" ref="tableWrapperRef" :style="{ height: tableHeight }">
-          <div v-if="isPlannerLoading && plannerRows.length" class="planner-table-loading">
+          <div
+            v-if="isPlannerLoading && activeTable === 'planner' && plannerRows.length"
+            class="planner-table-loading"
+          >
             <span class="spinner-border spinner-border-sm me-2"></span>
             Загружаем данные...
           </div>
-          <div v-if="isPlannerLoading && !plannerRows.length" class="planner-table-splash">
+          <div
+            v-if="isPlannerLoading && activeTable === 'planner' && !plannerRows.length"
+            class="planner-table-splash"
+          >
+            <span class="spinner-border spinner-border-sm me-2"></span>
+            Готовим таблицу...
+          </div>
+          <div
+            v-if="isPlannerLoading && activeTable === 'summary' && summaryRows.length"
+            class="planner-table-loading"
+          >
+            <span class="spinner-border spinner-border-sm me-2"></span>
+            Загружаем данные...
+          </div>
+          <div
+            v-if="isPlannerLoading && activeTable === 'summary' && !summaryRows.length"
+            class="planner-table-splash"
+          >
             <span class="spinner-border spinner-border-sm me-2"></span>
             Готовим таблицу...
           </div>
@@ -1047,6 +1067,11 @@ const removeExcludedRow = (index: number) => {
 watch(
   () => props.storeId,
   async () => {
+    activeTable.value = 'planner'
+    plannerError.value = null
+    plannerRows.value = []
+    summaryRows.value = []
+    isPlannerLoading.value = true
     await fetchFilters()
     await fetchPlannerData()
   },
@@ -1422,9 +1447,10 @@ watch(
 
 .planner-table-splash {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   height: 100%;
+  padding-top: 1.25rem;
   color: #0f172a;
   font-weight: 600;
   gap: 0.5rem;

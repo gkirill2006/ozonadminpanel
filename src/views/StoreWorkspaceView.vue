@@ -14,7 +14,7 @@
 
         <template v-else>
           <PlannerSection v-if="activeSection === 'planner'" :store-id="storeId" />
-          <SupplySection v-else-if="activeSection === 'supply'" />
+          <SupplySection v-else-if="activeSection === 'supply'" :store-id="storeId" />
           <div v-else class="section-body">
             <div class="section-placeholder">
               <h3 class="mb-2">{{ currentSectionLabel }}</h3>

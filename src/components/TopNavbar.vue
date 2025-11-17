@@ -191,6 +191,7 @@ watch(
 .workspace-tabs {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
   padding: 0.25rem 0.5rem;
   border-radius: 999px;
