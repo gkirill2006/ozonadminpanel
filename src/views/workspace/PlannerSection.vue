@@ -150,6 +150,11 @@
           <span class="text-muted small">
             {{ activeTable === 'planner' ? `Показано ${plannerRows.length} SKU` : `Показано ${summaryRows.length} товаров` }}
           </span>
+          <div class="d-flex justify-content-end mt-1">
+            <button class="btn btn-outline-secondary btn-sm" type="button" @click="openPlannerSettings">
+              Настройки
+            </button>
+          </div>
         </div>
       </div>
       <div class="card-body p-0">
@@ -191,31 +196,32 @@
           >
             <thead>
               <tr>
-                <th
-                  v-for="(header, idx) in plannerHeaders"
-                  :key="header"
-                  :class="[
-                    headerColorClasses[idx],
-                    {
-                      'sticky-col photo-col': idx === 0,
-                      'sticky-col supplier-col': idx === 1
-                    }
-                  ]"
-                >
-                  {{ header }}
-                </th>
+                <template v-for="(header, idx) in plannerHeaders" :key="header">
+                  <th
+                    v-if="isColumnVisible(idx)"
+                    :class="[
+                      headerColorClasses[idx],
+                      {
+                        'sticky-col photo-col': idx === 0,
+                        'sticky-col supplier-col': idx === 1
+                      }
+                    ]"
+                  >
+                    {{ header }}
+                  </th>
+                </template>
               </tr>
             </thead>
             <tbody v-if="plannerRows.length">
               <tr v-for="row in plannerRows" :key="row.id">
-                <td class="sticky-col photo-col">
+                <td v-if="isColumnVisible(0)" class="sticky-col photo-col">
                   <img :src="row.photo || fallbackPhoto" alt="photo" class="product-photo" />
                 </td>
-                <td class="sticky-col supplier-col">{{ row.supplierSku || '—' }}</td>
-                <td>{{ formatCurrency(row.price) }}</td>
-                <td>{{ row.barcode || '—' }}</td>
+                <td v-if="isColumnVisible(1)" class="sticky-col supplier-col">{{ row.supplierSku || '—' }}</td>
+                <td v-if="isColumnVisible(2)">{{ formatCurrency(row.price) }}</td>
+                <td v-if="isColumnVisible(3)">{{ row.barcode || '—' }}</td>
                 
-                <td class="category-col">
+                <td v-if="isColumnVisible(4)" class="category-col">
                   <span
                     class="category-text"
                     @mouseenter="showCategoryTooltip($event, row.category)"
@@ -226,7 +232,7 @@
                 </td>
                 
                 
-                <td class="type-col">
+                <td v-if="isColumnVisible(5)" class="type-col">
                   <span
                     class="type-text"
                     @mouseenter="showTypeTooltip($event, row.productType)"
@@ -235,47 +241,47 @@
                     {{ row.productType || '—' }}
                   </span>
                 </td>
-                <td>
+                <td v-if="isColumnVisible(6)">
                   <a v-if="row.link" :href="row.link" target="_blank" rel="noopener">Открыть</a>
                   <span v-else class="text-muted">—</span>
                 </td>
-                <td class="text-end">{{ formatNumber(row.ownStock) }}</td>
-                <td class="text-end">{{ formatNumber(row.quantity) }}</td>
-                <td class="text-end">{{ formatCurrency(row.revenue) }}</td>
-                <td class="text-end">{{ formatNumber(row.dailyUnits) }}</td>
-                <td class="text-end">{{ formatNumber(row.turnoverDays) }}</td>
-                <td>{{ row.cluster || '—' }}</td>
-                <td class="text-end">{{ formatNumber(row.avgDeliveryHours) }}</td>
-                <td class="text-end">
+                <td v-if="isColumnVisible(7)" class="text-end">{{ formatNumber(row.ownStock) }}</td>
+                <td v-if="isColumnVisible(8)" class="text-end">{{ formatNumber(row.quantity) }}</td>
+                <td v-if="isColumnVisible(9)" class="text-end">{{ formatCurrency(row.revenue) }}</td>
+                <td v-if="isColumnVisible(10)" class="text-end">{{ formatNumber(row.dailyUnits) }}</td>
+                <td v-if="isColumnVisible(11)" class="text-end">{{ formatNumber(row.turnoverDays) }}</td>
+                <td v-if="isColumnVisible(12)">{{ row.cluster || '—' }}</td>
+                <td v-if="isColumnVisible(13)" class="text-end">{{ formatNumber(row.avgDeliveryHours) }}</td>
+                <td v-if="isColumnVisible(14)" class="text-end">
                   <span v-if="isNumber(row.influenceShare)">
                     {{ formatNumber(row.influenceShare, { maximumFractionDigits: 2 }) }}%
                   </span>
                   <span v-else>—</span>
                 </td>
-                <td class="text-end">{{ formatNumber(row.avgDeliveryItemHours) }}</td>
-                <td class="text-end">
+                <td v-if="isColumnVisible(15)" class="text-end">{{ formatNumber(row.avgDeliveryItemHours) }}</td>
+                <td v-if="isColumnVisible(16)" class="text-end">
                   <span v-if="isNumber(row.influenceItemShare)">
                     {{ formatNumber(row.influenceItemShare, { maximumFractionDigits: 2 }) }}%
                   </span>
                   <span v-else>—</span>
                 </td>
-                <td class="text-end">{{ formatNumber(row.recommendations) }}</td>
-                <td class="text-end">{{ formatCurrency(row.recommendationRevenue) }}</td>
-                <td class="text-end">{{ formatNumber(row.totalQty) }}</td>
-                <td class="text-end">{{ formatCurrency(row.dailyRevenue) }}</td>
-                <td class="text-end">{{ formatNumber(row.dailyUnitsTotal) }}</td>
-                <td class="text-end">
+                <td v-if="isColumnVisible(17)" class="text-end">{{ formatNumber(row.recommendations) }}</td>
+                <td v-if="isColumnVisible(18)" class="text-end">{{ formatCurrency(row.recommendationRevenue) }}</td>
+                <td v-if="isColumnVisible(19)" class="text-end">{{ formatNumber(row.totalQty) }}</td>
+                <td v-if="isColumnVisible(20)" class="text-end">{{ formatCurrency(row.dailyRevenue) }}</td>
+                <td v-if="isColumnVisible(21)" class="text-end">{{ formatNumber(row.dailyUnitsTotal) }}</td>
+                <td v-if="isColumnVisible(22)" class="text-end">
                   <span v-if="isNumber(row.dailySharePercent)">
                     {{ formatNumber(row.dailySharePercent, { maximumFractionDigits: 3 }) }}%
                   </span>
                   <span v-else>—</span>
                 </td>
-                <td class="text-end">{{ formatNumber(row.stockWithTransit) }}</td>
-                <td class="text-end">{{ formatNumber(row.demand) }}</td>
-                <td class="text-end">{{ formatNumber(row.toSupply) }}</td>
-                <td>{{ row.article || '—' }}</td>
-                <td>{{ row.barcode2 || row.barcode || '—' }}</td>
-                <td class="quantity-last">{{ formatNumber(row.shipmentQty) }}</td>
+                <td v-if="isColumnVisible(23)" class="text-end">{{ formatNumber(row.stockWithTransit) }}</td>
+                <td v-if="isColumnVisible(24)" class="text-end">{{ formatNumber(row.demand) }}</td>
+                <td v-if="isColumnVisible(25)" class="text-end">{{ formatNumber(row.toSupply) }}</td>
+                <td v-if="isColumnVisible(26)">{{ row.article || '—' }}</td>
+                <td v-if="isColumnVisible(27)">{{ row.barcode2 || row.barcode || '—' }}</td>
+                <td v-if="isColumnVisible(28)" class="quantity-last">{{ formatNumber(row.shipmentQty) }}</td>
               </tr>
             </tbody>
             <tbody v-else>
@@ -335,6 +341,36 @@
         {{ typeTooltip.text }}
       </div>
     </Teleport>
+
+    <Modal v-if="plannerSettingsOpen" @close="closePlannerSettings">
+      <div class="list-modal">
+        <h5 class="mb-3">Настройки столбцов</h5>
+        <div class="settings-grid">
+          <label
+            v-for="(header, idx) in plannerHeaders"
+            :key="`col-${idx}`"
+            class="form-check form-check-inline settings-option"
+          >
+            <input
+              class="form-check-input"
+              type="checkbox"
+              :checked="isColumnVisible(idx)"
+              @change="onPlannerColumnToggle(idx, ($event.target as HTMLInputElement).checked)"
+            />
+            <span class="form-check-label">{{ header }}</span>
+          </label>
+        </div>
+        <div class="d-flex justify-content-end gap-2 mt-3">
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="resetPlannerSettings">
+            Сбросить
+          </button>
+          <button class="btn btn-primary btn-sm" type="button" @click="closePlannerSettings">
+            OK
+          </button>
+        </div>
+      </div>
+    </Modal>
+
     <Modal v-if="showExcludedModal" @close="closeExcludedModal">
       <div class="list-modal">
         <h5 class="mb-3">Список исключений</h5>
@@ -509,6 +545,9 @@ const summaryRows = ref<PlannerSummaryRow[]>([])
 const isPlannerLoading = ref(false)
 const plannerError = ref<string | null>(null)
 const activeTable = ref<'planner' | 'summary'>('planner')
+const plannerSettingsOpen = ref(false)
+const plannerHiddenColumns = ref<number[]>([])
+const PLANNER_STORAGE_KEY = 'planner_column_settings'
 const createTooltipState = () => reactive({
   visible: false,
   text: '',
@@ -677,6 +716,37 @@ const toNullableNumber = (value: unknown): number | null => {
   if (value === null || typeof value === 'undefined') return null
   const num = Number(value)
   return Number.isNaN(num) ? null : num
+}
+
+const loadHiddenColumns = () => {
+  if (typeof localStorage === 'undefined') return []
+  try {
+    const raw = localStorage.getItem(PLANNER_STORAGE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed.map((n: unknown) => Number(n)).filter((n) => Number.isInteger(n)) : []
+  } catch {
+    return []
+  }
+}
+
+plannerHiddenColumns.value = loadHiddenColumns()
+
+const persistHiddenColumns = () => {
+  localStorage.setItem(PLANNER_STORAGE_KEY, JSON.stringify(plannerHiddenColumns.value))
+}
+
+const isColumnVisible = (index: number) => !plannerHiddenColumns.value.includes(index)
+
+const setColumnVisibility = (index: number, visible: boolean) => {
+  const next = new Set(plannerHiddenColumns.value)
+  if (visible) {
+    next.delete(index)
+  } else {
+    next.add(index)
+  }
+  plannerHiddenColumns.value = Array.from(next).sort((a, b) => a - b)
+  persistHiddenColumns()
 }
 
 const positionTooltip = (event: MouseEvent, tooltip: { text: string; x: number; y: number; visible: boolean }) => {
@@ -1064,6 +1134,23 @@ const removeExcludedRow = (index: number) => {
   excludedDraft.value.splice(index, 1)
 }
 
+const openPlannerSettings = () => {
+  plannerSettingsOpen.value = true
+}
+
+const closePlannerSettings = () => {
+  plannerSettingsOpen.value = false
+}
+
+const resetPlannerSettings = () => {
+  plannerHiddenColumns.value = []
+  persistHiddenColumns()
+}
+
+const onPlannerColumnToggle = (index: number, checked: boolean) => {
+  setColumnVisibility(index, checked)
+}
+
 watch(
   () => props.storeId,
   async () => {
@@ -1443,6 +1530,18 @@ watch(
 
 .planner-table td a:hover {
   text-decoration: underline;
+}
+
+.settings-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+}
+
+.settings-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 .planner-table-splash {
