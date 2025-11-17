@@ -3,7 +3,12 @@
       <section class="card shadow-sm planner-card">
         <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
           <h5 class="mb-0">Поставка</h5>
-          <span class="text-muted small">Кластеров: {{ clusterHeaders.length }} · Товаров: {{ products.length }}</span>
+          <div class="d-flex align-items-center gap-2">
+            <span class="text-muted small">Кластеров: {{ clusterHeaders.length }} · Товаров: {{ products.length }}</span>
+            <button class="btn btn-outline-secondary btn-sm" type="button" @click="openSettings">
+              Настройки
+            </button>
+          </div>
         </div>
         <div class="card-body">
           <div v-if="loadError" class="alert alert-danger py-1 px-2 mb-2">
@@ -55,11 +60,17 @@
               <tr>
                 <th class="sticky-col index-col">#</th>
                 <th class="sticky-col name-col">Артикул</th>
-                <th class="barcode-col">ШК</th>
+                <th v-if="displaySettings.showBarcode" class="barcode-col">ШК</th>
                 <th class="total-col">Количество, шт</th>
-                <th v-for="cluster in clusterHeaders" :key="cluster" class="text-center">
-                  {{ cluster }}
-                </th>
+                <template v-if="displaySettings.showClusters">
+                  <th
+                    v-for="cluster in visibleClusters"
+                    :key="cluster"
+                    class="text-center"
+                  >
+                    {{ cluster }}
+                  </th>
+                </template>
               </tr>
             </thead>
             <tbody>
@@ -72,11 +83,11 @@
                 <td class="sticky-col index-col">{{ idx + 1 }}</td>
                 <td class="sticky-col name-col">
                   <div class="d-flex align-items-center gap-2">
-                    <img v-if="row.photo" :src="row.photo" alt="photo" class="pivot-photo" />
+                    <img v-if="displaySettings.showImage && row.photo" :src="row.photo" alt="photo" class="pivot-photo" />
                     <div class="d-flex flex-column pivot-text">
                       <span class="pivot-name fw-semibold">{{ row.offerId || '—' }}</span>
                       <a
-                        v-if="row.link"
+                        v-if="displaySettings.showLink && row.link"
                         :href="row.link"
                         target="_blank"
                         rel="noopener"
@@ -85,11 +96,17 @@
                     </div>
                   </div>
                 </td>
-                <td class="barcode-col">{{ row.barcode || '—' }}</td>
+                <td v-if="displaySettings.showBarcode" class="barcode-col">{{ row.barcode || '—' }}</td>
                 <td class="total-col text-center fw-semibold">{{ formatNumber(row.totalForDelivery) }}</td>
-                <td v-for="cluster in clusterHeaders" :key="cluster" class="text-center">
-                  {{ formatNumber(row.clusters[cluster]) }}
-                </td>
+                <template v-if="displaySettings.showClusters">
+                  <td
+                    v-for="cluster in visibleClusters"
+                    :key="cluster"
+                    class="text-center"
+                  >
+                    {{ formatNumber(row.clusters[cluster]) }}
+                  </td>
+                </template>
               </tr>
             </tbody>
           </table>
@@ -98,10 +115,60 @@
       </div>
     </section>
   </div>
+
+  <div v-if="settingsOpen" class="planner-modal">
+    <div class="planner-modal__backdrop" @click="closeSettings"></div>
+    <div class="planner-modal__body card shadow-lg settings-modal">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <h5 class="mb-0">Настройки отображения</h5>
+        <button type="button" class="btn btn-sm btn-outline-secondary" @click="closeSettings">Закрыть</button>
+      </div>
+      <div class="card-body">
+        <label class="form-check form-check-inline me-4">
+          <input class="form-check-input" type="checkbox" v-model="displaySettings.showImage" />
+          <span class="form-check-label">Изображение</span>
+        </label>
+        <label class="form-check form-check-inline me-4">
+          <input class="form-check-input" type="checkbox" v-model="displaySettings.showBarcode" />
+          <span class="form-check-label">ШК</span>
+        </label>
+        <label class="form-check form-check-inline me-4">
+          <input class="form-check-input" type="checkbox" v-model="displaySettings.showLink" />
+          <span class="form-check-label">Ссылка</span>
+        </label>
+        <label class="form-check form-check-inline me-4">
+          <input class="form-check-input" type="checkbox" v-model="displaySettings.showClusters" />
+          <span class="form-check-label">Склады</span>
+        </label>
+        <div v-if="displaySettings.showClusters" class="mt-3">
+          <p class="text-muted mb-2 small">Скрыть отдельные склады:</p>
+          <div class="cluster-list">
+            <label
+              v-for="cluster in clusterHeaders"
+              :key="cluster"
+              class="form-check form-check-inline cluster-toggle"
+            >
+              <input
+                class="form-check-input"
+                type="checkbox"
+                :value="cluster"
+                v-model="displaySettings.hiddenClusters"
+              />
+              <span class="form-check-label">{{ cluster }}</span>
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="card-footer d-flex justify-content-end gap-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm" @click="resetSettings">Сбросить</button>
+        <button type="button" class="btn btn-primary btn-sm" @click="closeSettings">OK</button>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch, reactive } from 'vue'
 import { apiService } from '@/services/api'
 
 const props = defineProps<{ storeId: string }>()
@@ -122,15 +189,43 @@ const clusterHeaders = ref<string[]>([])
 const products = ref<PivotProduct[]>([])
 const isLoading = ref(false)
 const loadError = ref<string | null>(null)
+
 const selectedRows = ref<Set<number>>(new Set())
 const rangeFrom = ref('')
 const rangeTo = ref('')
 const selectedRowsSize = computed(() => selectedRows.value.size)
+const settingsOpen = ref(false)
+
+const defaultDisplaySettings = {
+  showImage: true,
+  showBarcode: true,
+  showLink: true,
+  showClusters: true,
+  hiddenClusters: [] as string[]
+}
+
+const STORAGE_KEY = 'supply_display_settings'
+const storedSettings = localStorage.getItem(STORAGE_KEY)
+const parsed = storedSettings ? (JSON.parse(storedSettings) as Partial<typeof defaultDisplaySettings>) : {}
+const displaySettings = reactive({
+  ...defaultDisplaySettings,
+  ...parsed
+})
+
+const visibleClusters = computed(() =>
+  displaySettings.showClusters
+    ? clusterHeaders.value.filter((name) => !displaySettings.hiddenClusters.includes(name))
+    : []
+)
 
 const formatNumber = (value: number | null | undefined) => {
   const num = Number(value)
   if (!Number.isFinite(num)) return '—'
   return new Intl.NumberFormat('ru-RU').format(num)
+}
+
+const persistSettings = () => {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(displaySettings))
 }
 
 const fetchPivotData = async () => {
@@ -141,11 +236,11 @@ const fetchPivotData = async () => {
     const response = await apiService.fetchPlannerPivot(props.storeId)
     const headers = Array.isArray((response as any)?.cluster_headers) ? (response as any).cluster_headers : []
     clusterHeaders.value = headers
-    const items = Array.isArray((response as any)?.products) ? (response as any).products : []
-    products.value = items.map((item: any, idx: number) => ({
-      id: `${item?.offer_id ?? item?.sku ?? idx}`,
-      offerId: String(item?.offer_id ?? item?.sku ?? ''),
-      sku: item?.sku,
+  const items = Array.isArray((response as any)?.products) ? (response as any).products : []
+  products.value = items.map((item: any, idx: number) => ({
+    id: `${item?.offer_id ?? item?.sku ?? idx}`,
+    offerId: String(item?.offer_id ?? item?.sku ?? ''),
+    sku: item?.sku,
       name: item?.name,
       barcode: String(item?.barcode ?? (Array.isArray(item?.barcodes) ? item.barcodes[0] : '') ?? ''),
       photo: item?.photo,
@@ -170,6 +265,8 @@ const fetchPivotData = async () => {
 onMounted(() => {
   if (props.storeId) fetchPivotData()
 })
+
+watch(displaySettings, persistSettings, { deep: true })
 
 watch(
   () => props.storeId,
@@ -216,6 +313,19 @@ const isRowSelected = (rowNumber: number) => selectedRows.value.has(rowNumber)
 const openShipmentDialog = () => {
   if (!selectedRows.value.size) return
   console.log('Сформировать отгрузку для строк:', Array.from(selectedRows.value))
+}
+
+const openSettings = () => {
+  settingsOpen.value = true
+}
+
+const closeSettings = () => {
+  settingsOpen.value = false
+}
+
+const resetSettings = () => {
+  Object.assign(displaySettings, defaultDisplaySettings)
+  persistSettings()
 }
 </script>
 
@@ -375,5 +485,42 @@ const openShipmentDialog = () => {
 
 .selection-actions {
   align-self: flex-end;
+}
+
+.planner-modal__body.settings-modal {
+  width: min(500px, 90vw);
+}
+
+.planner-modal {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.planner-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.planner-modal__body {
+  position: relative;
+  max-height: 90vh;
+  overflow: hidden;
+}
+
+.cluster-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+}
+
+.cluster-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 </style>
