@@ -54,7 +54,7 @@
             <div v-if="isLoading && !products.length" class="planner-table-splash">
               <span class="spinner-border spinner-border-sm me-2"></span>
               Готовим таблицу...
-          </div>
+            </div>
           <table v-if="products.length || !isLoading" class="planner-table pivot-table">
             <thead>
               <tr>
@@ -165,6 +165,44 @@
       </div>
     </div>
   </div>
+
+  <div v-if="shipmentDialogOpen" class="planner-modal">
+    <div class="planner-modal__backdrop" @click="closeShipmentDialog"></div>
+    <div class="planner-modal__body card shadow-lg settings-modal">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <h5 class="mb-0">Выберите склады для отгрузки</h5>
+        <button type="button" class="btn btn-sm btn-outline-secondary" @click="closeShipmentDialog">Закрыть</button>
+      </div>
+      <div class="card-body">
+        <div class="d-flex gap-2 mb-3 flex-wrap">
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="selectAllShipmentWarehouses">Выделить все</button>
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="deselectAllShipmentWarehouses">Снять все</button>
+        </div>
+        <div class="shipment-grid">
+          <label
+            v-for="cluster in clusterHeaders"
+            :key="cluster"
+            class="form-check shipment-toggle"
+          >
+            <input
+              class="form-check-input"
+              type="checkbox"
+              :value="cluster"
+              :checked="selectedShipmentWarehouses.has(cluster)"
+              @change="toggleShipmentWarehouse(cluster)"
+            />
+            <span class="form-check-label">{{ cluster }}</span>
+          </label>
+        </div>
+      </div>
+      <div class="card-footer d-flex justify-content-end gap-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm" @click="closeShipmentDialog">Отмена</button>
+        <button type="button" class="btn btn-primary btn-sm" @click="confirmShipment" :disabled="!selectedShipmentWarehouses.size">
+          Далее
+        </button>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -227,6 +265,9 @@ const formatNumber = (value: number | null | undefined) => {
 const persistSettings = () => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(displaySettings))
 }
+
+const shipmentDialogOpen = ref(false)
+const selectedShipmentWarehouses = ref<Set<string>>(new Set())
 
 const fetchPivotData = async () => {
   if (!props.storeId) return
@@ -312,7 +353,22 @@ const isRowSelected = (rowNumber: number) => selectedRows.value.has(rowNumber)
 
 const openShipmentDialog = () => {
   if (!selectedRows.value.size) return
-  console.log('Сформировать отгрузку для строк:', Array.from(selectedRows.value))
+  if (!selectedShipmentWarehouses.value.size && clusterHeaders.value.length) {
+    selectedShipmentWarehouses.value = new Set(clusterHeaders.value)
+  }
+  shipmentDialogOpen.value = true
+}
+
+const closeShipmentDialog = () => {
+  shipmentDialogOpen.value = false
+}
+
+const selectAllShipmentWarehouses = () => {
+  selectedShipmentWarehouses.value = new Set(clusterHeaders.value)
+}
+
+const deselectAllShipmentWarehouses = () => {
+  selectedShipmentWarehouses.value = new Set()
 }
 
 const openSettings = () => {
@@ -326,6 +382,39 @@ const closeSettings = () => {
 const resetSettings = () => {
   Object.assign(displaySettings, defaultDisplaySettings)
   persistSettings()
+}
+
+const toggleShipmentWarehouse = (cluster: string) => {
+  const next = new Set(selectedShipmentWarehouses.value)
+  if (next.has(cluster)) {
+    next.delete(cluster)
+  } else {
+    next.add(cluster)
+  }
+  selectedShipmentWarehouses.value = next
+}
+
+const confirmShipment = () => {
+  const warehouses = Array.from(selectedShipmentWarehouses.value)
+  const selectedProducts = Array.from(selectedRows.value)
+    .sort((a, b) => a - b)
+    .map((rowNumber) => {
+      const product = products.value[rowNumber - 1]
+      const byWarehouse = warehouses.map((cluster) => ({
+        warehouse: cluster,
+        quantity: Number(product?.clusters?.[cluster] ?? 0)
+      }))
+      return {
+        row: rowNumber,
+        offerId: product?.offerId ?? '—',
+        name: product?.name ?? '',
+        totalForDelivery: product?.totalForDelivery ?? 0,
+        warehouses: byWarehouse
+      }
+    })
+
+  console.log('Отправка на склады', { warehouses, products: selectedProducts })
+  closeShipmentDialog()
 }
 </script>
 
@@ -519,6 +608,18 @@ const resetSettings = () => {
 }
 
 .cluster-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.shipment-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem 1rem;
+}
+
+.shipment-toggle {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;

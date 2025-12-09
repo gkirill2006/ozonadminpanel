@@ -143,18 +143,18 @@
             Заказать товар
           </button>
         </div>
-        <div class="order-0 order-md-1 text-end text-md-start">
-          <h5 class="mb-1">
-            {{ activeTable === 'planner' ? 'Таблица планирования' : 'Заказать товар' }}
-          </h5>
-          <span class="text-muted small">
-            {{ activeTable === 'planner' ? `Показано ${plannerRows.length} SKU` : `Показано ${summaryRows.length} товаров` }}
-          </span>
-          <div class="d-flex justify-content-end mt-1">
-            <button class="btn btn-outline-secondary btn-sm" type="button" @click="openPlannerSettings">
-              Настройки
-            </button>
+        <div class="order-0 order-md-1 d-flex flex-column flex-md-row align-items-md-center gap-2 text-end text-md-start">
+          <div>
+            <h5 class="mb-1">
+              {{ activeTable === 'planner' ? 'Таблица планирования' : 'Заказать товар' }}
+            </h5>
+            <span class="text-muted small">
+              {{ activeTable === 'planner' ? `Показано ${plannerRows.length} SKU` : `Показано ${summaryRows.length} товаров` }}
+            </span>
           </div>
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="openPlannerSettings">
+            Настройки
+          </button>
         </div>
       </div>
       <div class="card-body p-0">
