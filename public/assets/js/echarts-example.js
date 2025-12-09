@@ -1260,7 +1260,7 @@
       };
     };
 
-    // eslint-disable-next-line no-plusplus
+     
     for (let i = 0; i < 1000; i++) {
       data.push(randomData());
     }
@@ -1336,7 +1336,7 @@
       echartSetOption(chart, userOptions, getDefaultOptions);
 
       setInterval(() => {
-        // eslint-disable-next-line no-plusplus
+         
         for (let i = 0; i < 5; i++) {
           data.shift();
           data.push(randomData());
@@ -2761,7 +2761,7 @@
           borderColor: getColor('border-color'),
           textStyle: { color: getColor('light-text-emphasis') },
           borderWidth: 1,
-          /* eslint-disable prefer-destructuring */
+           
           formatter: params => {
             let tar;
             if (params[1].value !== '-') {
@@ -3373,7 +3373,7 @@
       getColor('warning')
     ];
 
-    /* eslint-disable no-continue */
+     
     const calculateMA = (dayCount, data) => {
       const result = [];
       for (let i = 0, len = data.length; i < len; i += 1) {

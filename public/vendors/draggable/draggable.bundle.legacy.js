@@ -228,9 +228,9 @@ $exports.store = store;
 // https://github.com/zloirock/core-js/issues/86#issuecomment-115759028
 var global = module.exports = typeof window != 'undefined' && window.Math == Math
   ? window : typeof self != 'undefined' && self.Math == Math ? self
-  // eslint-disable-next-line no-new-func
+   
   : Function('return this')();
-if (typeof __g == 'number') __g = global; // eslint-disable-line no-undef
+if (typeof __g == 'number') __g = global;  
 
 
 /***/ }),
@@ -238,7 +238,7 @@ if (typeof __g == 'number') __g = global; // eslint-disable-line no-undef
 /***/ (function(module, exports) {
 
 var core = module.exports = { version: '2.5.7' };
-if (typeof __e == 'number') __e = core; // eslint-disable-line no-undef
+if (typeof __e == 'number') __e = core;  
 
 
 /***/ }),
@@ -246,7 +246,7 @@ if (typeof __e == 'number') __e = core; // eslint-disable-line no-undef
 /***/ (function(module, exports) {
 
 var core = module.exports = { version: '2.5.7' };
-if (typeof __e == 'number') __e = core; // eslint-disable-line no-undef
+if (typeof __e == 'number') __e = core;  
 
 
 /***/ }),
@@ -364,9 +364,9 @@ exports.f = __webpack_require__(17) ? Object.defineProperty : function definePro
 // https://github.com/zloirock/core-js/issues/86#issuecomment-115759028
 var global = module.exports = typeof window != 'undefined' && window.Math == Math
   ? window : typeof self != 'undefined' && self.Math == Math ? self
-  // eslint-disable-next-line no-new-func
+   
   : Function('return this')();
-if (typeof __g == 'number') __g = global; // eslint-disable-line no-undef
+if (typeof __g == 'number') __g = global;  
 
 
 /***/ }),
@@ -1201,7 +1201,7 @@ var createDict = function () {
   var iframeDocument;
   iframe.style.display = 'none';
   __webpack_require__(197).appendChild(iframe);
-  iframe.src = 'javascript:'; // eslint-disable-line no-script-url
+  iframe.src = 'javascript:';  
   // createDict = iframe.contentWindow.Object;
   // html.removeChild(iframe);
   iframeDocument = iframe.contentWindow.document;
@@ -2011,7 +2011,7 @@ var ONREADYSTATECHANGE = 'onreadystatechange';
 var defer, channel, port;
 var run = function () {
   var id = +this;
-  // eslint-disable-next-line no-prototype-builtins
+   
   if (queue.hasOwnProperty(id)) {
     var fn = queue[id];
     delete queue[id];
@@ -2028,7 +2028,7 @@ if (!setTask || !clearTask) {
     var i = 1;
     while (arguments.length > i) args.push(arguments[i++]);
     queue[++counter] = function () {
-      // eslint-disable-next-line no-new-func
+       
       invoke(typeof fn == 'function' ? fn : Function(fn), args);
     };
     defer(counter);
@@ -2241,7 +2241,7 @@ var createDict = function () {
   var iframeDocument;
   iframe.style.display = 'none';
   __webpack_require__(104).appendChild(iframe);
-  iframe.src = 'javascript:'; // eslint-disable-line no-script-url
+  iframe.src = 'javascript:';  
   // createDict = iframe.contentWindow.Object;
   // html.removeChild(iframe);
   iframeDocument = iframe.contentWindow.document;
@@ -2294,10 +2294,10 @@ module.exports = function (IS_INCLUDES) {
     var index = toAbsoluteIndex(fromIndex, length);
     var value;
     // Array#includes uses SameValueZero equality algorithm
-    // eslint-disable-next-line no-self-compare
+     
     if (IS_INCLUDES && el != el) while (length > index) {
       value = O[index++];
-      // eslint-disable-next-line no-self-compare
+       
       if (value != value) return true;
     // Array#indexOf ignores holes, Array#includes - not
     } else for (;length > index; index++) if (IS_INCLUDES || index in O) {
@@ -2313,7 +2313,7 @@ module.exports = function (IS_INCLUDES) {
 
 // fallback for non-array-like ES3 and non-enumerable old V8 strings
 var cof = __webpack_require__(39);
-// eslint-disable-next-line no-prototype-builtins
+ 
 module.exports = Object('z').propertyIsEnumerable(0) ? Object : function (it) {
   return cof(it) == 'String' ? it.split('') : Object(it);
 };
@@ -4370,9 +4370,9 @@ var Emitter = function () {
       }
 
       if (caughtErrors.length) {
-        /* eslint-disable no-console */
+         
         console.error("Draggable caught errors while triggering '" + event.type + "'", caughtErrors);
-        /* eslint-disable no-console */
+         
       }
 
       return this;
@@ -9455,7 +9455,7 @@ var DragSensor = function (_Sensor) {
   }, {
     key: onDrop,
     value: function value(event) {
-      // eslint-disable-line class-methods-use-this
+       
       event.preventDefault();
     }
 
@@ -10235,7 +10235,7 @@ module.exports = { "default": __webpack_require__(166), __esModule: true };
 /***/ (function(module, exports, __webpack_require__) {
 
 // Works with __proto__ only. Old v8 can't work with null proto objects.
-/* eslint-disable no-proto */
+ 
 var isObject = __webpack_require__(26);
 var anObject = __webpack_require__(27);
 var check = function (O, proto) {
@@ -10243,7 +10243,7 @@ var check = function (O, proto) {
   if (!isObject(proto) && proto !== null) throw TypeError(proto + ": can't set as prototype!");
 };
 module.exports = {
-  set: Object.setPrototypeOf || ('__proto__' in {} ? // eslint-disable-line
+  set: Object.setPrototypeOf || ('__proto__' in {} ?  
     function (test, buggy, set) {
       try {
         set = __webpack_require__(67)(Function.call, __webpack_require__(51).f(Object.prototype, '__proto__').set, 2);
@@ -11063,7 +11063,7 @@ var SAFE_CLOSING = false;
 try {
   var riter = [7][ITERATOR]();
   riter['return'] = function () { SAFE_CLOSING = true; };
-  // eslint-disable-next-line no-throw-literal
+   
   Array.from(riter, function () { throw 2; });
 } catch (e) { /* empty */ }
 
@@ -11252,10 +11252,10 @@ module.exports = function (IS_INCLUDES) {
     var index = toAbsoluteIndex(fromIndex, length);
     var value;
     // Array#includes uses SameValueZero equality algorithm
-    // eslint-disable-next-line no-self-compare
+     
     if (IS_INCLUDES && el != el) while (length > index) {
       value = O[index++];
-      // eslint-disable-next-line no-self-compare
+       
       if (value != value) return true;
     // Array#indexOf ignores holes, Array#includes - not
     } else for (;length > index; index++) if (IS_INCLUDES || index in O) {
@@ -11271,7 +11271,7 @@ module.exports = function (IS_INCLUDES) {
 
 // fallback for non-array-like ES3 and non-enumerable old V8 strings
 var cof = __webpack_require__(60);
-// eslint-disable-next-line no-prototype-builtins
+ 
 module.exports = Object('z').propertyIsEnumerable(0) ? Object : function (it) {
   return cof(it) == 'String' ? it.split('') : Object(it);
 };
@@ -11834,13 +11834,13 @@ var $assign = Object.assign;
 module.exports = !$assign || __webpack_require__(42)(function () {
   var A = {};
   var B = {};
-  // eslint-disable-next-line no-undef
+   
   var S = Symbol();
   var K = 'abcdefghijklmnopqrst';
   A[S] = 7;
   K.split('').forEach(function (k) { B[k] = k; });
   return $assign({}, A)[S] != 7 || Object.keys($assign({}, B)).join('') != K;
-}) ? function assign(target, source) { // eslint-disable-line no-unused-vars
+}) ? function assign(target, source) {  
   var T = toObject(target);
   var aLen = arguments.length;
   var index = 1;
@@ -11885,7 +11885,7 @@ var SAFE_CLOSING = false;
 try {
   var riter = [7][ITERATOR]();
   riter['return'] = function () { SAFE_CLOSING = true; };
-  // eslint-disable-next-line no-throw-literal
+   
   Array.from(riter, function () { throw 2; });
 } catch (e) { /* empty */ }
 
@@ -12015,7 +12015,7 @@ module.exports = function () {
   } else if (Observer && !(global.navigator && global.navigator.standalone)) {
     var toggle = true;
     var node = document.createTextNode('');
-    new Observer(flush).observe(node, { characterData: true }); // eslint-disable-line no-new
+    new Observer(flush).observe(node, { characterData: true });  
     notify = function () {
       node.data = toggle = !toggle;
     };
@@ -12361,7 +12361,7 @@ if (!USE_NATIVE) {
       $reject.call(this, err);
     }
   };
-  // eslint-disable-next-line no-unused-vars
+   
   Internal = function Promise(executor) {
     this._c = [];             // <- awaiting reactions
     this._a = undefined;      // <- checked in isUnhandled reactions

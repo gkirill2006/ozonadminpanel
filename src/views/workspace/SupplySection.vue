@@ -60,6 +60,7 @@
               <tr>
                 <th class="sticky-col index-col">#</th>
                 <th class="sticky-col name-col">Артикул</th>
+                <th class="sku-col">SKU</th>
                 <th v-if="displaySettings.showBarcode" class="barcode-col">ШК</th>
                 <th class="total-col">Количество, шт</th>
                 <template v-if="displaySettings.showClusters">
@@ -96,6 +97,7 @@
                     </div>
                   </div>
                 </td>
+                <td class="sku-col">{{ row.sku || '—' }}</td>
                 <td v-if="displaySettings.showBarcode" class="barcode-col">{{ row.barcode || '—' }}</td>
                 <td class="total-col text-center fw-semibold">{{ formatNumber(row.totalForDelivery) }}</td>
                 <template v-if="displaySettings.showClusters">
@@ -498,6 +500,10 @@ const confirmShipment = () => {
   left: 60px;
   min-width: 120px;
   max-width: 220px;
+}
+
+.planner-table .sku-col {
+  min-width: 120px;
 }
 
 .planner-table .barcode-col {

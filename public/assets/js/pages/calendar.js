@@ -411,7 +411,7 @@
         dateClick(info) {
           const modal = new window.bootstrap.Modal(addEventModal);
           modal.show();
-          /* eslint-disable-next-line */
+           
           const flatpickr = document.querySelector(
             Selectors.EVENT_START_DATE
           )._flatpickr;

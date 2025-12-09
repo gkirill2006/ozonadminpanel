@@ -459,7 +459,7 @@
     }
   };
 
-  /* eslint-disable no-new */
+   
 
   /* -------------------------------------------------------------------------- */
   /*                            ChartJs Initialization                          */
@@ -597,13 +597,13 @@
       const { getItemFromStore } = window.phoenix.utils;
       if (
         chart.tooltip &&
-        // eslint-disable-next-line no-underscore-dangle
+         
         chart.tooltip._active &&
-        // eslint-disable-next-line no-underscore-dangle
+         
         chart.tooltip._active.length
       ) {
         const { ctx } = chart;
-        // eslint-disable-next-line no-underscore-dangle
+         
         const activePoint = chart.tooltip._active[0];
         const { x } = activePoint.element;
         const topY = chart.scales.y.top;

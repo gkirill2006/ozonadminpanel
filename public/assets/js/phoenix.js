@@ -93,7 +93,7 @@
     const height = el.offsetHeight;
 
     while (el.offsetParent) {
-      // eslint-disable-next-line no-param-reassign
+       
       el = el.offsetParent;
       top += el.offsetTop;
       left += el.offsetLeft;
@@ -345,7 +345,7 @@
     }
   };
 
-  /* eslint-disable no-unused-expressions */
+   
   /*-----------------------------------------------
   |   DomNode
   -----------------------------------------------*/
@@ -405,7 +405,7 @@
       return !!this.node;
     }
 
-    // eslint-disable-next-line class-methods-use-this
+     
     camelize(str) {
       const text = str.replace(/[-_\s.]+(.)?/g, (_, c) =>
         c ? c.toUpperCase() : ''
@@ -867,7 +867,7 @@
         ) {
           const dropdownInstance = new window.bootstrap.Dropdown(e.target);
 
-          /* eslint-disable no-underscore-dangle */
+           
           dropdownInstance._element.classList.add('show');
           dropdownInstance._menu.classList.add('show');
           dropdownInstance._menu.setAttribute('data-bs-popper', 'none');
@@ -981,7 +981,7 @@
           },
           userOptions
         );
-        // eslint-disable-next-line
+         
         item.querySelector(Selector.DZ_PREVIEW).innerHTML = '';
 
         const dropzone = new window.Dropzone(item, options);
@@ -1758,7 +1758,7 @@
         masonryItems.forEach(masonryItem => {
           window.imagesLoaded(masonryItem, () => {
             document.querySelectorAll(Selector.ISOTOPE_ITEM).forEach(item => {
-              // eslint-disable-next-line no-param-reassign
+               
               item.style.visibility = 'visible';
             });
 
@@ -1817,11 +1817,11 @@
     }
   };
 
-  /* eslint-disable no-unused-expressions */
+   
   /* -------------------------------------------------------------------------- */
   /*                                 Data Table                                 */
   /* -------------------------------------------------------------------------- */
-  /* eslint-disable no-param-reassign */
+   
   const togglePaginationButtonDisable = (button, disabled) => {
     button.disabled = disabled;
     button.classList[disabled ? 'add' : 'remove']('disabled');
@@ -2316,7 +2316,7 @@
     }
   };
 
-  /* eslint-disable no-new */
+   
   /*-----------------------------------------------
   |                    Phoenix Offcanvas
   -----------------------------------------------*/
@@ -2452,7 +2452,7 @@
     });
   };
 
-  /* eslint-disable no-new */
+   
   /*-----------------------------------------------
   |                    Swiper
   -----------------------------------------------*/
@@ -2930,7 +2930,7 @@
     }
   };
 
-  /* eslint-disable no-new */
+   
   /*-----------------------------------------------
   |                    Swiper
   -----------------------------------------------*/
@@ -2992,7 +2992,7 @@
   /* -------------------------------------------------------------------------- */
   /*                                Theme Control                               */
   /* -------------------------------------------------------------------------- */
-  /* eslint-disable no-param-reassign */
+   
   /* eslint-disable */
   const { config } = window.config;
 
@@ -3422,7 +3422,7 @@
     );
   };
 
-  /* eslint-disable no-restricted-syntax */
+   
   /* -------------------------------------------------------------------------- */
   /*                                 step wizard                                */
   /* -------------------------------------------------------------------------- */
@@ -4093,7 +4093,7 @@
               collapse = collapse.parentElement;
             }
             parents.forEach(collapseEl => {
-              // eslint-disable-next-line no-new
+               
               new window.bootstrap.Collapse(collapseEl, {
                 show: true
               });
@@ -4120,7 +4120,7 @@
     }
   };
 
-  /* eslint-disable no-new */
+   
 
   window.initMap = initMap;
   docReady(detectorInit);
