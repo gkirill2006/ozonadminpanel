@@ -8,11 +8,16 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+public
+
 .DS_Store
-dist
+
 dist-ssr
 coverage
 *.local
+public.zip
+*.tsbuildinfo
+dist/
 
 /cypress/videos/
 /cypress/screenshots/
@@ -26,5 +31,3 @@ coverage
 *.njsproj
 *.sln
 *.sw?
-
-*.tsbuildinfo
