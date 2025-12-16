@@ -15,6 +15,8 @@
         <template v-else>
           <PlannerSection v-if="activeSection === 'planner'" :store-id="storeId" />
           <SupplySection v-else-if="activeSection === 'supply'" :store-id="storeId" />
+          <SupplyDraftsSection v-else-if="activeSection === 'drafts'" :store-id="storeId" />
+          <WorkspaceSettingsSection v-else-if="activeSection === 'settings'" :store-id="storeId" :store="store" />
           <div v-else class="section-body">
             <div class="section-placeholder">
               <h3 class="mb-2">{{ currentSectionLabel }}</h3>
@@ -53,6 +55,8 @@ import {
 } from '@/constants/workspace'
 import PlannerSection from './workspace/PlannerSection.vue'
 import SupplySection from './workspace/SupplySection.vue'
+import SupplyDraftsSection from './workspace/SupplyDraftsSection.vue'
+import WorkspaceSettingsSection from './workspace/SettingsSection.vue'
 import { useStoresStore } from '@/stores/stores'
 
 interface AuthStore {
@@ -91,15 +95,12 @@ const fetchStore = async () => {
   isLoading.value = true
   loadError.value = null
   try {
-    const data = await apiService.getAuthStores()
-    const list = Array.isArray(data) ? data : []
-    const found = list.find((item) => String(item.id) === storeId.value) || null
-    store.value = found
+    const data = await apiService.getStore(storeId.value)
+    store.value = data || null
     if (!store.value) {
       loadError.value = 'Магазин не найден'
       storesStore.setActiveStoreId(null)
-    }
-    if (store.value) {
+    } else {
       const normalizedId = String(store.value.id)
       storesStore.upsertStore({
         ...store.value,

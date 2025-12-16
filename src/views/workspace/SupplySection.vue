@@ -5,6 +5,9 @@
           <h5 class="mb-0">Поставка</h5>
           <div class="d-flex align-items-center gap-2">
             <span class="text-muted small">Кластеров: {{ clusterHeaders.length }} · Товаров: {{ products.length }}</span>
+            <button class="btn btn-outline-primary btn-sm" type="button" @click="openBatchesDialog">
+              Черновики
+            </button>
             <button class="btn btn-outline-secondary btn-sm" type="button" @click="openSettings">
               Настройки
             </button>
@@ -47,6 +50,51 @@
               <button class="btn btn-success btn-sm" type="button" :disabled="!selectedRowsSize" @click="openShipmentDialog">
                 Сформировать отгрузку
               </button>
+            </div>
+          </div>
+
+          <div v-if="draftBatchId" class="card shadow-sm mb-2 draft-status-card">
+            <div class="card-header d-flex justify-content-between align-items-center py-2 px-3">
+              <div class="d-flex align-items-center gap-2 flex-wrap">
+                <span class="fw-semibold">Черновики поставки</span>
+                <span class="badge bg-secondary">batch: {{ draftBatchId }}</span>
+                <button class="btn btn-outline-secondary btn-sm" type="button" @click="openBatchesDialog">
+                  Все черновики
+                </button>
+              </div>
+              <span class="text-muted small">Статус батча: {{ batchStatusLabel }}</span>
+            </div>
+            <div class="card-body py-2 px-3 draft-status-body">
+              <div v-if="draftBatchError" class="alert alert-danger py-1 px-2 mb-2">{{ draftBatchError }}</div>
+              <div v-if="draftItems.length">
+                <table class="table table-sm mb-0 align-middle">
+                  <thead>
+                    <tr>
+                      <th>Склад</th>
+                      <th>Статус</th>
+                      <th>draft_id</th>
+                      <th>operation_id</th>
+                      <th>Ошибка</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="draft in draftItems" :key="draft.id || draft.draft_id || draft.logistic_cluster_id || draft.logistic_cluster_name">
+                      <td>{{ draft.logistic_cluster_name || draft.warehouse || '—' }}</td>
+                      <td>{{ draft.status || '—' }}</td>
+                      <td>{{ draft.draft_id ?? '—' }}</td>
+                      <td>{{ draft.operation_id ?? '—' }}</td>
+                      <td class="text-danger small">{{ draft.error_message || '' }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div v-else class="text-muted small">Нет данных по черновикам</div>
+              <div v-if="draftBatchLoading" class="draft-status-overlay">
+                <div class="text-muted small d-flex align-items-center gap-2">
+                  <span class="spinner-border spinner-border-sm"></span>
+                  Обновляем статусы...
+                </div>
+              </div>
             </div>
           </div>
 
@@ -170,19 +218,19 @@
 
   <div v-if="shipmentDialogOpen" class="planner-modal">
     <div class="planner-modal__backdrop" @click="closeShipmentDialog"></div>
-    <div class="planner-modal__body card shadow-lg settings-modal">
+    <div class="planner-modal__body card shadow-lg settings-modal shipment-modal">
       <div class="card-header d-flex align-items-center justify-content-between">
         <h5 class="mb-0">Выберите склады для отгрузки</h5>
         <button type="button" class="btn btn-sm btn-outline-secondary" @click="closeShipmentDialog">Закрыть</button>
       </div>
-      <div class="card-body">
+      <div class="card-body shipment-modal-body">
         <div class="d-flex gap-2 mb-3 flex-wrap">
           <button class="btn btn-outline-secondary btn-sm" type="button" @click="selectAllShipmentWarehouses">Выделить все</button>
           <button class="btn btn-outline-secondary btn-sm" type="button" @click="deselectAllShipmentWarehouses">Снять все</button>
         </div>
         <div class="shipment-grid">
           <label
-            v-for="cluster in clusterHeaders"
+            v-for="cluster in availableShipmentClusters"
             :key="cluster"
             class="form-check shipment-toggle"
           >
@@ -197,7 +245,7 @@
           </label>
         </div>
       </div>
-      <div class="card-footer d-flex justify-content-end gap-2">
+      <div class="card-footer d-flex justify-content-end gap-2 shipment-modal-footer">
         <button type="button" class="btn btn-outline-secondary btn-sm" @click="closeShipmentDialog">Отмена</button>
         <button type="button" class="btn btn-primary btn-sm" @click="confirmShipment" :disabled="!selectedShipmentWarehouses.size">
           Далее
@@ -205,10 +253,125 @@
       </div>
     </div>
   </div>
+
+  <div v-if="supplyDialogOpen" class="planner-modal">
+    <div class="planner-modal__backdrop" @click="closeSupplyDialog"></div>
+    <div class="planner-modal__body card shadow-lg settings-modal tall-modal">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <h5 class="mb-0">Создание поставки</h5>
+        <button type="button" class="btn btn-sm btn-outline-secondary" @click="closeSupplyDialog">Закрыть</button>
+      </div>
+      <div class="card-body supply-modal-body d-flex flex-column gap-3">
+        <div>
+          <label class="form-label text-uppercase text-muted small fw-semibold mb-1">Тип поставки</label>
+          <select v-model="supplyType" class="form-select form-select-sm">
+            <option v-for="opt in supplyTypeOptions" :key="opt.value" :value="opt.value">
+              {{ opt.label }}
+            </option>
+          </select>
+        </div>
+        <div class="position-relative">
+          <label class="form-label text-uppercase text-muted small fw-semibold mb-1">Склад (поиск от 4 символов)</label>
+          <input
+            v-model="warehouseSearch"
+            type="text"
+            class="form-control form-control-sm"
+            placeholder="Начните вводить адрес или название склада"
+          />
+          <div v-if="warehouseSearchLoading" class="form-text text-muted">Ищем...</div>
+          <div v-if="warehouseSearchError" class="text-danger small mt-1">{{ warehouseSearchError }}</div>
+          <div v-if="warehouseSearchResults.length" class="search-dropdown">
+            <button
+              v-for="item in warehouseSearchResults"
+              :key="item.warehouse_id"
+              type="button"
+              class="dropdown-item"
+              @click="selectWarehouse(item)"
+            >
+              <div class="fw-semibold">{{ item.name || '—' }}</div>
+              <div class="text-muted small">{{ item.address || '—' }}</div>
+            </button>
+          </div>
+        </div>
+        <div v-if="selectedWarehouse" class="alert alert-info py-2 px-3 mb-0">
+          Выбран склад: <strong>{{ selectedWarehouse.name }}</strong> — {{ selectedWarehouse.address }}
+        </div>
+        <div v-if="supplyCreateError" class="alert alert-danger py-2 px-3 mb-0">
+          {{ supplyCreateError }}
+        </div>
+      </div>
+      <div class="card-footer d-flex justify-content-end gap-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm" @click="closeSupplyDialog">Отмена</button>
+        <button
+          type="button"
+          class="btn btn-primary btn-sm"
+          :disabled="!selectedWarehouse || supplyCreateLoading"
+          @click="submitSupplyCreation"
+        >
+          <span v-if="supplyCreateLoading" class="spinner-border spinner-border-sm me-1"></span>
+          Далее
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div v-if="batchesDialogOpen" class="planner-modal">
+    <div class="planner-modal__backdrop" @click="closeBatchesDialog"></div>
+    <div class="planner-modal__body card shadow-lg settings-modal batches-modal">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <h5 class="mb-0">Все черновики поставок</h5>
+        <button type="button" class="btn btn-sm btn-outline-secondary" @click="closeBatchesDialog">Закрыть</button>
+      </div>
+      <div class="card-body batches-body">
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="loadAllBatches">Обновить</button>
+          <span v-if="batchesLoading" class="text-muted small d-flex align-items-center gap-2">
+            <span class="spinner-border spinner-border-sm"></span> Загружаем...
+          </span>
+          <span v-else class="text-muted small">Показаны все батчи{{ props.storeId ? ' для магазина ' + props.storeId : '' }}</span>
+        </div>
+        <div v-if="batchesError" class="alert alert-danger py-1 px-2 mb-2">{{ batchesError }}</div>
+        <div v-if="allBatches.length" class="batches-table-wrapper">
+          <table class="table table-sm align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Batch</th>
+                <th>Статус</th>
+                <th>Магазин</th>
+                <th>Склад сдачи</th>
+                <th>Черновики</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="batch in allBatches" :key="batch.batch_id">
+                <td class="fw-semibold">{{ batch.batch_id }}</td>
+                <td>{{ batch.status || '—' }}</td>
+                <td>{{ batch.store || batch.store_id || '—' }}</td>
+                <td>{{ batch.drop_off_point_warehouse_id || '—' }}</td>
+                <td>
+                  <div v-if="Array.isArray(batch.drafts) && batch.drafts.length" class="drafts-list">
+                    <div v-for="draft in batch.drafts" :key="draft.id || draft.draft_id" class="draft-pill">
+                      <div class="small fw-semibold">{{ draft.logistic_cluster_name || draft.warehouse || '—' }}</div>
+                      <div class="small text-muted">status: {{ draft.status || '—' }}</div>
+                    </div>
+                  </div>
+                  <span v-else class="text-muted small">—</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div v-else-if="!batchesLoading" class="text-muted small">Нет черновиков</div>
+      </div>
+      <div class="card-footer d-flex justify-content-end">
+        <button type="button" class="btn btn-primary btn-sm" @click="closeBatchesDialog">OK</button>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch, reactive } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { apiService } from '@/services/api'
 
 const props = defineProps<{ storeId: string }>()
@@ -229,6 +392,12 @@ const clusterHeaders = ref<string[]>([])
 const products = ref<PivotProduct[]>([])
 const isLoading = ref(false)
 const loadError = ref<string | null>(null)
+const collator = new Intl.Collator('ru', { sensitivity: 'base' })
+const availableShipmentClusters = computed(() =>
+  displaySettings.showClusters
+    ? clusterHeaders.value.filter((name) => !displaySettings.hiddenClusters.includes(name))
+    : []
+)
 
 const selectedRows = ref<Set<number>>(new Set())
 const rangeFrom = ref('')
@@ -270,6 +439,37 @@ const persistSettings = () => {
 
 const shipmentDialogOpen = ref(false)
 const selectedShipmentWarehouses = ref<Set<string>>(new Set())
+const supplyDialogOpen = ref(false)
+const supplyCreateLoading = ref(false)
+const supplyCreateError = ref<string | null>(null)
+
+const supplyTypeOptions = [
+  { value: 'CREATE_TYPE_CROSSDOCK', label: 'Кросс-докинг' },
+  { value: 'CREATE_TYPE_DIRECT', label: 'Прямая' }
+]
+
+const supplyType = ref<'CREATE_TYPE_CROSSDOCK' | 'CREATE_TYPE_DIRECT'>('CREATE_TYPE_CROSSDOCK')
+const warehouseSearch = ref('')
+const warehouseSearchResults = ref<Array<{ warehouse_id: string | number; name: string; address: string }>>([])
+const warehouseSearchLoading = ref(false)
+const warehouseSearchError = ref<string | null>(null)
+const selectedWarehouse = ref<{ warehouse_id: string | number; name: string; address: string } | null>(null)
+let searchDebounce: ReturnType<typeof setTimeout> | null = null
+
+const draftBatchId = ref<string | null>(null)
+const draftBatchStatus = ref<any | null>(null)
+const draftBatchLoading = ref(false)
+const draftBatchError = ref<string | null>(null)
+let draftBatchTimer: ReturnType<typeof setInterval> | null = null
+const draftItems = computed(() =>
+  Array.isArray((draftBatchStatus.value as any)?.drafts) ? (draftBatchStatus.value as any).drafts : []
+)
+const batchStatusLabel = computed(() => (draftBatchStatus.value as any)?.status || '—')
+
+const batchesDialogOpen = ref(false)
+const batchesLoading = ref(false)
+const batchesError = ref<string | null>(null)
+const allBatches = ref<any[]>([])
 
 const fetchPivotData = async () => {
   if (!props.storeId) return
@@ -278,7 +478,7 @@ const fetchPivotData = async () => {
   try {
     const response = await apiService.fetchPlannerPivot(props.storeId)
     const headers = Array.isArray((response as any)?.cluster_headers) ? (response as any).cluster_headers : []
-    clusterHeaders.value = headers
+    clusterHeaders.value = headers.slice().sort((a: string, b: string) => collator.compare(a, b))
   const items = Array.isArray((response as any)?.products) ? (response as any).products : []
   products.value = items.map((item: any, idx: number) => ({
     id: `${item?.offer_id ?? item?.sku ?? idx}`,
@@ -355,8 +555,8 @@ const isRowSelected = (rowNumber: number) => selectedRows.value.has(rowNumber)
 
 const openShipmentDialog = () => {
   if (!selectedRows.value.size) return
-  if (!selectedShipmentWarehouses.value.size && clusterHeaders.value.length) {
-    selectedShipmentWarehouses.value = new Set(clusterHeaders.value)
+  if (!selectedShipmentWarehouses.value.size && availableShipmentClusters.value.length) {
+    selectedShipmentWarehouses.value = new Set(availableShipmentClusters.value)
   }
   shipmentDialogOpen.value = true
 }
@@ -366,7 +566,7 @@ const closeShipmentDialog = () => {
 }
 
 const selectAllShipmentWarehouses = () => {
-  selectedShipmentWarehouses.value = new Set(clusterHeaders.value)
+  selectedShipmentWarehouses.value = new Set(availableShipmentClusters.value)
 }
 
 const deselectAllShipmentWarehouses = () => {
@@ -417,6 +617,225 @@ const confirmShipment = () => {
 
   console.log('Отправка на склады', { warehouses, products: selectedProducts })
   closeShipmentDialog()
+  openSupplyDialog()
+}
+
+const openSupplyDialog = () => {
+  supplyDialogOpen.value = true
+  warehouseSearch.value = ''
+  warehouseSearchResults.value = []
+  warehouseSearchError.value = null
+  selectedWarehouse.value = null
+  supplyCreateError.value = null
+}
+
+const closeSupplyDialog = () => {
+  supplyDialogOpen.value = false
+  if (searchDebounce) {
+    clearTimeout(searchDebounce)
+    searchDebounce = null
+  }
+}
+
+const runWarehouseSearch = async () => {
+  if (!props.storeId || warehouseSearch.value.trim().length < 4) {
+    warehouseSearchResults.value = []
+    return
+  }
+  warehouseSearchLoading.value = true
+  warehouseSearchError.value = null
+  try {
+    const response = await apiService.searchFboWarehouses({
+      storeId: props.storeId,
+      supplyTypes: [supplyType.value],
+      search: warehouseSearch.value.trim()
+    })
+    const results = Array.isArray((response as any)?.search) ? (response as any).search : []
+    warehouseSearchResults.value = results.map((item: any) => ({
+      warehouse_id: item?.warehouse_id,
+      name: item?.name,
+      address: item?.address
+    }))
+  } catch (error) {
+    warehouseSearchError.value = error instanceof Error ? error.message : 'Не удалось загрузить склады'
+    warehouseSearchResults.value = []
+  } finally {
+    warehouseSearchLoading.value = false
+  }
+}
+
+watch(
+  () => warehouseSearch.value,
+  () => {
+    if (searchDebounce) clearTimeout(searchDebounce)
+    searchDebounce = setTimeout(() => runWarehouseSearch(), 350)
+  }
+)
+
+watch(
+  () => supplyType.value,
+  () => {
+    if (warehouseSearch.value.trim().length >= 4) {
+      runWarehouseSearch()
+    }
+  }
+)
+
+watch(
+  () => displaySettings.hiddenClusters.slice(),
+  () => {
+    const allowed = new Set(availableShipmentClusters.value)
+    selectedShipmentWarehouses.value = new Set(
+      Array.from(selectedShipmentWarehouses.value).filter((w) => allowed.has(w))
+    )
+  }
+)
+
+watch(
+  () => props.storeId,
+  () => {
+    stopDraftBatchPolling()
+    draftBatchId.value = null
+    draftBatchStatus.value = null
+    draftBatchError.value = null
+  }
+)
+
+const selectWarehouse = (item: { warehouse_id: string | number; name: string; address: string }) => {
+  selectedWarehouse.value = item
+  warehouseSearchResults.value = []
+}
+
+const submitSupplyCreation = () => {
+  if (!selectedWarehouse.value) {
+    supplyCreateError.value = 'Выберите склад назначения'
+    return
+  }
+  if (!selectedRows.value.size) {
+    supplyCreateError.value = 'Не выбраны строки для отгрузки'
+    return
+  }
+
+  const warehouses = Array.from(selectedShipmentWarehouses.value).filter((w) =>
+    availableShipmentClusters.value.includes(w)
+  )
+  const rows = Array.from(selectedRows.value).sort((a, b) => a - b)
+
+  const groupedByWarehouse: Record<string, Array<{ sku: string | number; quantity: number }>> = {}
+
+  rows.forEach((rowNumber) => {
+    const product = products.value[rowNumber - 1]
+    const sku = product?.sku || product?.offerId || '—'
+    warehouses.forEach((warehouse) => {
+      const rawQty = Number(product?.clusters?.[warehouse] ?? 0)
+      const qty = Number.isFinite(rawQty) ? rawQty : 0
+      if (!groupedByWarehouse[warehouse]) groupedByWarehouse[warehouse] = []
+      groupedByWarehouse[warehouse].push({ sku, quantity: qty })
+    })
+  })
+
+  const shipments = warehouses
+    .map((warehouse) => ({
+      warehouse,
+      items: (groupedByWarehouse[warehouse] || []).filter((item) => Number(item.quantity) > 0)
+    }))
+    .filter((entry) => entry.items.length)
+
+  if (!shipments.length) {
+    supplyCreateError.value = 'Нет товаров с количеством больше 0'
+    return
+  }
+
+  supplyCreateError.value = null
+  supplyCreateLoading.value = true
+
+  const payload = {
+    store_id: props.storeId,
+    supplyType: supplyType.value,
+    destinationWarehouse: {
+      warehouse_id: selectedWarehouse.value.warehouse_id,
+      name: selectedWarehouse.value.name
+    },
+    shipments
+  }
+
+  apiService
+    .createSupplyDrafts(payload)
+    .then((response) => {
+      draftBatchId.value = (response as any)?.batch_id ?? null
+      draftBatchStatus.value = response
+      draftBatchError.value = null
+      if (draftBatchId.value) {
+        startDraftBatchPolling(draftBatchId.value)
+      }
+      closeSupplyDialog()
+    })
+    .catch((error) => {
+      supplyCreateError.value = error instanceof Error ? error.message : 'Не удалось создать черновики'
+    })
+    .finally(() => {
+      supplyCreateLoading.value = false
+    })
+}
+
+const fetchDraftBatch = async (batchId: string) => {
+  if (!batchId) return
+  draftBatchLoading.value = true
+  draftBatchError.value = null
+  try {
+    const response = await apiService.getSupplyDraftBatch(batchId)
+    draftBatchStatus.value = response
+    const status = (response as any)?.status
+    if (status && status !== 'processing') {
+      stopDraftBatchPolling()
+    }
+  } catch (error) {
+    draftBatchError.value = error instanceof Error ? error.message : 'Не удалось получить статус черновиков'
+  } finally {
+    draftBatchLoading.value = false
+  }
+}
+
+const startDraftBatchPolling = (batchId: string) => {
+  stopDraftBatchPolling()
+  fetchDraftBatch(batchId)
+  draftBatchTimer = setInterval(() => fetchDraftBatch(batchId), 5000)
+}
+
+const stopDraftBatchPolling = () => {
+  if (draftBatchTimer) {
+    clearInterval(draftBatchTimer)
+    draftBatchTimer = null
+  }
+}
+
+onBeforeUnmount(() => {
+  stopDraftBatchPolling()
+  if (searchDebounce) clearTimeout(searchDebounce)
+})
+
+const openBatchesDialog = () => {
+  batchesDialogOpen.value = true
+  loadAllBatches()
+}
+
+const closeBatchesDialog = () => {
+  batchesDialogOpen.value = false
+}
+
+const loadAllBatches = async () => {
+  batchesLoading.value = true
+  batchesError.value = null
+  try {
+    const response = await apiService.getSupplyDraftBatches(
+      props.storeId ? { storeId: props.storeId } : undefined
+    )
+    allBatches.value = Array.isArray(response) ? response : []
+  } catch (error) {
+    batchesError.value = error instanceof Error ? error.message : 'Не удалось загрузить черновики'
+  } finally {
+    batchesLoading.value = false
+  }
 }
 </script>
 
@@ -629,5 +1048,116 @@ const confirmShipment = () => {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
+}
+
+.search-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 50;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 6px;
+  width: 100%;
+  max-height: 260px;
+  overflow: auto;
+  margin-top: 4px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+}
+
+.search-dropdown .dropdown-item {
+  text-align: left;
+  white-space: normal;
+}
+
+.search-dropdown .dropdown-item:hover {
+  background: rgba(15, 23, 42, 0.06);
+}
+
+.supply-modal-body {
+  max-height: 80vh;
+  overflow: auto;
+}
+
+.tall-modal {
+  height: 70vh;
+  max-height: 90vh;
+}
+
+.shipment-modal {
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+}
+
+.shipment-modal-body {
+  flex: 1;
+  overflow: auto;
+}
+
+.shipment-modal-footer {
+  position: sticky;
+  bottom: 0;
+  background: #fff;
+  z-index: 10;
+}
+
+.draft-status-card .table th,
+.draft-status-card .table td {
+  padding: 0.4rem 0.5rem;
+  font-size: 0.82rem;
+}
+
+.draft-status-card .card-header {
+  padding: 0.5rem 0.75rem;
+}
+
+.draft-status-card .card-body {
+  padding: 0.5rem 0.75rem;
+  min-height: 140px;
+  position: relative;
+}
+
+.draft-status-body {
+  position: relative;
+}
+
+.draft-status-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+}
+
+.batches-modal {
+  max-width: 900px;
+  width: min(900px, 95vw);
+}
+
+.batches-body {
+  max-height: 70vh;
+  overflow: auto;
+}
+
+.batches-table-wrapper {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.drafts-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.draft-pill {
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 6px;
+  padding: 0.25rem 0.5rem;
+  background: #f8fafc;
 }
 </style>

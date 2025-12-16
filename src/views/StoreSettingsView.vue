@@ -190,6 +190,99 @@
         </transition>
       </section>
 
+      <!-- Доступ к магазину -->
+      <section class="settings-section" :class="{ open: openSections.access }">
+        <button type="button" class="settings-section__toggle" @click="toggleSection('access')">
+          <span class="settings-section__icon"><i data-feather="users"></i></span>
+          <span class="settings-section__title">Доступ к магазину</span>
+          <span class="settings-section__chevron" :class="{ rotated: openSections.access }"><i data-feather="chevron-down"></i></span>
+        </button>
+        <transition name="settings-collapse">
+          <div v-show="openSections.access" class="settings-section__content">
+            <div class="settings-card">
+              <div class="settings-card__header">
+                <span class="settings-card__title">Управление пользователями</span>
+              </div>
+              <div class="settings-card__body">
+                <p class="mb-2">
+                  <strong>Владелец:</strong> {{ ownerUsername || '—' }}
+                </p>
+                <p class="text-body-secondary small mb-3">Приглашайте пользователей по Telegram никнейму. Они смогут работать с данными, но не менять ключи и не удалять магазин.</p>
+                <div v-if="isOwner" class="mb-3">
+                  <label class="form-label">Никнейм Telegram</label>
+                  <div class="d-flex gap-2 flex-wrap">
+                    <input
+                      type="text"
+                      class="form-control"
+                      placeholder="@username"
+                      v-model="inviteUsername"
+                      :disabled="inviteLoading"
+                      style="max-width: 320px"
+                    />
+                    <button type="button" class="btn btn-primary" :disabled="inviteLoading" @click="sendInvite">
+                      <span v-if="inviteLoading" class="spinner-border spinner-border-sm me-1"></span>
+                      Пригласить
+                    </button>
+                  </div>
+                  <div v-if="inviteError" class="text-danger small mt-2">{{ inviteError }}</div>
+                  <div v-if="inviteMessage" class="text-success small mt-2">{{ inviteMessage }}</div>
+                </div>
+
+                <div class="mb-3">
+                  <h6 class="mb-2">Активные пользователи</h6>
+                  <div v-if="!managers.length" class="text-body-secondary small">Активных пользователей нет.</div>
+                  <div v-else class="d-flex flex-column gap-2">
+                    <div
+                      v-for="user in managers"
+                      :key="getUserName(user)"
+                      class="d-flex align-items-center justify-content-between access-row"
+                    >
+                      <div class="d-flex align-items-center gap-2">
+                        <span class="badge bg-light text-dark">@{{ getUserName(user) }}</span>
+                        <span v-if="user?.is_owner" class="badge bg-primary">Владелец</span>
+                      </div>
+                      <button
+                        v-if="isOwner && !user?.is_owner"
+                        class="btn btn-outline-danger btn-sm"
+                        type="button"
+                        @click="openRemoveManager(user)"
+                      >
+                        Удалить доступ
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h6 class="mb-2">Ожидают подтверждения</h6>
+                  <div v-if="!pendingInvites.length" class="text-body-secondary small">Нет активных приглашений.</div>
+                  <div v-else class="d-flex flex-column gap-2">
+                    <div
+                      v-for="inv in pendingInvites"
+                      :key="getUserName(inv) || inv?.username || inv?.id"
+                      class="d-flex align-items-center justify-content-between access-row"
+                    >
+                      <div>
+                        <span class="badge bg-warning text-dark">@{{ getUserName(inv) }}</span>
+                        <span class="text-body-secondary small ms-2">Статус: {{ inv?.status || inv?.state || 'pending' }}</span>
+                      </div>
+                      <button
+                        v-if="isOwner"
+                        class="btn btn-outline-danger btn-sm"
+                        type="button"
+                        @click="openRemoveManager(inv)"
+                      >
+                        Отменить
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </transition>
+      </section>
+
       <!-- Адреса и телефоны -->
       <section class="settings-section" :class="{ open: openSections.contacts }">
         <button type="button" class="settings-section__toggle" @click="toggleSection('contacts')">
@@ -375,6 +468,21 @@
         Сохранить изменения
       </button>
     </div>
+
+    <Modal v-if="managerToRemove" :show="true" @close="closeRemoveManager">
+      <h5 class="mb-3">Удалить доступ?</h5>
+      <p class="mb-3">
+        Пользователь <strong>@{{ getUserName(managerToRemove) }}</strong> потеряет доступ к магазину. Продолжить?
+      </p>
+      <div v-if="removeError" class="alert alert-danger py-2 px-3">{{ removeError }}</div>
+      <div class="d-flex justify-content-end gap-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm" @click="closeRemoveManager">Отмена</button>
+        <button type="button" class="btn btn-danger btn-sm" :disabled="removeLoading" @click="confirmRemoveManager">
+          <span v-if="removeLoading" class="spinner-border spinner-border-sm me-1"></span>
+          Удалить
+        </button>
+      </div>
+    </Modal>
   </div>
 </template>
 
@@ -384,6 +492,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useStoresStore } from '@/stores/stores'
 import { apiService } from '@/services/api'
+import Modal from '@/components/Modal.vue'
 
 interface StoreAddress {
   id: string
@@ -408,6 +517,13 @@ const storeError = ref<string | null>(null)
 const storeDetail = ref<any>(null)
 const isTelegramApp = ref(false)
 const viewportWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 0)
+const inviteUsername = ref('')
+const inviteLoading = ref(false)
+const inviteError = ref<string | null>(null)
+const inviteMessage = ref<string | null>(null)
+const managerToRemove = ref<any | null>(null)
+const removeLoading = ref(false)
+const removeError = ref<string | null>(null)
 
 const updateViewportWidth = () => {
   if (typeof window === 'undefined') return
@@ -478,6 +594,7 @@ const openSections = reactive<Record<string, boolean>>({
   basic: true,
   contacts: true,
   telegram: false,
+  access: true,
   advanced: false
 })
 
@@ -497,6 +614,26 @@ const currentStoreId = computed(() => {
 
 const storeDisplayName = computed(() => storeDetail.value?.name || 'Без названия')
 const storePublicLink = computed(() => storeForm.publicUrl || storeDetail.value?.public_url || '')
+const isOwner = computed(() => !!storeDetail.value?.is_owner)
+const ownerUsername = computed(() => storeDetail.value?.owner_username || storeDetail.value?.owner?.username || '')
+
+const managers = computed(() => {
+  const list =
+    storeDetail.value?.managers ||
+    storeDetail.value?.shared_users ||
+    storeDetail.value?.collaborators ||
+    []
+  return Array.isArray(list) ? list : []
+})
+
+const pendingInvites = computed(() => {
+  const list =
+    storeDetail.value?.pending_invites ||
+    storeDetail.value?.invites ||
+    storeDetail.value?.invitations ||
+    []
+  return Array.isArray(list) ? list : []
+})
 
 const copyStoreLink = async () => {
   if (!storePublicLink.value) return
@@ -529,6 +666,61 @@ const goToDashboard = () => {
 const goToOverview = () => {
   const query = currentStoreId.value ? { store: currentStoreId.value } : undefined
   router.push({ name: 'stores', query })
+}
+
+const getUserName = (user: any) => user?.username || user?.telegram_username || user?.name || ''
+
+const sendInvite = async () => {
+  if (!isOwner.value || !currentStoreId.value) return
+  const username = inviteUsername.value.trim().replace(/^@/, '')
+  if (!username) {
+    inviteError.value = 'Введите никнейм телеграма'
+    return
+  }
+  inviteLoading.value = true
+  inviteError.value = null
+  inviteMessage.value = null
+  try {
+    await apiService.inviteStoreUser(currentStoreId.value, username)
+    inviteMessage.value = 'Приглашение отправлено'
+    inviteUsername.value = ''
+    await fetchStore()
+  } catch (error) {
+    inviteError.value = error instanceof Error ? error.message : 'Не удалось отправить приглашение'
+  } finally {
+    inviteLoading.value = false
+    setTimeout(() => (inviteMessage.value = null), 3000)
+  }
+}
+
+const openRemoveManager = (user: any) => {
+  managerToRemove.value = user
+  removeError.value = null
+}
+
+const closeRemoveManager = () => {
+  managerToRemove.value = null
+  removeError.value = null
+}
+
+const confirmRemoveManager = async () => {
+  if (!managerToRemove.value || !currentStoreId.value) return
+  const username = getUserName(managerToRemove.value)
+  if (!username) {
+    removeError.value = 'Не удалось определить пользователя'
+    return
+  }
+  removeLoading.value = true
+  removeError.value = null
+  try {
+    await apiService.revokeStoreInvite(currentStoreId.value, username)
+    await fetchStore()
+    closeRemoveManager()
+  } catch (error) {
+    removeError.value = error instanceof Error ? error.message : 'Не удалось удалить доступ'
+  } finally {
+    removeLoading.value = false
+  }
 }
 
 const fetchStore = async () => {
@@ -1093,6 +1285,10 @@ onUnmounted(() => {
   display: flex;
   justify-content: flex-end;
   margin-top: 2rem;
+}
+
+.access-row .badge {
+  font-size: 0.9rem;
 }
 
 .settings-collapse-enter-active,

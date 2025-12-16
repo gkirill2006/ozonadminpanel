@@ -33,6 +33,41 @@
           </div>
 
           <div v-else-if="!hasStores" class="state state--empty">
+            <div v-if="invites?.length" class="mb-4 text-start w-100">
+              <h5 class="mb-2">Приглашения</h5>
+              <div class="d-flex flex-column gap-2">
+                <div
+                  v-for="inv in invites"
+                  :key="inv?.store_id || inv?.store || inv?.id"
+                  class="d-flex align-items-center justify-content-between invite-row"
+                >
+                  <div class="d-flex flex-column">
+                    <strong>{{ inv?.store_name || inv?.name || `Магазин ${inv?.store_id || ''}` }}</strong>
+                    <small class="text-body-secondary">Владелец: {{ inv?.invited_by || inv?.owner_username || inv?.owner || '—' }}</small>
+                  </div>
+                  <div class="d-flex gap-2">
+                    <button
+                      type="button"
+                      class="btn btn-outline-secondary btn-sm"
+                      :disabled="respondingInviteId === (inv?.store_id || inv?.store || inv?.id)"
+                      @click="respondInvite(inv, 'reject')"
+                    >
+                      Отклонить
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-primary btn-sm"
+                      :disabled="respondingInviteId === (inv?.store_id || inv?.store || inv?.id)"
+                      @click="respondInvite(inv, 'accept')"
+                    >
+                      <span v-if="respondingInviteId === (inv?.store_id || inv?.store || inv?.id)" class="spinner-border spinner-border-sm me-1"></span>
+                      Принять
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div v-if="inviteError" class="alert alert-danger mt-3 mb-0 py-2 px-3">{{ inviteError }}</div>
+            </div>
             <h4>Пока нет ни одного магазина</h4>
             <p class="text-body-secondary mb-3">
               Добавьте первый магазин, чтобы получить client_id и API ключ в одном месте.
@@ -158,12 +193,13 @@ import { useRouter } from 'vue-router'
 import { apiService } from '@/services/api'
 import { DEFAULT_WORKSPACE_SECTION } from '@/constants/workspace'
 import { useStoresStore } from '@/stores/stores'
+import { storeToRefs } from 'pinia'
 
 interface AuthStore {
-  id: number | string
+  id: string
   name?: string | null
-  client_id: string
-  api_key: string
+  client_id?: string | number | null
+  api_key?: string | null
   google_sheet_url?: string | null
   urls?: Record<string, string | null> | null
   performance_service_account_number?: string | null
@@ -172,13 +208,11 @@ interface AuthStore {
   [key: string]: unknown
 }
 
-const stores = ref<AuthStore[]>([])
-const isLoading = ref(false)
-const errorMessage = ref<string | null>(null)
+const storesStore = useStoresStore()
+const { stores, invites, isLoading, error: errorMessage } = storeToRefs(storesStore)
 const formSectionRef = ref<HTMLElement | null>(null)
 
 const router = useRouter()
-const storesStore = useStoresStore()
 
 const form = reactive({
   name: '',
@@ -195,6 +229,8 @@ const formSuccess = ref<string | null>(null)
 const isSubmitting = ref(false)
 
 const hasStores = computed(() => stores.value.length > 0)
+const respondingInviteId = ref<string | number | null>(null)
+const inviteError = ref<string | null>(null)
 
 const resetForm = () => {
   form.name = ''
@@ -207,16 +243,7 @@ const resetForm = () => {
 }
 
 const fetchStores = async () => {
-  isLoading.value = true
-  errorMessage.value = null
-  try {
-    const data = await apiService.getAuthStores()
-    stores.value = Array.isArray(data) ? data : []
-  } catch (error: unknown) {
-    errorMessage.value = error instanceof Error ? error.message : 'Не удалось загрузить магазины'
-  } finally {
-    isLoading.value = false
-  }
+  await storesStore.fetchStores()
 }
 
 const handleCreate = async () => {
@@ -240,9 +267,10 @@ const handleCreate = async () => {
   try {
     const created = await apiService.createAuthStore(payload)
     if (created) {
-      stores.value = [created, ...stores.value.filter((store) => store.id !== created.id)]
+      stores.value = [created as AuthStore, ...stores.value.filter((store) => store.id !== created.id)]
       formSuccess.value = 'Магазин создан'
       resetForm()
+      await fetchStores()
     }
   } catch (error: unknown) {
     formError.value = error instanceof Error ? error.message : 'Не удалось создать магазин'
@@ -257,12 +285,33 @@ const focusForm = () => {
   }
 }
 
+const respondInvite = async (inv: any, decision: 'accept' | 'reject') => {
+  const storeId = inv?.store_id || inv?.store || inv?.id
+  if (!storeId) return
+  respondingInviteId.value = storeId
+  inviteError.value = null
+  try {
+    await apiService.respondStoreInvite(storeId, decision)
+    await fetchStores()
+    if (decision === 'accept' && stores.value.length) {
+      router.push({
+        name: 'store-workspace',
+        params: { id: stores.value[0].id, section: DEFAULT_WORKSPACE_SECTION }
+      })
+    }
+  } catch (error) {
+    inviteError.value = error instanceof Error ? error.message : 'Не удалось обработать приглашение'
+  } finally {
+    respondingInviteId.value = null
+  }
+}
+
 const openWorkspace = (store: AuthStore) => {
   if (!store?.id) return
   storesStore.setActiveStoreId(String(store.id))
   router.push({
     name: 'store-workspace',
-    params: { id: store.id, section: DEFAULT_WORKSPACE_SECTION }
+    params: { id: String(store.id), section: DEFAULT_WORKSPACE_SECTION }
   })
 }
 

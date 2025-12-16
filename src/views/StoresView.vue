@@ -14,6 +14,43 @@
     </div>
   </div>
   <div v-else-if="!currentStoreId" class="store-page">
+    <div class="card border-0 shadow-sm mb-3" v-if="invites?.length">
+      <div class="card-body">
+        <h5 class="mb-3">Приглашения</h5>
+        <div class="d-flex flex-column gap-2">
+          <div
+            v-for="inv in invites"
+            :key="inv?.id || inv?.store_id || inv?.store || inv?.store_name || JSON.stringify(inv)"
+            class="d-flex align-items-center justify-content-between invite-row"
+          >
+            <div class="d-flex flex-column">
+              <strong>{{ inv?.store_name || inv?.name || inv?.store || 'Магазин' }}</strong>
+              <small class="text-body-secondary">Владелец: {{ inv?.owner_username || inv?.owner || '—' }}</small>
+            </div>
+            <div class="d-flex gap-2">
+              <button
+                type="button"
+                class="btn btn-outline-secondary btn-sm"
+                :disabled="respondingInviteId === (inv?.store_id || inv?.store || inv?.id)"
+                @click="respondInvite(inv, 'reject')"
+              >
+                Отклонить
+              </button>
+              <button
+                type="button"
+                class="btn btn-primary btn-sm"
+                :disabled="respondingInviteId === (inv?.store_id || inv?.store || inv?.id)"
+                @click="respondInvite(inv, 'accept')"
+              >
+                <span v-if="respondingInviteId === (inv?.store_id || inv?.store || inv?.id)" class="spinner-border spinner-border-sm me-1"></span>
+                Принять
+              </button>
+            </div>
+          </div>
+        </div>
+        <div v-if="inviteError" class="alert alert-danger mt-3 mb-0 py-2 px-3">{{ inviteError }}</div>
+      </div>
+    </div>
     <div class="card border-0 shadow-sm">
       <div class="card-body text-center py-5">
         <h3 class="mb-3">Магазин не найден</h3>
@@ -165,7 +202,7 @@ interface StorePhone {
 const route = useRoute()
 const router = useRouter()
 const storesStore = useStoresStore()
-const { primaryStore, stores, isLoading: storesLoading } = storeToRefs(storesStore)
+const { primaryStore, stores, invites, isLoading: storesLoading } = storeToRefs(storesStore)
 
 const isStoreLoading = ref(true)
 const storeError = ref<string | null>(null)
@@ -192,6 +229,8 @@ const addressesError = ref<string | null>(null)
 const isCreatingAddress = ref(false)
 const addressCreateError = ref<string | null>(null)
 const deletingAddressId = ref<string | null>(null)
+const respondingInviteId = ref<string | number | null>(null)
+const inviteError = ref<string | null>(null)
 
 const addressForm = reactive({
   label: '',
@@ -230,6 +269,28 @@ const phoneForm = reactive({
   label: '',
   number: ''
 })
+
+const getInviteStoreId = (inv: any) => inv?.store_id || inv?.store || inv?.id
+const getInviteStoreName = (inv: any) => inv?.store_name || inv?.name || `Магазин ${getInviteStoreId(inv) || ''}`
+
+const respondInvite = async (inv: any, decision: 'accept' | 'reject') => {
+  const storeId = getInviteStoreId(inv)
+  if (!storeId) return
+  respondingInviteId.value = storeId
+  inviteError.value = null
+  try {
+    await apiService.respondStoreInvite(storeId, decision)
+    await storesStore.fetchStores()
+    if (decision === 'accept' && currentStoreId.value === null && stores.value.length) {
+      // выберем принятый магазин
+      router.push({ name: 'store-workspace', params: { id: stores.value[0].id, section: 'planner' } })
+    }
+  } catch (error) {
+    inviteError.value = error instanceof Error ? error.message : 'Не удалось обработать приглашение'
+  } finally {
+    respondingInviteId.value = null
+  }
+}
 
 const storeDisplayName = computed(() => {
   const name = storeForm.name?.trim() || storeDetail.value?.name

@@ -12,6 +12,7 @@ export interface Store {
 
 export const useStoresStore = defineStore('stores', () => {
   const stores = ref<Store[]>([])
+  const invites = ref<any[]>([])
   const isLoading = ref(false)
   const error = ref<string | null>(null)
   const activeStoreId = ref<string | null>(null)
@@ -26,13 +27,19 @@ export const useStoresStore = defineStore('stores', () => {
     error.value = null
 
     try {
-      const data = await apiService.getStores()
-      const list = Array.isArray(data) ? data : data?.results || []
+      const [storesResp, invitesResp] = await Promise.all([
+        apiService.getStores(),
+        apiService.getStoreInvites().catch(() => [])
+      ])
+      const list = Array.isArray(storesResp) ? storesResp : storesResp?.results || []
+      const pending = Array.isArray(invitesResp) ? invitesResp : invitesResp?.results || []
+      invites.value = pending
       stores.value = Array.isArray(list) ? list : []
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Не удалось загрузить магазины'
       error.value = message
       stores.value = []
+      invites.value = []
     } finally {
       isLoading.value = false
     }
@@ -77,6 +84,7 @@ export const useStoresStore = defineStore('stores', () => {
     clear,
     activeStoreId,
     setActiveStoreId,
-    upsertStore
+    upsertStore,
+    invites
   }
 })

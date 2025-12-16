@@ -258,6 +258,81 @@ class ApiService {
     return this.handleResponse(response)
   }
 
+  async createSupplyDrafts(payload: Record<string, unknown>) {
+    const response = await fetch(`${API_BASE_URL}/api/ozon/drafts/create/`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(payload)
+    })
+    return this.handleResponse(response)
+  }
+
+  async getSupplyDraftBatch(batchId: string) {
+    const response = await fetch(`${API_BASE_URL}/api/ozon/drafts/batch/${batchId}/`, {
+      method: 'GET',
+      headers: this.getHeaders()
+    })
+    return this.handleResponse(response)
+  }
+
+  async getSupplyDraftBatches(params?: { storeId?: string | number }) {
+    const url = new URL(`${API_BASE_URL}/api/ozon/drafts/batches/`, window.location.origin)
+    if (params?.storeId) url.searchParams.set('store_id', String(params.storeId))
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: this.getHeaders()
+    })
+    return this.handleResponse(response)
+  }
+
+  async selectDraftWarehouse(draftId: string | number, warehouseId: string | number) {
+    const response = await fetch(`${API_BASE_URL}/api/ozon/drafts/${draftId}/select-warehouse/`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ warehouse_id: warehouseId })
+    })
+    return this.handleResponse(response)
+  }
+
+  async fetchDraftTimeslots(payload: { batch_id: string; date_from: string; days: number }) {
+    const response = await fetch(`${API_BASE_URL}/api/ozon/drafts/timeslots/fetch/`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(payload)
+    })
+    return this.handleResponse(response)
+  }
+
+  async getDraftTimeslots(batchId: string) {
+    const response = await fetch(`${API_BASE_URL}/api/ozon/drafts/batch/${batchId}/timeslots/`, {
+      method: 'GET',
+      headers: this.getHeaders()
+    })
+    return this.handleResponse(response)
+  }
+
+  async deleteSupplyDraft(draftId: string | number) {
+    const response = await fetch(`${API_BASE_URL}/api/ozon/drafts/${draftId}/`, {
+      method: 'DELETE',
+      headers: this.getHeaders()
+    })
+    return this.handleResponse(response)
+  }
+
+  async searchFboWarehouses(params: { storeId: string | number; supplyTypes?: string[] | string; search?: string }) {
+    const { storeId, supplyTypes, search } = params
+    const payload: Record<string, unknown> = { store_id: storeId }
+    if (supplyTypes) payload.filter_by_supply_type = supplyTypes
+    if (search) payload.search = search
+
+    const response = await fetch(`${API_BASE_URL}/api/ozon/warehouse/fbo/search/`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(payload)
+    })
+    return this.handleResponse(response)
+  }
+
   // Stores endpoints
   async getStores() {
     const response = await fetch(`${API_BASE_URL}/auth/stores/`, {
@@ -270,6 +345,30 @@ class ApiService {
   async getStore(storeId: string) {
     const response = await fetch(`${API_BASE_URL}/auth/stores/${storeId}/`, {
       method: 'GET',
+      headers: this.getHeaders()
+    })
+    return this.handleResponse(response)
+  }
+
+  async getStoreInvites() {
+    const response = await fetch(`${API_BASE_URL}/auth/stores/invites/`, {
+      method: 'GET',
+      headers: this.getHeaders()
+    })
+    return this.handleResponse(response)
+  }
+
+  async getStoreAccesses(storeId: string | number) {
+    const response = await fetch(`${API_BASE_URL}/auth/stores/${storeId}/accesses/`, {
+      method: 'GET',
+      headers: this.getHeaders()
+    })
+    return this.handleResponse(response)
+  }
+
+  async deleteStoreAccess(storeId: string | number, userId: string | number) {
+    const response = await fetch(`${API_BASE_URL}/auth/stores/${storeId}/accesses/${userId}/`, {
+      method: 'DELETE',
       headers: this.getHeaders()
     })
     return this.handleResponse(response)
@@ -297,6 +396,33 @@ class ApiService {
     const response = await fetch(`${API_BASE_URL}/auth/stores/${storeId}/`, {
       method: 'DELETE',
       headers: this.getHeaders()
+    })
+    return this.handleResponse(response)
+  }
+
+  async inviteStoreUser(storeId: string | number, username: string) {
+    const response = await fetch(`${API_BASE_URL}/auth/stores/${storeId}/invite/`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ username })
+    })
+    return this.handleResponse(response)
+  }
+
+  async revokeStoreInvite(storeId: string | number, username: string) {
+    const response = await fetch(`${API_BASE_URL}/auth/stores/${storeId}/invite/`, {
+      method: 'DELETE',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ username })
+    })
+    return this.handleResponse(response)
+  }
+
+  async respondStoreInvite(storeId: string | number, decision: 'accept' | 'reject') {
+    const response = await fetch(`${API_BASE_URL}/auth/stores/${storeId}/invite/respond/`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ decision })
     })
     return this.handleResponse(response)
   }

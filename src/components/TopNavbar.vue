@@ -26,7 +26,7 @@
           <a class="nav-link" href="#" role="button" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
             <div class="avatar avatar-l">
               <div class="avatar-name rounded-circle bg-primary-subtle text-primary">
-                <span class="fs-0 text-primary">{{ userInitial }}</span>
+                <span class="fs-0 text-primary">{{ userInitials }}</span>
               </div>
             </div>
           </a>
@@ -78,7 +78,20 @@ const navbarEl = ref<HTMLElement | null>(null)
 const workspaceSections = WORKSPACE_SECTIONS
 
 const user = computed(() => authStore.user)
-const userInitial = computed(() => user.value?.username?.charAt(0)?.toUpperCase() || 'А')
+
+const userInitials = computed(() => {
+  const name =
+    user.value?.username ||
+    user.value?.telegram_username ||
+    user.value?.email ||
+    ''
+  const safe = name ? String(name) : ''
+  const cleaned = safe.replace('@', '').trim()
+  const parts = cleaned.split(/[\s._-]+/).filter(Boolean)
+  const first = parts[0]?.[0] || cleaned[0] || 'А'
+  const second = parts[1]?.[0] || cleaned[1] || ''
+  return (first + second).toUpperCase()
+})
 
 const isWorkspaceRoute = computed(() => route.name === 'store-workspace')
 const currentStoreId = computed(() =>

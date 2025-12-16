@@ -54,6 +54,18 @@ const router = createRouter({
       meta: { requiresAuth: true }
     },
     {
+      path: '/workspace',
+      redirect: '/stores'
+    },
+    {
+      path: '/workspace/',
+      redirect: '/stores'
+    },
+    {
+      path: '/workspace/*',
+      redirect: '/stores'
+    },
+    {
       path: '/workspace/:id/:section?',
       name: 'store-workspace',
       component: () => import('../views/StoreWorkspaceView.vue'),
