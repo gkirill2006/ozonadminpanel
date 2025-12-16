@@ -17,7 +17,7 @@ coverage
 *.local
 public.zip
 *.tsbuildinfo
-dist/
+
 
 /cypress/videos/
 /cypress/screenshots/
