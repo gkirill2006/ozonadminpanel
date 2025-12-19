@@ -236,6 +236,12 @@
                   {{ batch.drafts?.[0]?.logistic_cluster_name || batch.drafts?.[0]?.warehouse || '—' }}
                 </div>
               </div>
+              <div>
+                <div class="text-muted small">Статус</div>
+                <div :class="['fw-semibold', isCancelled(getOrderStateForBatch(batch)) ? 'text-danger' : '']">
+                  {{ getOrderStateForBatch(batch) }}
+                </div>
+              </div>
               <div class="ms-auto">
                 <button
                   class="btn btn-outline-secondary btn-sm"
@@ -715,6 +721,33 @@ const getBundleItemsForDraft = (batchKey: string, draft: any) => {
   })
   return items
 }
+
+const getOrderStateForItem = (batchKey: string, draft: any) => {
+  const info = supplyInfo.value[batchKey]
+  if (!info?.results) return '—'
+  const draftId = draft?.id ?? draft?.draft_id
+  const entry = info.results.find((r: any) => r?.draft_id === draftId)
+  if (Array.isArray(entry?.order_states) && entry.order_states.length) {
+    return entry.order_states.join(', ')
+  }
+  return '—'
+}
+
+const getOrderStateForBatch = (batch: any) => {
+  const key = getBatchKey(batch)
+  if (!supplyInfo.value[key]?.results?.length) return '—'
+  const states: string[] = []
+  supplyInfo.value[key].results.forEach((r: any) => {
+    if (Array.isArray(r?.order_states)) {
+      states.push(...r.order_states)
+    }
+  })
+  if (!states.length) return '—'
+  const unique = Array.from(new Set(states))
+  return unique.join(', ')
+}
+
+const isCancelled = (state: string) => state?.toLowerCase().includes('cancel')
 
 const getSelectedCommonSlot = (batch: any) => {
   const batchKey = getBatchKey(batch)
