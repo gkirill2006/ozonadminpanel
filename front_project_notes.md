@@ -30,7 +30,7 @@
 ## Связка с бекендом
 - Django API (порт 9000) отвечает за маршруты `/auth/*`, `/stores/*`, `/dashboard/*`.
 - Токены сохраняются в localStorage (`authStore`), при 401 вызывается `logout()` и редирект на `/login`.
-- Для прод-окружения задаём `VITE_API_BASE_URL=https://<host>` и отключаем dev-proxy.
+- Базовый URL API задаём через `VITE_API_BASE_URL` (см. `.env.example`). Для продового бэка: `VITE_API_BASE_URL=https://ozon.codemark.me`.
 
 ## Особенности и заметки
 - Компоненты активно используют глобальные объекты Phoenix (например `window.phoenix.toggleNavbarVerticalCollapsed`). Следим, чтобы эти скрипты были загружены до монтирования Vue.

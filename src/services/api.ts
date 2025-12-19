@@ -311,6 +311,36 @@ class ApiService {
     return this.handleResponse(response)
   }
 
+  async confirmSupplyDraftBatch(
+    batchId: string,
+    timeslot: { from_in_timezone: string; to_in_timezone: string }
+  ) {
+    const response = await fetch(`${API_BASE_URL}/api/ozon/drafts/batch/${batchId}/confirm-supply/`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ timeslot })
+    })
+    return this.handleResponse(response)
+  }
+
+  async getConfirmedDraftBatches(params?: { storeId?: string | number }) {
+    const url = new URL(`${API_BASE_URL}/api/ozon/drafts/batches/confirmed/`, window.location.origin)
+    if (params?.storeId) url.searchParams.set('store_id', String(params.storeId))
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: this.getHeaders()
+    })
+    return this.handleResponse(response)
+  }
+
+  async getSupplyInfo(batchId: string) {
+    const response = await fetch(`${API_BASE_URL}/api/ozon/drafts/batch/${batchId}/supply-info/`, {
+      method: 'GET',
+      headers: this.getHeaders()
+    })
+    return this.handleResponse(response)
+  }
+
   async deleteSupplyDraft(draftId: string | number) {
     const response = await fetch(`${API_BASE_URL}/api/ozon/drafts/${draftId}/`, {
       method: 'DELETE',

@@ -58,7 +58,7 @@
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="(draft, draftIndex) in batch.drafts || []" :key="draft.draft_id || draft.id || getBatchKey(batch)">
+                  <tr v-for="(draft, draftIndex) in batch.drafts || []" :key="getDraftKey(draft)">
                     <td class="fw-semibold">
                       <div class="d-flex align-items-center justify-content-between gap-2">
                         <span>{{ draft.logistic_cluster_name || draft.warehouse || '—' }}</span>
@@ -177,15 +177,108 @@
                         <button
                           class="btn btn-primary btn-sm mt-3"
                           type="button"
-                          :disabled="!selectedCommonTimeslot[getBatchKey(batch)]"
+                          :disabled="!selectedCommonTimeslot[getBatchKey(batch)] || confirmSupplyLoading === getBatchKey(batch)"
                           @click="createCommonApplication(batch)"
                         >
+                          <span v-if="confirmSupplyLoading === getBatchKey(batch)" class="spinner-border spinner-border-sm me-1"></span>
                           Создать заявку
                         </button>
+                        <div v-if="confirmSupplyError[getBatchKey(batch)]" class="text-danger small mt-2">
+                          {{ confirmSupplyError[getBatchKey(batch)] }}
+                        </div>
                       </div>
                       <div v-else class="text-muted small">Нет общих слотов</div>
                     </td>
                   </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card shadow-sm mt-4">
+      <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <h5 class="mb-0">Актуальные поставки</h5>
+        <div class="text-muted small">Магазин: {{ storeId }}</div>
+      </div>
+      <div class="card-body">
+        <div v-if="confirmedLoading" class="state state--loading">
+          <span class="spinner-border spinner-border-sm me-2"></span>
+          Загружаем подтвержденные поставки...
+        </div>
+        <div v-else-if="confirmedError" class="alert alert-danger py-2 px-3">{{ confirmedError }}</div>
+        <div v-else-if="!confirmedBatches.length" class="text-muted small">Пока нет подтвержденных поставок.</div>
+        <div v-else class="d-flex flex-column gap-3">
+          <div
+            v-for="batch in confirmedBatches"
+            :key="getBatchKey(batch)"
+            class="p-3 border rounded-3 bg-light-subtle"
+          >
+            <div class="d-flex flex-wrap align-items-center gap-3 mb-2">
+              <div>
+                <div class="text-muted small">Дата</div>
+                <div class="fw-semibold">
+                  <span v-if="batch.drafts?.[0]?.selected_timeslot">
+                    {{ formatDateTimeShort(batch.drafts[0].selected_timeslot.from_in_timezone || batch.drafts[0].selected_timeslot.from || '') }}
+                  </span>
+                  <span v-else>—</span>
+                </div>
+              </div>
+              <div>
+                <div class="text-muted small">Склад сдачи</div>
+                <div class="fw-semibold">{{ batch.drop_off_point_name || batch.drop_off_point_warehouse?.name || '—' }}</div>
+              </div>
+              <div>
+                <div class="text-muted small">Кластер</div>
+                <div class="fw-semibold">
+                  {{ batch.drafts?.[0]?.logistic_cluster_name || batch.drafts?.[0]?.warehouse || '—' }}
+                </div>
+              </div>
+              <div class="ms-auto">
+                <button
+                  class="btn btn-outline-secondary btn-sm"
+                  type="button"
+                  @click="toggleSupplyExpand(batch)"
+                >
+                  {{ isSupplyExpanded(getBatchKey(batch)) ? 'Свернуть' : 'Развернуть' }}
+                </button>
+              </div>
+            </div>
+            <div v-if="isSupplyExpanded(getBatchKey(batch))" class="table-responsive">
+              <table class="table table-sm mb-0">
+                <thead>
+                  <tr>
+                    <th>Фото</th>
+                    <th>SKU</th>
+                    <th>Товар</th>
+                    <th>ШК</th>
+                    <th>Product ID</th>
+                    <th>Кол-во</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template v-for="draft in batch.drafts || []" :key="`orders-${getDraftKey(draft)}`">
+                    <template v-if="getBundleItemsForDraft(getBatchKey(batch), draft).length">
+                      <tr
+                        v-for="(item, idx) in getBundleItemsForDraft(getBatchKey(batch), draft)"
+                        :key="`${getBatchKey(batch)}-${getDraftKey(draft)}-${item.sku}-${idx}`"
+                      >
+                        <td>
+                          <img v-if="item.icon_path" :src="item.icon_path" alt="" style="width: 48px; height: 48px; object-fit: cover; border-radius: 8px;" />
+                        </td>
+                        <td>{{ item.sku || '—' }}</td>
+                        <td>{{ item.offer_id || item.name || '—' }}</td>
+                        <td>{{ item.barcode || '—' }}</td>
+                        <td>{{ item.product_id || '—' }}</td>
+                        <td>{{ item.quantity || 0 }}</td>
+                      </tr>
+                    </template>
+                    <tr v-else>
+                      <td colspan="6" class="text-muted">Нет товаров</td>
+                    </tr>
+                  </template>
                 </tbody>
               </table>
             </div>
@@ -222,8 +315,12 @@ import { apiService } from '@/services/api'
 const props = defineProps<{ storeId: string }>()
 
 const batches = ref<any[]>([])
+const confirmedBatches = ref<any[]>([])
 const isLoading = ref(false)
+const confirmedLoading = ref(false)
 const error = ref<string | null>(null)
+const confirmedError = ref<string | null>(null)
+const supplyInfo = ref<Record<string, any>>({})
 const batchDates = ref<Record<string, string>>({})
 const appliedBatchDates = ref<Record<string, string>>({})
 const timeslotDays = ref<Record<string, number>>({})
@@ -233,6 +330,8 @@ const timeslotLoading = ref<string | null>(null)
 const timeslotError = ref<Record<string, string>>({})
 const selectedTimeslot = ref<Record<string, string>>({})
 const selectedCommonTimeslot = ref<Record<string, string>>({})
+const confirmSupplyLoading = ref<string | null>(null)
+const confirmSupplyError = ref<Record<string, string>>({})
 const expandedDraftKey = ref<string | null>(null)
 const warehouseOptionsInline = ref<any[]>([])
 const expandedDates = ref<Record<string, Record<string, boolean>>>({})
@@ -240,6 +339,7 @@ const expandedCommonDates = ref<Record<string, Record<string, boolean>>>({})
 const draftToDelete = ref<any | null>(null)
 const deleteLoading = ref(false)
 const deleteError = ref<string | null>(null)
+const expandedSupplies = ref<Set<string>>(new Set())
 
 const draftRows = computed(() =>
   batches.value.flatMap((batch) => {
@@ -281,6 +381,30 @@ const fetchBatches = async () => {
   }
 }
 
+const fetchConfirmedBatches = async () => {
+  if (!props.storeId) return
+  confirmedLoading.value = true
+  confirmedError.value = null
+  supplyInfo.value = {}
+  try {
+    const resp = await apiService.getConfirmedDraftBatches({ storeId: props.storeId })
+    confirmedBatches.value = Array.isArray(resp) ? resp : []
+    for (const batch of confirmedBatches.value) {
+      try {
+        const info = await apiService.getSupplyInfo(batch.batch_id)
+        supplyInfo.value[getBatchKey(batch)] = info
+      } catch (e) {
+        // не блокируем остальные
+      }
+    }
+  } catch (err) {
+    confirmedError.value = err instanceof Error ? err.message : 'Не удалось загрузить актуальные поставки'
+    confirmedBatches.value = []
+  } finally {
+    confirmedLoading.value = false
+  }
+}
+
 const defaultDate = () => new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
 
 const formatDate = (dateStr?: string) => {
@@ -304,8 +428,21 @@ const formatDateShort = (dateStr?: string) => {
   return date.toLocaleDateString('ru-RU')
 }
 
+const formatDateTimeShort = (dateStr?: string) => {
+  if (!dateStr) return '—'
+  const date = new Date(dateStr)
+  if (Number.isNaN(date.getTime())) return dateStr
+  const dd = String(date.getDate()).padStart(2, '0')
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const yy = String(date.getFullYear()).slice(-2)
+  const hh = String(date.getHours()).padStart(2, '0')
+  const min = String(date.getMinutes()).padStart(2, '0')
+  return `${dd}-${mm}-${yy} ${hh}:${min}`
+}
+
 const getBatchKey = (batch: any) => String(batch?.batch_id ?? Math.random())
-const getDraftKey = (draft: any) => String(draft?.draft_id ?? draft?.id ?? Math.random())
+// Важно: для "черновика" используем локальный id (draft.id), т.к. draft.draft_id может быть OZON draft_id.
+const getDraftKey = (draft: any) => String(draft?.id ?? draft?.draft_id ?? Math.random())
 
 const ensureBatchDates = (batchesList: any[]) => {
   batchesList.forEach((batch) => {
@@ -370,6 +507,10 @@ const fetchTimeslots = async (batch: any) => {
   const dateFrom = new Date(batchDates.value[key]).toISOString()
   const days = Number(timeslotDays.value[key] || 7)
   const drafts = Array.isArray(batch?.drafts) ? batch.drafts : []
+  // сбрасываем предыдущие слоты, чтобы не висели старые данные
+  drafts.forEach((draft: any) => {
+    timeslotDataByDraft.value[getDraftKey(draft)] = []
+  })
   const missingDrafts = drafts.filter((draft: any) => !draftHasSelectedWarehouse(draft))
   if (missingDrafts.length) {
     const failed: string[] = []
@@ -505,7 +646,10 @@ const isDateExpanded = (draft: any, date: string) => {
 }
 
 const getCommonTimeslotsByDate = (batch: any) => {
-  const grouped: Record<string, Array<{ key: string; from: string; to: string }>> = {}
+  const grouped: Record<
+    string,
+    Array<{ key: string; from: string; to: string; fromRaw: string; toRaw: string }>
+  > = {}
   const batchKey = getBatchKey(batch)
   const source = Array.isArray(batch?.common_timeslots)
     ? batch.common_timeslots
@@ -524,7 +668,9 @@ const getCommonTimeslotsByDate = (batch: any) => {
       grouped[date].push({
         key,
         from: formatTime(from),
-        to: formatTime(to)
+        to: formatTime(to),
+        fromRaw: from,
+        toRaw: to
       })
     })
   })
@@ -542,10 +688,68 @@ const isCommonDateExpanded = (batch: any, date: string) => {
   return !!expandedCommonDates.value[key]?.[date]
 }
 
-const createCommonApplication = (batch: any) => {
+const toggleSupplyExpand = (batch: any) => {
   const key = getBatchKey(batch)
-  const slotKey = selectedCommonTimeslot.value[key]
-  console.log('[Create common application]', { batchId: batch?.batch_id, slotKey })
+  const set = expandedSupplies.value
+  if (set.has(key)) {
+    set.delete(key)
+  } else {
+    set.add(key)
+  }
+  // trigger reactivity
+  expandedSupplies.value = new Set(set)
+}
+
+const isSupplyExpanded = (batchKey: string) => expandedSupplies.value.has(batchKey)
+
+const getBundleItemsForDraft = (batchKey: string, draft: any) => {
+  const info = supplyInfo.value[batchKey]
+  if (!info?.results) return []
+  const draftId = draft?.id ?? draft?.draft_id
+  const entries = info.results.filter((r: any) => r?.draft_id === draftId)
+  const items: any[] = []
+  entries.forEach((entry: any) => {
+    if (Array.isArray(entry?.bundle_items)) {
+      entry.bundle_items.forEach((item: any) => items.push(item))
+    }
+  })
+  return items
+}
+
+const getSelectedCommonSlot = (batch: any) => {
+  const batchKey = getBatchKey(batch)
+  const selectedKey = selectedCommonTimeslot.value[batchKey]
+  if (!selectedKey) return null
+  const grouped = getCommonTimeslotsByDate(batch)
+  for (const date of Object.keys(grouped)) {
+    const slot = grouped[date].find((item) => item.key === selectedKey)
+    if (slot) return slot
+  }
+  return null
+}
+
+const createCommonApplication = async (batch: any) => {
+  const key = getBatchKey(batch)
+  const slot = getSelectedCommonSlot(batch)
+  if (!slot?.fromRaw || !slot?.toRaw) {
+    confirmSupplyError.value[key] = 'Выберите тайм-слот'
+    return
+  }
+
+  confirmSupplyLoading.value = key
+  confirmSupplyError.value[key] = ''
+  try {
+    const result = await apiService.confirmSupplyDraftBatch(batch.batch_id, {
+      from_in_timezone: slot.fromRaw,
+      to_in_timezone: slot.toRaw
+    })
+    console.log('[Confirm supply result]', result)
+    await fetchBatches()
+  } catch (err) {
+    confirmSupplyError.value[key] = err instanceof Error ? err.message : 'Не удалось создать заявку'
+  } finally {
+    confirmSupplyLoading.value = null
+  }
 }
 
 const openDeleteDraft = (draft: any) => {
@@ -581,6 +785,13 @@ const loadBatchTimeslots = async (batch: any, key?: string, silent = false) => {
   try {
     const result = await apiService.getDraftTimeslots(batch.batch_id)
     timeslotData.value[k] = result
+    // очистить старые слоты по всем драфтам этого батча
+    if (Array.isArray(batch?.drafts)) {
+      batch.drafts.forEach((draft: any) => {
+        const dk = getDraftKey(draft)
+        timeslotDataByDraft.value[dk] = []
+      })
+    }
     // распределяем слоты по черновикам
     if (Array.isArray(result?.drafts)) {
       result.drafts.forEach((draft: any) => {
@@ -669,13 +880,16 @@ const saveWarehouseSelectionInline = async (draft: any, warehouseId: string | nu
 
 onMounted(() => {
   fetchBatches()
+  fetchConfirmedBatches()
 })
 
 watch(
   () => props.storeId,
   () => {
     batches.value = []
+    confirmedBatches.value = []
     fetchBatches()
+    fetchConfirmedBatches()
   }
 )
 </script>
