@@ -281,10 +281,6 @@ const respondInvite = async (inv: any, decision: 'accept' | 'reject') => {
   try {
     await apiService.respondStoreInvite(storeId, decision)
     await storesStore.fetchStores()
-    if (decision === 'accept' && currentStoreId.value === null && stores.value.length) {
-      // выберем принятый магазин
-      router.push({ name: 'store-workspace', params: { id: stores.value[0].id, section: 'planner' } })
-    }
   } catch (error) {
     inviteError.value = error instanceof Error ? error.message : 'Не удалось обработать приглашение'
   } finally {

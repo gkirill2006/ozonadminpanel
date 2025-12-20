@@ -1,7 +1,10 @@
 <template>
   <div class="dashboard">
     <div class="dashboard-grid">
-<section class="card shadow-sm dashboard-section">
+      <section
+        class="card shadow-sm dashboard-section"
+        :class="{ 'dashboard-section--full': !showCreateStore }"
+      >
         <div class="card-header d-flex align-items-start justify-content-between flex-wrap gap-2">
           <div>
             <h2 class="mb-1">Магазины</h2>
@@ -32,7 +35,7 @@
             <button type="button" class="btn btn-link btn-sm p-0" @click="fetchStores">Повторить</button>
           </div>
 
-          <div v-else-if="!hasStores" class="state state--empty">
+          <div v-else>
             <div v-if="invites?.length" class="mb-4 text-start w-100">
               <h5 class="mb-2">Приглашения</h5>
               <div class="d-flex flex-column gap-2">
@@ -68,31 +71,56 @@
               </div>
               <div v-if="inviteError" class="alert alert-danger mt-3 mb-0 py-2 px-3">{{ inviteError }}</div>
             </div>
-            <h4>Пока нет ни одного магазина</h4>
-            <p class="text-body-secondary mb-3">
-              Добавьте первый магазин, чтобы получить client_id и API ключ в одном месте.
-            </p>
-            <button class="btn btn-primary" type="button" @click="focusForm">Создать магазин</button>
-          </div>
 
-          <div v-else class="store-buttons">
-            <button
-              v-for="store in stores"
-              :key="store.id"
-              type="button"
-              class="store-button btn btn-outline-dark d-flex align-items-center justify-content-between"
-              @click="openWorkspace(store)"
-            >
-              <span class="store-button__title">{{ store.name || `Магазин #${store.id}` }}</span>
-              <span class="store-button__meta text-body-secondary">
-                ID {{ store.id }}
-              </span>
-            </button>
+            <div v-if="!hasStores" class="state state--empty">
+              <h4>Пока нет ни одного магазина</h4>
+              <p class="text-body-secondary mb-2">
+                Добавьте первый магазин, чтобы получить client_id и API ключ в одном месте.
+              </p>
+              <p class="text-body-secondary mb-0">Добавление магазина временно отключено.</p>
+            </div>
+
+            <div v-else>
+              <div v-if="ownedStores.length" class="store-group">
+                <h5 class="store-group__title">Мои магазины</h5>
+                <div class="store-buttons">
+                  <button
+                    v-for="store in ownedStores"
+                    :key="store.id"
+                    type="button"
+                    class="store-button btn btn-outline-dark d-flex align-items-center justify-content-between"
+                    @click="openWorkspace(store)"
+                  >
+                    <span class="store-button__title">{{ store.name || `Магазин #${store.id}` }}</span>
+                    <span class="store-button__meta text-body-secondary">
+                      ID {{ store.id }}
+                    </span>
+                  </button>
+                </div>
+              </div>
+              <div v-if="sharedStores.length" class="store-group">
+                <h5 class="store-group__title">Магазины по приглашению</h5>
+                <div class="store-buttons">
+                  <button
+                    v-for="store in sharedStores"
+                    :key="store.id"
+                    type="button"
+                    class="store-button btn btn-outline-dark d-flex align-items-center justify-content-between"
+                    @click="openWorkspace(store)"
+                  >
+                    <span class="store-button__title">{{ store.name || `Магазин #${store.id}` }}</span>
+                    <span class="store-button__meta text-body-secondary">
+                      ID {{ store.id }}
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      <section class="card shadow-sm form-section" ref="formSectionRef">
+      <section v-if="showCreateStore" class="card shadow-sm form-section" ref="formSectionRef">
         <div class="card-header">
           <h3 class="mb-1">Добавить магазин</h3>
           <p class="text-body-secondary mb-0">Client ID и API ключ обязательны, остальные поля можно заполнить позже.</p>
@@ -198,6 +226,7 @@ import { storeToRefs } from 'pinia'
 interface AuthStore {
   id: string
   name?: string | null
+  is_owner?: boolean | null
   client_id?: string | number | null
   api_key?: string | null
   google_sheet_url?: string | null
@@ -229,8 +258,11 @@ const formSuccess = ref<string | null>(null)
 const isSubmitting = ref(false)
 
 const hasStores = computed(() => stores.value.length > 0)
+const ownedStores = computed(() => stores.value.filter((store) => store?.is_owner !== false))
+const sharedStores = computed(() => stores.value.filter((store) => store?.is_owner === false))
 const respondingInviteId = ref<string | number | null>(null)
 const inviteError = ref<string | null>(null)
+const showCreateStore = false
 
 const resetForm = () => {
   form.name = ''
@@ -293,12 +325,6 @@ const respondInvite = async (inv: any, decision: 'accept' | 'reject') => {
   try {
     await apiService.respondStoreInvite(storeId, decision)
     await fetchStores()
-    if (decision === 'accept' && stores.value.length) {
-      router.push({
-        name: 'store-workspace',
-        params: { id: stores.value[0].id, section: DEFAULT_WORKSPACE_SECTION }
-      })
-    }
   } catch (error) {
     inviteError.value = error instanceof Error ? error.message : 'Не удалось обработать приглашение'
   } finally {
@@ -343,6 +369,10 @@ onMounted(async () => {
   border-radius: 24px;
 }
 
+.dashboard-section--full {
+  grid-column: 1 / -1;
+}
+
 .card-header {
   border-bottom: 1px solid rgba(15, 23, 42, 0.08);
   background: #fff;
@@ -371,6 +401,16 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+}
+
+.store-group + .store-group {
+  margin-top: 1.25rem;
+}
+
+.store-group__title {
+  margin-bottom: 0.75rem;
+  font-size: 0.95rem;
+  color: #334155;
 }
 
 .store-button {
