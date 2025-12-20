@@ -126,15 +126,7 @@
                           </button>
                           <div v-if="isDateExpanded(draft, date)" class="timeslot-list mt-1">
                             <div class="slot-option" v-for="slot in slotsByDate" :key="slot.key">
-                              <label class="d-flex align-items-center gap-2">
-                                <input
-                                  type="radio"
-                                  :name="`slot-${getDraftKey(draft)}`"
-                                  :value="slot.key"
-                                  v-model="selectedTimeslot[getDraftKey(draft)]"
-                                />
-                                <span>{{ slot.from }} — {{ slot.to }}</span>
-                              </label>
+                              <span>{{ slot.from }} — {{ slot.to }}</span>
                             </div>
                           </div>
                         </div>
