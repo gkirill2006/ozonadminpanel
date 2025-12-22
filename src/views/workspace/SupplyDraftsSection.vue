@@ -16,8 +16,8 @@
         <div v-else-if="!isLoading && !batches.length" class="text-muted small">Черновиков пока нет.</div>
         <div v-if="batches.length">
           <div v-for="batch in batches" :key="batch.batch_id" class="batch-block">
-            <div class="d-flex flex-wrap align-items-center gap-3 mb-2">
-              <div class="fw-semibold">Batch: {{ batch.batch_id }}</div>
+            <div class="batch-header d-flex flex-wrap align-items-center gap-3 mb-2">
+              <div class="fw-semibold">Поставка: {{ batch.batch_id }}</div>
               <div class="text-muted small">Склад сдачи: {{ batch.drop_off_point_name || batch.drop_off_point_warehouse?.name || '—' }}</div>
             </div>
             <div class="d-flex flex-wrap align-items-center gap-2 mb-3 filter-row">
@@ -30,20 +30,24 @@
               <input
                 type="number"
                 min="1"
-                max="14"
+                max="28"
                 class="form-control form-control-sm days-input"
+                :class="{ 'is-invalid': isTimeslotDaysInvalid(getBatchKey(batch)) }"
                 v-model.number="timeslotDays[getBatchKey(batch)]"
                 placeholder="дней"
               />
               <button
                 class="btn btn-outline-secondary btn-sm"
                 type="button"
-                :disabled="timeslotLoading === getBatchKey(batch)"
+                :disabled="timeslotLoading === getBatchKey(batch) || isTimeslotDaysInvalid(getBatchKey(batch))"
                 @click="applyBatchDate(batch, true)"
               >
                 <span v-if="timeslotLoading === getBatchKey(batch)" class="spinner-border spinner-border-sm me-1"></span>
                 Запросить
               </button>
+              <div v-if="isTimeslotDaysInvalid(getBatchKey(batch))" class="text-danger small">
+                Максимум 28 дней
+              </div>
               <div class="text-muted small ms-auto">Текущая дата: {{ appliedBatchDates[getBatchKey(batch)] || 'не выбрана' }}</div>
             </div>
 
@@ -60,19 +64,18 @@
                 <tbody>
                   <tr v-for="(draft, draftIndex) in batch.drafts || []" :key="getDraftKey(draft)">
                     <td class="fw-semibold">
-                      <div class="d-flex align-items-center justify-content-between gap-2">
-                        <span>{{ draft.logistic_cluster_name || draft.warehouse || '—' }}</span>
+                      <div class="d-flex align-items-center gap-2 draft-cluster-cell">
                         <button
-                          class="btn btn-link btn-sm p-0 text-danger delete-btn"
+                          class="btn btn-link btn-sm p-0 text-primary move-btn"
                           type="button"
-                          title="Удалить черновик"
-                          @click="openDeleteDraft(draft)"
+                          title="Перенести в новый батч"
+                          @click="openMoveDraft(batch, draft)"
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                            <path d="M5.5 5.5a.5.5 0 0 1 .5-.5h4a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-1 0V6h-3v6.5a.5.5 0 0 1-1 0v-7z"/>
-                            <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1 0-2h3l.5-1h3l.5 1h3a1 1 0 0 1 1 1zM4 4v9a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4H4z"/>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M7.217 10.907a2.25 2.25 0 1 0 0 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186 9.566-5.314m-9.566 7.5 9.566 5.314m0 0a2.25 2.25 0 1 0 3.935 2.186 2.25 2.25 0 0 0-3.935-2.186Zm0-12.814a2.25 2.25 0 1 0 3.933-2.185 2.25 2.25 0 0 0-3.933 2.185Z" />
                           </svg>
                         </button>
+                        <span>{{ draft.logistic_cluster_name || draft.warehouse || '—' }}</span>
                       </div>
                     </td>
                     <td>
@@ -111,22 +114,26 @@
                         {{ timeslotError[getBatchKey(batch)] }}
                       </div>
                       <div v-if="Object.keys(getSlotsGroupedByDate(draft)).length" class="timeslot-block">
-                        <div
-                          class="timeslot-date"
-                          v-for="(slotsByDate, date) in getSlotsGroupedByDate(draft)"
-                          :key="`${getDraftKey(draft)}-${date}`"
-                        >
-                          <button
-                            type="button"
-                            class="btn btn-link btn-sm p-0 d-flex align-items-center gap-1"
-                            @click="toggleDateExpanded(draft, date)"
+                        <div class="timeslot-grid">
+                          <div
+                            v-for="(slotsByDate, date) in getSlotsGroupedByDate(draft)"
+                            :key="`${getDraftKey(draft)}-${date}`"
+                            class="timeslot-item"
                           >
-                            <span class="chevron" :class="{ open: isDateExpanded(draft, date) }">▸</span>
-                            <span>{{ date }}</span>
-                          </button>
-                          <div v-if="isDateExpanded(draft, date)" class="timeslot-list mt-1">
-                            <div class="slot-option" v-for="slot in slotsByDate" :key="slot.key">
-                              <span>{{ slot.from }} — {{ slot.to }}</span>
+                            <div class="timeslot-date">
+                              <button
+                                type="button"
+                                class="timeslot-date-btn"
+                                :class="{ 'timeslot-date-btn--active': isDateExpanded(draft, date) }"
+                                @click="toggleDateExpanded(draft, date)"
+                              >
+                                <span>{{ formatDateDayMonth(date) }}</span>
+                              </button>
+                            </div>
+                            <div v-if="isDateExpanded(draft, date)" class="timeslot-list timeslot-list--draft timeslot-list--full mt-2">
+                              <div class="slot-option" v-for="slot in slotsByDate" :key="slot.key">
+                                <span>{{ slot.from }} — {{ slot.to }}</span>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -139,30 +146,37 @@
                       class="common-slots-cell"
                     >
                       <div v-if="Object.keys(getCommonTimeslotsByDate(batch)).length">
-                        <div
-                          class="timeslot-date"
-                          v-for="(slotsByDate, date) in getCommonTimeslotsByDate(batch)"
-                          :key="`${getBatchKey(batch)}-common-${date}`"
-                        >
-                          <button
-                            type="button"
-                            class="btn btn-link btn-sm p-0 d-flex align-items-center gap-1"
-                            @click="toggleCommonDateExpanded(batch, date)"
+                        <div class="timeslot-grid timeslot-grid--single">
+                          <div
+                            v-for="(slotsByDate, date) in getCommonTimeslotsByDate(batch)"
+                            :key="`${getBatchKey(batch)}-common-${date}`"
+                            class="timeslot-item"
                           >
-                            <span class="chevron" :class="{ open: isCommonDateExpanded(batch, date) }">▸</span>
-                            <span>{{ formatDateShort(date) }}</span>
-                          </button>
-                          <div v-if="isCommonDateExpanded(batch, date)" class="timeslot-list mt-1">
-                            <div class="slot-option" v-for="slot in slotsByDate" :key="slot.key">
-                              <label class="d-flex align-items-center gap-2">
-                                <input
-                                  type="radio"
-                                  :name="`common-slot-${getBatchKey(batch)}`"
-                                  :value="slot.key"
-                                  v-model="selectedCommonTimeslot[getBatchKey(batch)]"
-                                />
-                                <span>{{ slot.from }} — {{ slot.to }}</span>
-                              </label>
+                            <div class="timeslot-date">
+                              <button
+                                type="button"
+                                class="timeslot-date-btn"
+                                :class="{ 'timeslot-date-btn--active': isCommonDateExpanded(batch, date) }"
+                                @click="toggleCommonDateExpanded(batch, date)"
+                              >
+                                <span>{{ formatDateDayMonth(date) }}</span>
+                              </button>
+                            </div>
+                            <div v-if="isCommonDateExpanded(batch, date)" class="timeslot-list timeslot-list--draft timeslot-list--full mt-2">
+                              <div class="slot-option slot-option--common" v-for="slot in slotsByDate" :key="slot.key">
+                                <label
+                                  class="d-flex align-items-center gap-2"
+                                  @click.prevent="toggleCommonTimeslot(getBatchKey(batch), slot.key)"
+                                >
+                                  <input
+                                    type="radio"
+                                    :name="`common-slot-${getBatchKey(batch)}`"
+                                    :value="slot.key"
+                                    :checked="selectedCommonTimeslot[getBatchKey(batch)] === slot.key"
+                                  />
+                                  <span>{{ slot.from }} — {{ slot.to }}</span>
+                                </label>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -285,19 +299,18 @@
       </div>
     </section>
 
-    <Modal v-if="draftToDelete" :show="true" @close="closeDeleteDraft">
-      <h5 class="mb-3">Удалить черновик?</h5>
+    <Modal v-if="draftToMove" :show="true" @close="closeMoveDraft">
       <p class="mb-3">
         Черновик
-        <strong>{{ draftToDelete?.logistic_cluster_name || draftToDelete?.warehouse || draftToDelete?.draft_id }}</strong>
-        будет удалён. Продолжить?
+        <strong>{{ draftToMove?.draft?.logistic_cluster_name || draftToMove?.draft?.warehouse || draftToMove?.draft?.draft_id }}</strong>
+        будет перенесён в новую поставку.
       </p>
-      <div v-if="deleteError" class="alert alert-danger py-2 px-3">{{ deleteError }}</div>
+      <div v-if="moveError" class="alert alert-danger py-2 px-3">{{ moveError }}</div>
       <div class="d-flex justify-content-end gap-2">
-        <button class="btn btn-outline-secondary btn-sm" type="button" @click="closeDeleteDraft">Отмена</button>
-        <button class="btn btn-danger btn-sm" type="button" :disabled="deleteLoading" @click="confirmDeleteDraft">
-          <span v-if="deleteLoading" class="spinner-border spinner-border-sm me-1"></span>
-          Удалить
+        <button class="btn btn-outline-secondary btn-sm" type="button" @click="closeMoveDraft">Отмена</button>
+        <button class="btn btn-primary btn-sm" type="button" :disabled="moveLoading" @click="confirmMoveDraft">
+          <span v-if="moveLoading" class="spinner-border spinner-border-sm me-1"></span>
+          Перенести
         </button>
       </div>
     </Modal>
@@ -318,6 +331,7 @@ const isLoading = ref(false)
 const confirmedLoading = ref(false)
 const error = ref<string | null>(null)
 const confirmedError = ref<string | null>(null)
+const MAX_TIMESLOT_DAYS = 28
 const supplyInfo = ref<Record<string, any>>({})
 const batchDates = ref<Record<string, string>>({})
 const appliedBatchDates = ref<Record<string, string>>({})
@@ -334,9 +348,9 @@ const expandedDraftKey = ref<string | null>(null)
 const warehouseOptionsInline = ref<any[]>([])
 const expandedDates = ref<Record<string, Record<string, boolean>>>({})
 const expandedCommonDates = ref<Record<string, Record<string, boolean>>>({})
-const draftToDelete = ref<any | null>(null)
-const deleteLoading = ref(false)
-const deleteError = ref<string | null>(null)
+const draftToMove = ref<{ draft: any; batchId: string } | null>(null)
+const moveLoading = ref(false)
+const moveError = ref<string | null>(null)
 const expandedSupplies = ref<Set<string>>(new Set())
 
 const draftRows = computed(() =>
@@ -426,6 +440,42 @@ const formatDateShort = (dateStr?: string) => {
   return date.toLocaleDateString('ru-RU')
 }
 
+const getLocalMinutes = (raw?: string, fallback?: string) => {
+  if (raw) {
+    const date = new Date(raw)
+    if (!Number.isNaN(date.getTime())) {
+      return date.getHours() * 60 + date.getMinutes()
+    }
+  }
+  if (fallback) {
+    const match = String(fallback).match(/^(\d{1,2}):(\d{2})/)
+    if (match) {
+      return Number(match[1]) * 60 + Number(match[2])
+    }
+  }
+  return 0
+}
+
+const formatDateDayMonth = (dateStr?: string) => {
+  if (!dateStr) return '—'
+  const match = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (match) return `${match[3]}.${match[2]}`
+  const date = new Date(dateStr)
+  if (Number.isNaN(date.getTime())) return dateStr
+  const dd = String(date.getDate()).padStart(2, '0')
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  return `${dd}.${mm}`
+}
+
+const getDateKey = (dateStr?: string) => {
+  if (!dateStr) return ''
+  const value = String(dateStr)
+  if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10)
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toISOString().slice(0, 10)
+}
+
 const formatDateTimeShort = (dateStr?: string) => {
   if (!dateStr) return '—'
   const date = new Date(dateStr)
@@ -447,8 +497,13 @@ const ensureBatchDates = (batchesList: any[]) => {
     const key = getBatchKey(batch)
     if (!batchDates.value[key]) batchDates.value[key] = defaultDate()
     if (!appliedBatchDates.value[key]) appliedBatchDates.value[key] = batchDates.value[key]
-    if (!timeslotDays.value[key]) timeslotDays.value[key] = 3
+    if (!timeslotDays.value[key]) timeslotDays.value[key] = MAX_TIMESLOT_DAYS
   })
+}
+
+const isTimeslotDaysInvalid = (batchKey: string) => {
+  const value = Number(timeslotDays.value[batchKey] || 0)
+  return Number.isFinite(value) && value > MAX_TIMESLOT_DAYS
 }
 
 const applyBatchDate = (batch: any, withFetch = false) => {
@@ -503,7 +558,7 @@ const fetchTimeslots = async (batch: any) => {
   const key = getBatchKey(batch)
   if (!batchDates.value[key]) batchDates.value[key] = defaultDate()
   const dateFrom = new Date(batchDates.value[key]).toISOString()
-  const days = Number(timeslotDays.value[key] || 7)
+  const days = Number(timeslotDays.value[key] || MAX_TIMESLOT_DAYS)
   const drafts = Array.isArray(batch?.drafts) ? batch.drafts : []
   // сбрасываем предыдущие слоты, чтобы не висели старые данные
   drafts.forEach((draft: any) => {
@@ -570,9 +625,10 @@ const mapTimeslotsForDraft = (draft: any) => {
           const to = slot?.to
           slots.push({
             key: `${entry?.warehouse_id || 'w'}_${day?.date || ''}_${from || ''}_${to || ''}`,
-            date: formatDateShort(day?.date || from),
+            date: getDateKey(day?.date || from),
             from: formatTime(from),
-            to: formatTime(to)
+            to: formatTime(to),
+            fromRaw: from
           })
         })
       })
@@ -596,9 +652,10 @@ const mapTimeslotsForDraft = (draft: any) => {
           const to = slot?.to_in_timezone || slot?.to
           slots.push({
             key: `${from || ''}_${to || ''}`,
-            date: formatDateShort(from),
+            date: getDateKey(from),
             from: formatTime(from),
-            to: formatTime(to)
+            to: formatTime(to),
+            fromRaw: from
           })
         })
       })
@@ -624,18 +681,31 @@ const getSlotsForDraft = (draft: any) => {
 }
 
 const getSlotsGroupedByDate = (draft: any) => {
-  const grouped: Record<string, Array<{ key: string; date: string; from: string; to: string }>> = {}
-  getSlotsForDraft(draft).forEach((slot) => {
-    if (!grouped[slot.date]) grouped[slot.date] = []
-    grouped[slot.date].push(slot)
-  })
-  return grouped
+  const grouped: Record<
+    string,
+    Array<{ key: string; date: string; from: string; to: string; fromRaw?: string }>
+  > = {}
+  getSlotsForDraft(draft)
+    .slice()
+    .sort((a, b) => {
+      const dateOrder = String(a.date).localeCompare(String(b.date))
+      if (dateOrder !== 0) return dateOrder
+      return getLocalMinutes(a.fromRaw, a.from) - getLocalMinutes(b.fromRaw, b.from)
+    })
+    .forEach((slot) => {
+      if (!grouped[slot.date]) grouped[slot.date] = []
+      grouped[slot.date].push(slot)
+    })
+  return Object.fromEntries(Object.entries(grouped).sort(([a], [b]) => String(a).localeCompare(String(b))))
 }
 
 const toggleDateExpanded = (draft: any, date: string) => {
   const draftKey = getDraftKey(draft)
-  if (!expandedDates.value[draftKey]) expandedDates.value[draftKey] = {}
-  expandedDates.value[draftKey][date] = !expandedDates.value[draftKey][date]
+  const current = expandedDates.value[draftKey]?.[date]
+  expandedDates.value[draftKey] = {}
+  if (!current) {
+    expandedDates.value[draftKey][date] = true
+  }
 }
 
 const isDateExpanded = (draft: any, date: string) => {
@@ -672,7 +742,13 @@ const getCommonTimeslotsByDate = (batch: any) => {
       })
     })
   })
-  return grouped
+  const sorted = Object.fromEntries(
+    Object.entries(grouped).sort(([a], [b]) => String(a).localeCompare(String(b)))
+  )
+  Object.values(sorted).forEach((slots) => {
+    slots.sort((a, b) => getLocalMinutes(a.fromRaw, a.from) - getLocalMinutes(b.fromRaw, b.from))
+  })
+  return sorted
 }
 
 const toggleCommonDateExpanded = (batch: any, date: string) => {
@@ -684,6 +760,14 @@ const toggleCommonDateExpanded = (batch: any, date: string) => {
 const isCommonDateExpanded = (batch: any, date: string) => {
   const key = getBatchKey(batch)
   return !!expandedCommonDates.value[key]?.[date]
+}
+
+const toggleCommonTimeslot = (batchKey: string, slotKey: string) => {
+  if (selectedCommonTimeslot.value[batchKey] === slotKey) {
+    selectedCommonTimeslot.value[batchKey] = ''
+  } else {
+    selectedCommonTimeslot.value[batchKey] = slotKey
+  }
 }
 
 const toggleSupplyExpand = (batch: any) => {
@@ -777,30 +861,32 @@ const createCommonApplication = async (batch: any) => {
   }
 }
 
-const openDeleteDraft = (draft: any) => {
-  draftToDelete.value = draft
-  deleteError.value = null
+const openMoveDraft = (batch: any, draft: any) => {
+  const batchId = batch?.batch_id
+  if (!batchId) return
+  draftToMove.value = { draft, batchId }
+  moveError.value = null
 }
 
-const closeDeleteDraft = () => {
-  draftToDelete.value = null
-  deleteError.value = null
+const closeMoveDraft = () => {
+  draftToMove.value = null
+  moveError.value = null
 }
 
-const confirmDeleteDraft = async () => {
-  if (!draftToDelete.value) return
-  const draftId = getDraftApiId(draftToDelete.value)
+const confirmMoveDraft = async () => {
+  if (!draftToMove.value) return
+  const draftId = getDraftApiId(draftToMove.value.draft)
   if (!draftId) return
-  deleteLoading.value = true
-  deleteError.value = null
+  moveLoading.value = true
+  moveError.value = null
   try {
-    await apiService.deleteSupplyDraft(draftId)
-    closeDeleteDraft()
+    await apiService.moveDraftToNewBatch(draftToMove.value.batchId, draftId)
+    closeMoveDraft()
     await fetchBatches()
   } catch (err) {
-    deleteError.value = err instanceof Error ? err.message : 'Не удалось удалить черновик'
+    moveError.value = err instanceof Error ? err.message : 'Не удалось перенести черновик'
   } finally {
-    deleteLoading.value = false
+    moveLoading.value = false
   }
 }
 
@@ -926,6 +1012,22 @@ watch(
   gap: 0.75rem;
 }
 
+.batch-block {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 14px;
+  padding: 0.75rem;
+  background: #fff;
+}
+
+.batch-block + .batch-block {
+  margin-top: 0.75rem;
+}
+
+.batch-header {
+  border-bottom: 1px dashed rgba(15, 23, 42, 0.1);
+  padding-bottom: 0.4rem;
+}
+
 .drafts-table {
   border: 1px solid rgba(15, 23, 42, 0.08);
   border-radius: 10px;
@@ -988,14 +1090,60 @@ watch(
   padding: 0.35rem 0.5rem;
 }
 
+.timeslot-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.timeslot-grid--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.timeslot-item {
+  display: contents;
+}
+
+.timeslot-date {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.timeslot-date-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  width: 100%;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: #fff;
+  border-radius: 6px;
+  padding: 0.15rem 0.3rem;
+  font-size: 0.7rem;
+  color: #334155;
+  line-height: 1.2;
+}
+
+.timeslot-date-btn:hover {
+  background: #eef2ff;
+  border-color: rgba(99, 102, 241, 0.35);
+}
+
+.timeslot-date-btn--active {
+  background: #e0e7ff;
+  border-color: rgba(99, 102, 241, 0.45);
+  color: #1e3a8a;
+}
+
 .days-input {
   min-width: 110px;
 }
 
-.timeslot-date + .timeslot-date {
-  margin-top: 0.35rem;
-  padding-top: 0.35rem;
-  border-top: 1px dashed rgba(15, 23, 42, 0.08);
+.timeslot-grid .timeslot-date + .timeslot-date {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
 }
 
 .timeslot-list {
@@ -1003,6 +1151,30 @@ watch(
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+}
+
+.timeslot-list--draft {
+  padding-left: 0;
+  width: 100%;
+  align-items: stretch;
+  font-size: 0.75rem;
+}
+
+.timeslot-list--full {
+  grid-column: 1 / -1;
+}
+
+.slot-option--common {
+  border-radius: 6px;
+  padding: 0.1rem 0.35rem;
+}
+
+.slot-option--common:hover {
+  background: rgba(15, 23, 42, 0.06);
+}
+
+.draft-cluster-cell {
+  justify-content: flex-start;
 }
 
 .chevron {
@@ -1019,7 +1191,7 @@ watch(
   text-align: center;
 }
 
-.delete-btn svg {
+.move-btn svg {
   vertical-align: middle;
 }
 

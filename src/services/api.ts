@@ -349,6 +349,15 @@ class ApiService {
     return this.handleResponse(response)
   }
 
+  async moveDraftToNewBatch(batchId: string, draftId: string | number) {
+    const response = await fetch(`${API_BASE_URL}/api/ozon/drafts/batch/${batchId}/move-draft/`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ draft_id: draftId })
+    })
+    return this.handleResponse(response)
+  }
+
   async searchFboWarehouses(params: { storeId: string | number; supplyTypes?: string[] | string; search?: string }) {
     const { storeId, supplyTypes, search } = params
     const payload: Record<string, unknown> = { store_id: storeId }

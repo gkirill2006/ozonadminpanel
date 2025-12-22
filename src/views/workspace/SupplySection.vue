@@ -5,9 +5,6 @@
           <h5 class="mb-0">Поставка</h5>
           <div class="d-flex align-items-center gap-2">
             <span class="text-muted small">Кластеров: {{ clusterHeaders.length }} · Товаров: {{ products.length }}</span>
-            <button class="btn btn-outline-primary btn-sm" type="button" @click="openBatchesDialog">
-              Черновики
-            </button>
             <button class="btn btn-outline-secondary btn-sm" type="button" @click="openSettings">
               Настройки
             </button>
@@ -54,16 +51,21 @@
           </div>
 
           <div v-if="draftBatchId" class="card shadow-sm mb-2 draft-status-card">
-            <div class="card-header d-flex justify-content-between align-items-center py-2 px-3">
-              <div class="d-flex align-items-center gap-2 flex-wrap">
-                <span class="fw-semibold">Черновики поставки</span>
-                <span class="badge bg-secondary">batch: {{ draftBatchId }}</span>
-                <button class="btn btn-outline-secondary btn-sm" type="button" @click="openBatchesDialog">
-                  Все черновики
-                </button>
+              <div class="card-header d-flex justify-content-between align-items-center py-2 px-3">
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                  <span class="fw-semibold">Создание поставки</span>
+                  <span class="badge bg-secondary">{{ draftBatchId }}</span>
+                  <button
+                    class="btn btn-outline-secondary btn-sm"
+                    type="button"
+                    @click="goToCurrentSupply"
+                    :disabled="!isBatchCompleted"
+                  >
+                    Перейти в текущую поставку
+                  </button>
+                </div>
+              <span class="text-muted small">{{ batchStatusMessage }}</span>
               </div>
-              <span class="text-muted small">Статус батча: {{ batchStatusLabel }}</span>
-            </div>
             <div class="card-body py-2 px-3 draft-status-body">
               <div v-if="draftBatchError" class="alert alert-danger py-1 px-2 mb-2">{{ draftBatchError }}</div>
               <div v-if="draftItems.length">
@@ -72,29 +74,24 @@
                     <tr>
                       <th>Склад</th>
                       <th>Статус</th>
-                      <th>draft_id</th>
-                      <th>operation_id</th>
-                      <th>Ошибка</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="draft in draftItems" :key="draft.id || draft.draft_id || draft.logistic_cluster_id || draft.logistic_cluster_name">
+                    <tr
+                      v-for="draft in draftItems"
+                      :key="draft.id || draft.draft_id || draft.logistic_cluster_id || draft.logistic_cluster_name"
+                      :class="{ 'draft-row--done': isFinalDraftStatus(draft.status) }"
+                    >
                       <td>{{ draft.logistic_cluster_name || draft.warehouse || '—' }}</td>
-                      <td>{{ draft.status || '—' }}</td>
-                      <td>{{ draft.draft_id ?? '—' }}</td>
-                      <td>{{ draft.operation_id ?? '—' }}</td>
-                      <td class="text-danger small">{{ draft.error_message || '' }}</td>
+                      <td>
+                        <span>{{ draft.status || '—' }}</span>
+                        <span v-if="!isFinalDraftStatus(draft.status)" class="spinner-border spinner-border-sm ms-2" role="status"></span>
+                      </td>
                     </tr>
                   </tbody>
                 </table>
               </div>
               <div v-else class="text-muted small">Нет данных по черновикам</div>
-              <div v-if="draftBatchLoading" class="draft-status-overlay">
-                <div class="text-muted small d-flex align-items-center gap-2">
-                  <span class="spinner-border spinner-border-sm"></span>
-                  Обновляем статусы...
-                </div>
-              </div>
             </div>
           </div>
 
@@ -117,7 +114,12 @@
                     :key="cluster"
                     class="text-center"
                   >
-                    {{ cluster }}
+                    <div class="cluster-header">
+                      <span class="cluster-name">{{ cluster }}</span>
+                      <span v-if="getClusterImpactShare(cluster) !== null" class="cluster-share">
+                        {{ formatImpactShare(getClusterImpactShare(cluster)) }}
+                      </span>
+                    </div>
                   </th>
                 </template>
               </tr>
@@ -335,7 +337,7 @@
           <table class="table table-sm align-middle mb-0">
             <thead>
               <tr>
-                <th>Batch</th>
+                <th>Поставка</th>
                 <th>Статус</th>
                 <th>Магазин</th>
                 <th>Склад сдачи</th>
@@ -372,9 +374,11 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { apiService } from '@/services/api'
 
 const props = defineProps<{ storeId: string }>()
+const router = useRouter()
 
 interface PivotProduct {
   id: string
@@ -389,6 +393,7 @@ interface PivotProduct {
 }
 
 const clusterHeaders = ref<string[]>([])
+const clusterImpactShare = ref<Record<string, number>>({})
 const products = ref<PivotProduct[]>([])
 const isLoading = ref(false)
 const loadError = ref<string | null>(null)
@@ -433,6 +438,17 @@ const formatNumber = (value: number | null | undefined) => {
   return new Intl.NumberFormat('ru-RU').format(num)
 }
 
+const getClusterImpactShare = (cluster: string) => {
+  const raw = clusterImpactShare.value?.[cluster]
+  const num = Number(raw)
+  return Number.isFinite(num) ? num : null
+}
+
+const formatImpactShare = (value: number | null) => {
+  if (value === null) return ''
+  return `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(value)}%`
+}
+
 const persistSettings = () => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(displaySettings))
 }
@@ -457,14 +473,14 @@ const selectedWarehouse = ref<{ warehouse_id: string | number; name: string; add
 let searchDebounce: ReturnType<typeof setTimeout> | null = null
 
 const draftBatchId = ref<string | null>(null)
-const draftBatchStatus = ref<any | null>(null)
-const draftBatchLoading = ref(false)
+const draftBatchStatusText = ref<string>('—')
 const draftBatchError = ref<string | null>(null)
 let draftBatchTimer: ReturnType<typeof setInterval> | null = null
-const draftItems = computed(() =>
-  Array.isArray((draftBatchStatus.value as any)?.drafts) ? (draftBatchStatus.value as any).drafts : []
+const draftItems = ref<any[]>([])
+const isBatchCompleted = computed(() => String(draftBatchStatusText.value).toLowerCase() === 'completed')
+const batchStatusMessage = computed(() =>
+  isBatchCompleted.value ? 'Черновик для новой поставки создан.' : 'Создаём черновик для новой поставки...'
 )
-const batchStatusLabel = computed(() => (draftBatchStatus.value as any)?.status || '—')
 
 const batchesDialogOpen = ref(false)
 const batchesLoading = ref(false)
@@ -478,7 +494,26 @@ const fetchPivotData = async () => {
   try {
     const response = await apiService.fetchPlannerPivot(props.storeId)
     const headers = Array.isArray((response as any)?.cluster_headers) ? (response as any).cluster_headers : []
-    clusterHeaders.value = headers.slice().sort((a: string, b: string) => collator.compare(a, b))
+    const impactRaw = (response as any)?.cluster_impact_share
+    const impactMap: Record<string, number> = {}
+    if (impactRaw && typeof impactRaw === 'object') {
+      Object.entries(impactRaw as Record<string, unknown>).forEach(([key, value]) => {
+        const num = Number(value)
+        if (Number.isFinite(num)) impactMap[key] = num
+      })
+    }
+    clusterImpactShare.value = impactMap
+    clusterHeaders.value = headers
+      .map((name: string, index: number) => ({
+        name,
+        index,
+        share: Number.isFinite(impactMap[name]) ? impactMap[name] : -Infinity
+      }))
+      .sort((a, b) => {
+        if (a.share !== b.share) return b.share - a.share
+        return a.index - b.index
+      })
+      .map((entry) => entry.name)
   const items = Array.isArray((response as any)?.products) ? (response as any).products : []
   products.value = items.map((item: any, idx: number) => ({
     id: `${item?.offer_id ?? item?.sku ?? idx}`,
@@ -500,6 +535,7 @@ const fetchPivotData = async () => {
     loadError.value = error instanceof Error ? error.message : 'Не удалось загрузить данные поставки'
     products.value = []
     clusterHeaders.value = []
+    clusterImpactShare.value = {}
   } finally {
     isLoading.value = false
   }
@@ -517,6 +553,7 @@ watch(
     if (!next) return
     products.value = []
     clusterHeaders.value = []
+    clusterImpactShare.value = {}
     selectedRows.value = new Set()
     rangeFrom.value = ''
     rangeTo.value = ''
@@ -620,6 +657,71 @@ const confirmShipment = () => {
   openSupplyDialog()
 }
 
+const getDraftKeyForMerge = (draft: any) =>
+  String(draft?.id ?? draft?.draft_id ?? draft?.logistic_cluster_id ?? draft?.logistic_cluster_name ?? draft?.warehouse ?? '')
+
+const updateDraftItems = (nextDrafts: any[]) => {
+  if (!Array.isArray(nextDrafts)) return
+  if (!draftItems.value.length) {
+    draftItems.value = nextDrafts.slice()
+    return
+  }
+  const incoming = new Map(nextDrafts.map((draft) => [getDraftKeyForMerge(draft), draft]))
+  const merged: any[] = []
+
+  draftItems.value.forEach((current) => {
+    const key = getDraftKeyForMerge(current)
+    const next = incoming.get(key)
+    if (next) {
+      current.status = next.status
+      if (!current.logistic_cluster_name && next.logistic_cluster_name) {
+        current.logistic_cluster_name = next.logistic_cluster_name
+      }
+      if (!current.warehouse && next.warehouse) {
+        current.warehouse = next.warehouse
+      }
+      incoming.delete(key)
+    }
+    merged.push(current)
+  })
+
+  if (incoming.size) {
+    merged.push(...incoming.values())
+  }
+
+  draftItems.value.splice(0, draftItems.value.length, ...merged)
+}
+
+const isFinalDraftStatus = (status?: string | null) => {
+  if (!status) return false
+  const value = String(status).toLowerCase()
+  const normalized = value.replace(/[_-]/g, ' ')
+  if (
+    value.includes('error') ||
+    value.includes('fail') ||
+    value.includes('reject') ||
+    value.includes('cancel') ||
+    value.includes('complete') ||
+    value.includes('done') ||
+    value.includes('success')
+  ) {
+    return true
+  }
+  const pending = new Set(['queued', 'processing', 'draft_created', 'created', 'pending', 'in progress', 'in_progress'])
+  if (pending.has(value) || pending.has(normalized) || normalized.includes('progress')) {
+    return false
+  }
+  return true
+}
+
+const goToCurrentSupply = () => {
+  if (!isBatchCompleted.value || !props.storeId) return
+  router.push({
+    name: 'store-workspace',
+    params: { id: String(props.storeId), section: 'drafts' }
+  })
+}
+
 const openSupplyDialog = () => {
   supplyDialogOpen.value = true
   warehouseSearch.value = ''
@@ -696,8 +798,9 @@ watch(
   () => {
     stopDraftBatchPolling()
     draftBatchId.value = null
-    draftBatchStatus.value = null
+    draftBatchStatusText.value = '—'
     draftBatchError.value = null
+    draftItems.value = []
   }
 )
 
@@ -763,7 +866,8 @@ const submitSupplyCreation = () => {
     .createSupplyDrafts(payload)
     .then((response) => {
       draftBatchId.value = (response as any)?.batch_id ?? null
-      draftBatchStatus.value = response
+      draftBatchStatusText.value = (response as any)?.status || '—'
+      updateDraftItems(Array.isArray((response as any)?.drafts) ? (response as any).drafts : [])
       draftBatchError.value = null
       if (draftBatchId.value) {
         startDraftBatchPolling(draftBatchId.value)
@@ -780,19 +884,17 @@ const submitSupplyCreation = () => {
 
 const fetchDraftBatch = async (batchId: string) => {
   if (!batchId) return
-  draftBatchLoading.value = true
   draftBatchError.value = null
   try {
     const response = await apiService.getSupplyDraftBatch(batchId)
-    draftBatchStatus.value = response
+    draftBatchStatusText.value = (response as any)?.status || '—'
+    updateDraftItems(Array.isArray((response as any)?.drafts) ? (response as any).drafts : [])
     const status = (response as any)?.status
     if (status && status !== 'processing') {
       stopDraftBatchPolling()
     }
   } catch (error) {
     draftBatchError.value = error instanceof Error ? error.message : 'Не удалось получить статус черновиков'
-  } finally {
-    draftBatchLoading.value = false
   }
 }
 
@@ -948,6 +1050,24 @@ const loadAllBatches = async () => {
 .planner-table tbody tr.row-selected .sticky-col {
   background: #d9fbe7;
   box-shadow: inset -1px 0 rgba(15, 23, 42, 0.08);
+}
+
+.cluster-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.cluster-name {
+  line-height: 1.2;
+}
+
+.cluster-share {
+  font-size: 0.62rem;
+  color: #94a3b8;
+  font-weight: 600;
+  text-transform: none;
 }
 
 .planner-table-empty {
@@ -1122,14 +1242,8 @@ const loadAllBatches = async () => {
   position: relative;
 }
 
-.draft-status-overlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(255, 255, 255, 0.65);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
+.draft-status-card tbody .draft-row--done {
+  background: rgba(34, 197, 94, 0.12);
 }
 
 .batches-modal {
