@@ -503,17 +503,17 @@ const fetchPivotData = async () => {
       })
     }
     clusterImpactShare.value = impactMap
-    clusterHeaders.value = headers
-      .map((name: string, index: number) => ({
-        name,
-        index,
-        share: Number.isFinite(impactMap[name]) ? impactMap[name] : -Infinity
-      }))
-      .sort((a, b) => {
+    const headerEntries = headers.map((name: string, index: number) => ({
+      name,
+      index,
+      share: Number.isFinite(impactMap[name]) ? impactMap[name] : -Infinity
+    }))
+    clusterHeaders.value = headerEntries
+      .sort((a: { name: string; index: number; share: number }, b: { name: string; index: number; share: number }) => {
         if (a.share !== b.share) return b.share - a.share
         return a.index - b.index
       })
-      .map((entry) => entry.name)
+      .map((entry: { name: string }) => entry.name)
   const items = Array.isArray((response as any)?.products) ? (response as any).products : []
   products.value = items.map((item: any, idx: number) => ({
     id: `${item?.offer_id ?? item?.sku ?? idx}`,

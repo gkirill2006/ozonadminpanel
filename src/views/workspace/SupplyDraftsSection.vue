@@ -337,7 +337,9 @@ const batchDates = ref<Record<string, string>>({})
 const appliedBatchDates = ref<Record<string, string>>({})
 const timeslotDays = ref<Record<string, number>>({})
 const timeslotData = ref<Record<string, any>>({})
-const timeslotDataByDraft = ref<Record<string, Array<{ key: string; date: string; from: string; to: string }>>>({})
+const timeslotDataByDraft = ref<
+  Record<string, Array<{ key: string; date: string; from: string; to: string; fromRaw?: string; toRaw?: string }>>
+>({})
 const timeslotLoading = ref<string | null>(null)
 const timeslotError = ref<Record<string, string>>({})
 const selectedTimeslot = ref<Record<string, string>>({})
@@ -456,7 +458,7 @@ const getLocalMinutes = (raw?: string, fallback?: string) => {
   return 0
 }
 
-const formatDateDayMonth = (dateStr?: string) => {
+const formatDateDayMonth = (dateStr?: string | number) => {
   if (!dateStr) return '—'
   const match = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})/)
   if (match) return `${match[3]}.${match[2]}`
@@ -605,7 +607,7 @@ const fetchTimeslots = async (batch: any) => {
 
 const mapTimeslotsForDraft = (draft: any) => {
   const warehouseId = getSelectedWarehouseId(draft)
-  const slots: Array<{ key: string; date: string; from: string; to: string }> = []
+  const slots: Array<{ key: string; date: string; from: string; to: string; fromRaw?: string; toRaw?: string }> = []
 
   // Новый формат: timeslots_by_warehouse -> dates -> timeslots
   if (Array.isArray(draft?.timeslots_by_warehouse) && draft.timeslots_by_warehouse.length) {
