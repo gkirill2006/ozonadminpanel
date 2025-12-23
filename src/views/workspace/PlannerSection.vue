@@ -193,6 +193,7 @@
           <table
             v-if="activeTable === 'planner' && (plannerRows.length || !isPlannerLoading)"
             class="planner-table"
+            :class="{ 'planner-table--no-photo': !isColumnVisible(0) }"
           >
             <thead>
               <tr>
@@ -957,18 +958,18 @@ const extractPlannerData = (payload: unknown): { rows: PlannerRow[]; summary: Pl
             productType: toStringSafe(product?.type_name),
             link: typeof product?.ozon_link === 'string' ? product.ozon_link : '',
             ownStock: toNullableNumber(product?.fbs_stock_total_qty),
-            quantity: toNullableNumber(product?.sales_qty_cluster),
+            quantity: toNullableNumber(product?.sales_total_fbo_fbs),
             revenue: toNullableNumber(product?.product_total_revenue_fbo_fbs),
             dailyUnits: toNullableNumber(product?.avg_daily_sales_fbo_fbs),
             turnoverDays: toNullableNumber(product?.oborachivaemost),
             cluster: toStringSafe(cluster?.cluster_name),
             avgDeliveryHours: toNullableNumber(product?.average_delivery_time),
-            influenceShare: toNullableNumber(cluster?.cluster_share_percent),
+            influenceShare: toNullableNumber(product?.impact_share),
             avgDeliveryItemHours: toNullableNumber(product?.average_delivery_time_item),
             influenceItemShare: toNullableNumber(product?.impact_share_item),
             recommendations: toNullableNumber(product?.recommended_supply_item),
             recommendationRevenue: toNullableNumber(product?.payout_total),
-            totalQty: toNullableNumber(product?.stock_total_cluster),
+            totalQty: toNullableNumber(product?.sales_qty_cluster),
             dailyRevenue: toNullableNumber(product?.avg_daily_sales_cluster_rub),
             dailyUnitsTotal: toNullableNumber(product?.avg_daily_sales_cluster_qty),
             dailySharePercent: toNullableNumber(product?.share_of_total_daily_average),
@@ -1404,6 +1405,14 @@ watch(
   text-overflow: ellipsis;
 }
 
+.planner-table--no-photo .supplier-col {
+  left: 0;
+}
+
+.planner-table--no-photo .category-col {
+  left: 0;
+}
+
 .planner-table tbody .category-col {
   min-width: 200px;
   max-width: 200px;
@@ -1460,51 +1469,6 @@ watch(
   max-width: min(320px, 90vw);
   text-align: center;
 }
-.planner-table .category-col {
-  left: 90px;
-  width: 100px;
-  min-width: 100px;
-  max-width: 100px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  position: sticky;
-  background: #fff;
-  cursor: default;
-}
-
-/* внутренний контейнер для тултипа */
-.planner-table .category-wrapper {
-  position: relative;
-  display: inline-block;
-  max-width: 100%;
-}
-
-/* подсказка */
-.planner-table .category-wrapper .tooltip {
-  visibility: hidden;
-  opacity: 0;
-  position: absolute;
-  bottom: 100%;
-  left: 0;
-  background: rgba(0, 0, 0, 0.85);
-  color: #fff;
-  padding: 4px 8px;
-  border-radius: 4px;
-  white-space: nowrap;
-  font-size: 12px;
-  z-index: 999;
-  transform: translateY(-4px);
-  transition: opacity 0.2s ease;
-}
-
-/* при наведении — показываем тултип */
-.planner-table .category-wrapper:hover .tooltip {
-  visibility: visible;
-  opacity: 1;
-}
-
-
 .planner-table tbody .photo-col,
 .planner-table tbody .supplier-col {
   background: #fff;
