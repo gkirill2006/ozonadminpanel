@@ -235,7 +235,7 @@
             <div v-else class="confirmed-drafts">
               <div v-for="draft in batch.drafts" :key="`${getBatchKey(batch)}-${getDraftKey(draft)}`" class="confirmed-draft">
                 <div class="confirmed-draft-header d-flex flex-wrap align-items-center gap-3 mb-2">
-                  <div>
+                  <div class="confirmed-col confirmed-col--date">
                     <div class="text-muted small">Дата</div>
                     <div class="fw-semibold">
                       <span v-if="getDraftTimeslot(draft)">
@@ -244,11 +244,11 @@
                       <span v-else>—</span>
                     </div>
                   </div>
-                  <div>
+                  <div class="confirmed-col confirmed-col--cluster">
                     <div class="text-muted small">Кластер</div>
                     <div class="fw-semibold">{{ draft.logistic_cluster_name || draft.warehouse || '—' }}</div>
                   </div>
-                  <div>
+                  <div class="confirmed-col confirmed-col--status">
                     <div class="text-muted small">Статус</div>
                     <div :class="['fw-semibold', isCancelled(getOrderStateForDraft(batch, draft)) ? 'text-danger' : '']">
                       {{ getOrderStateForDraft(batch, draft) }}
@@ -1070,6 +1070,23 @@ watch(
 .confirmed-draft-header {
   border-bottom: 1px dashed rgba(15, 23, 42, 0.08);
   padding-bottom: 0.4rem;
+}
+
+.confirmed-col {
+  min-width: 0;
+}
+
+.confirmed-col--date {
+  min-width: 140px;
+}
+
+.confirmed-col--cluster {
+  min-width: 260px;
+  max-width: 360px;
+}
+
+.confirmed-col--status {
+  min-width: 180px;
 }
 
 .drafts-table {
