@@ -217,82 +217,88 @@
         <div v-else-if="confirmedError" class="alert alert-danger py-2 px-3">{{ confirmedError }}</div>
         <div v-else-if="!confirmedBatches.length" class="text-muted small">Пока нет подтвержденных поставок.</div>
         <div v-else class="d-flex flex-column gap-3">
-          <div
-            v-for="batch in confirmedBatches"
-            :key="getBatchKey(batch)"
-            class="p-3 border rounded-3 bg-light-subtle"
-          >
-            <div class="d-flex flex-wrap align-items-center gap-3 mb-2">
-              <div>
-                <div class="text-muted small">Дата</div>
-                <div class="fw-semibold">
-                  <span v-if="batch.drafts?.[0]?.selected_timeslot">
-                    {{ formatDateTimeShort(batch.drafts[0].selected_timeslot.from_in_timezone || batch.drafts[0].selected_timeslot.from || '') }}
-                  </span>
-                  <span v-else>—</span>
-                </div>
-              </div>
-              <div>
-                <div class="text-muted small">Склад сдачи</div>
-                <div class="fw-semibold">{{ batch.drop_off_point_name || batch.drop_off_point_warehouse?.name || '—' }}</div>
-              </div>
-              <div>
-                <div class="text-muted small">Кластер</div>
-                <div class="fw-semibold">
-                  {{ batch.drafts?.[0]?.logistic_cluster_name || batch.drafts?.[0]?.warehouse || '—' }}
-                </div>
-              </div>
-              <div>
-                <div class="text-muted small">Статус</div>
-                <div :class="['fw-semibold', isCancelled(getOrderStateForBatch(batch)) ? 'text-danger' : '']">
-                  {{ getOrderStateForBatch(batch) }}
-                </div>
-              </div>
-              <div class="ms-auto">
-                <button
-                  class="btn btn-outline-secondary btn-sm"
-                  type="button"
-                  @click="toggleSupplyExpand(batch)"
-                >
-                  {{ isSupplyExpanded(getBatchKey(batch)) ? 'Свернуть' : 'Развернуть' }}
-                </button>
-              </div>
+          <div v-for="batch in confirmedBatches" :key="getBatchKey(batch)" class="batch-block confirmed-batch">
+            <div class="batch-header d-flex flex-wrap align-items-center gap-3 mb-2">
+              <div class="fw-semibold">Поставка: {{ batch.batch_id }}</div>
+              <div class="text-muted small">Склад сдачи: {{ batch.drop_off_point_name || batch.drop_off_point_warehouse?.name || '—' }}</div>
+              <button
+                class="btn btn-outline-secondary btn-sm ms-auto"
+                type="button"
+                :disabled="supplyInfoLoading[getBatchKey(batch)]"
+                @click="refreshSupplyInfo(batch)"
+              >
+                <span v-if="supplyInfoLoading[getBatchKey(batch)]" class="spinner-border spinner-border-sm me-1"></span>
+                Обновить статусы
+              </button>
             </div>
-            <div v-if="isSupplyExpanded(getBatchKey(batch))" class="table-responsive">
-              <table class="table table-sm mb-0">
-                <thead>
-                  <tr>
-                    <th>Фото</th>
-                    <th>SKU</th>
-                    <th>Товар</th>
-                    <th>ШК</th>
-                    <th>Product ID</th>
-                    <th>Кол-во</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <template v-for="draft in batch.drafts || []" :key="`orders-${getDraftKey(draft)}`">
-                    <template v-if="getBundleItemsForDraft(getBatchKey(batch), draft).length">
-                      <tr
-                        v-for="(item, idx) in getBundleItemsForDraft(getBatchKey(batch), draft)"
-                        :key="`${getBatchKey(batch)}-${getDraftKey(draft)}-${item.sku}-${idx}`"
-                      >
-                        <td>
-                          <img v-if="item.icon_path" :src="item.icon_path" alt="" style="width: 48px; height: 48px; object-fit: cover; border-radius: 8px;" />
-                        </td>
-                        <td>{{ item.sku || '—' }}</td>
-                        <td>{{ item.offer_id || item.name || '—' }}</td>
-                        <td>{{ item.barcode || '—' }}</td>
-                        <td>{{ item.product_id || '—' }}</td>
-                        <td>{{ item.quantity || 0 }}</td>
+            <div v-if="!batch.drafts?.length" class="text-muted small">Нет черновиков</div>
+            <div v-else class="confirmed-drafts">
+              <div v-for="draft in batch.drafts" :key="`${getBatchKey(batch)}-${getDraftKey(draft)}`" class="confirmed-draft">
+                <div class="confirmed-draft-header d-flex flex-wrap align-items-center gap-3 mb-2">
+                  <div>
+                    <div class="text-muted small">Дата</div>
+                    <div class="fw-semibold">
+                      <span v-if="getDraftTimeslot(draft)">
+                        {{ formatDateTimeShort(getDraftTimeslot(draft) || '') }}
+                      </span>
+                      <span v-else>—</span>
+                    </div>
+                  </div>
+                  <div>
+                    <div class="text-muted small">Кластер</div>
+                    <div class="fw-semibold">{{ draft.logistic_cluster_name || draft.warehouse || '—' }}</div>
+                  </div>
+                  <div>
+                    <div class="text-muted small">Статус</div>
+                    <div :class="['fw-semibold', isCancelled(getOrderStateForDraft(batch, draft)) ? 'text-danger' : '']">
+                      {{ getOrderStateForDraft(batch, draft) }}
+                    </div>
+                  </div>
+                  <div class="ms-auto">
+                    <button
+                      class="btn btn-outline-secondary btn-sm"
+                      type="button"
+                      @click="toggleSupplyExpand(getConfirmedDraftKey(batch, draft))"
+                    >
+                      {{ isSupplyExpanded(getConfirmedDraftKey(batch, draft)) ? 'Свернуть' : 'Развернуть' }}
+                    </button>
+                  </div>
+                </div>
+                <div v-if="isSupplyExpanded(getConfirmedDraftKey(batch, draft))" class="table-responsive">
+                  <table class="table table-sm mb-0">
+                    <thead>
+                      <tr>
+                        <th>Фото</th>
+                        <th>SKU</th>
+                        <th>Товар</th>
+                        <th>ШК</th>
+                        <th>Product ID</th>
+                        <th>Кол-во</th>
                       </tr>
-                    </template>
-                    <tr v-else>
-                      <td colspan="6" class="text-muted">Нет товаров</td>
-                    </tr>
-                  </template>
-                </tbody>
-              </table>
+                    </thead>
+                    <tbody>
+                      <template v-if="getBundleItemsForDraft(getBatchKey(batch), draft).length">
+                        <tr
+                          v-for="(itemRow, idx) in getBundleItemsForDraft(getBatchKey(batch), draft)"
+                          :key="`${getBatchKey(batch)}-${getDraftKey(draft)}-${itemRow.sku}-${idx}`"
+                        >
+                          <td>
+                            <img v-if="itemRow.icon_path" :src="itemRow.icon_path" alt="" style="width: 48px; height: 48px; object-fit: cover; border-radius: 8px;" />
+                          </td>
+                          <td>{{ itemRow.sku || '—' }}</td>
+                          <td>{{ itemRow.offer_id || itemRow.name || '—' }}</td>
+                          <td>{{ itemRow.barcode || '—' }}</td>
+                          <td>{{ itemRow.product_id || '—' }}</td>
+                          <td>{{ itemRow.quantity || 0 }}</td>
+                        </tr>
+                      </template>
+                      <tr v-else>
+                        <td colspan="6" class="text-muted">Нет товаров</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -327,6 +333,7 @@ const props = defineProps<{ storeId: string }>()
 
 const batches = ref<any[]>([])
 const confirmedBatches = ref<any[]>([])
+const supplyInfoLoading = ref<Record<string, boolean>>({})
 const isLoading = ref(false)
 const confirmedLoading = ref(false)
 const error = ref<string | null>(null)
@@ -404,11 +411,8 @@ const fetchConfirmedBatches = async () => {
     const resp = await apiService.getConfirmedDraftBatches({ storeId: props.storeId })
     confirmedBatches.value = Array.isArray(resp) ? resp : []
     for (const batch of confirmedBatches.value) {
-      try {
-        const info = await apiService.getSupplyInfo(batch.batch_id)
-        supplyInfo.value[getBatchKey(batch)] = info
-      } catch (e) {
-        // не блокируем остальные
+      if (needsSupplyInfo(batch)) {
+        await fetchSupplyInfo(batch)
       }
     }
   } catch (err) {
@@ -774,8 +778,7 @@ const toggleCommonTimeslot = (batchKey: string, slotKey: string) => {
   }
 }
 
-const toggleSupplyExpand = (batch: any) => {
-  const key = getBatchKey(batch)
+const toggleSupplyExpand = (key: string) => {
   const set = expandedSupplies.value
   if (set.has(key)) {
     set.delete(key)
@@ -786,23 +789,30 @@ const toggleSupplyExpand = (batch: any) => {
   expandedSupplies.value = new Set(set)
 }
 
-const isSupplyExpanded = (batchKey: string) => expandedSupplies.value.has(batchKey)
+const isSupplyExpanded = (key: string) => expandedSupplies.value.has(key)
+
+const getConfirmedDraftKey = (batch: any, draft: any) =>
+  `${getBatchKey(batch)}-${getDraftKey(draft)}`
 
 const getBundleItemsForDraft = (batchKey: string, draft: any) => {
+  if (Array.isArray(draft?.supply_bundle_items) && draft.supply_bundle_items.length) {
+    return draft.supply_bundle_items
+  }
   const info = supplyInfo.value[batchKey]
   if (!info?.results) return []
   const draftId = draft?.id ?? draft?.draft_id
-  const entries = info.results.filter((r: any) => r?.draft_id === draftId)
-  const items: any[] = []
-  entries.forEach((entry: any) => {
-    if (Array.isArray(entry?.bundle_items)) {
-      entry.bundle_items.forEach((item: any) => items.push(item))
-    }
-  })
-  return items
+  const entry = info.results.find((r: any) => r?.draft_id === draftId)
+  if (Array.isArray(entry?.bundle_items) && entry.bundle_items.length) {
+    return entry.bundle_items
+  }
+  return []
 }
 
-const getOrderStateForItem = (batchKey: string, draft: any) => {
+const getOrderStateForDraft = (batch: any, draft: any) => {
+  if (Array.isArray(draft?.supply_order_states) && draft.supply_order_states.length) {
+    return draft.supply_order_states.join(', ')
+  }
+  const batchKey = getBatchKey(batch)
   const info = supplyInfo.value[batchKey]
   if (!info?.results) return '—'
   const draftId = draft?.id ?? draft?.draft_id
@@ -813,21 +823,32 @@ const getOrderStateForItem = (batchKey: string, draft: any) => {
   return '—'
 }
 
-const getOrderStateForBatch = (batch: any) => {
-  const key = getBatchKey(batch)
-  if (!supplyInfo.value[key]?.results?.length) return '—'
-  const states: string[] = []
-  supplyInfo.value[key].results.forEach((r: any) => {
-    if (Array.isArray(r?.order_states)) {
-      states.push(...r.order_states)
-    }
-  })
-  if (!states.length) return '—'
-  const unique = Array.from(new Set(states))
-  return unique.join(', ')
+const getDraftTimeslot = (draft: any) => {
+  const slot = draft?.selected_timeslot
+  return slot?.from_in_timezone || slot?.from || ''
 }
 
 const isCancelled = (state: string) => state?.toLowerCase().includes('cancel')
+
+const needsSupplyInfo = (batch: any) => {
+  const drafts = Array.isArray(batch?.drafts) ? batch.drafts : []
+  return drafts.some((draft: any) => !Array.isArray(draft?.supply_bundle_items))
+}
+
+const fetchSupplyInfo = async (batch: any, refresh = false) => {
+  const key = getBatchKey(batch)
+  supplyInfoLoading.value[key] = true
+  try {
+    const info = await apiService.getSupplyInfo(batch.batch_id, refresh ? { refresh: true } : undefined)
+    supplyInfo.value[key] = info
+  } finally {
+    supplyInfoLoading.value[key] = false
+  }
+}
+
+const refreshSupplyInfo = async (batch: any) => {
+  await fetchSupplyInfo(batch, true)
+}
 
 const getSelectedCommonSlot = (batch: any) => {
   const batchKey = getBatchKey(batch)
@@ -1029,6 +1050,25 @@ watch(
 
 .batch-header {
   border-bottom: 1px dashed rgba(15, 23, 42, 0.1);
+  padding-bottom: 0.4rem;
+}
+
+.confirmed-drafts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.confirmed-draft {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 10px;
+  padding: 0.65rem;
+  background: #fff;
+}
+
+.confirmed-draft-header {
+  border-bottom: 1px dashed rgba(15, 23, 42, 0.08);
   padding-bottom: 0.4rem;
 }
 

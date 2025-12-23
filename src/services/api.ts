@@ -333,8 +333,12 @@ class ApiService {
     return this.handleResponse(response)
   }
 
-  async getSupplyInfo(batchId: string) {
-    const response = await fetch(`${API_BASE_URL}/api/ozon/drafts/batch/${batchId}/supply-info/`, {
+  async getSupplyInfo(batchId: string, params?: { refresh?: boolean }) {
+    const url = new URL(`${API_BASE_URL}/api/ozon/drafts/batch/${batchId}/supply-info/`, window.location.origin)
+    if (params?.refresh) {
+      url.searchParams.set('refresh', '1')
+    }
+    const response = await fetch(url.toString(), {
       method: 'GET',
       headers: this.getHeaders()
     })
