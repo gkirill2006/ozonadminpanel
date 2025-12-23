@@ -161,7 +161,12 @@
         <div v-if="plannerError" class="alert alert-danger py-1 px-2 m-2 mb-0">
           {{ plannerError }}
         </div>
-        <div class="planner-table-wrapper" ref="tableWrapperRef" :style="{ height: tableHeight }">
+        <div
+          class="planner-table-wrapper"
+          ref="tableWrapperRef"
+          :style="{ height: tableHeight }"
+          @scroll.passive="handleTableScroll"
+        >
           <div
             v-if="isPlannerLoading && activeTable === 'planner' && plannerRows.length"
             class="planner-table-loading"
@@ -214,7 +219,10 @@
               </tr>
             </thead>
             <tbody v-if="plannerRows.length">
-              <tr v-for="row in plannerRows" :key="row.id">
+              <tr v-if="topSpacerHeight" class="planner-spacer-row">
+                <td :colspan="visibleColumnCount" :style="{ height: `${topSpacerHeight}px` }"></td>
+              </tr>
+              <tr v-for="(row, idx) in visibleRows" :key="row.id" :ref="idx === 0 ? measureRowHeight : undefined">
                 <td v-if="isColumnVisible(0)" class="sticky-col photo-col">
                   <img :src="row.photo || fallbackPhoto" alt="photo" class="product-photo" />
                 </td>
@@ -284,10 +292,13 @@
                 <td v-if="isColumnVisible(27)">{{ row.barcode2 || row.barcode || '—' }}</td>
                 <td v-if="isColumnVisible(28)" class="quantity-last">{{ formatNumber(row.shipmentQty) }}</td>
               </tr>
+              <tr v-if="bottomSpacerHeight" class="planner-spacer-row">
+                <td :colspan="visibleColumnCount" :style="{ height: `${bottomSpacerHeight}px` }"></td>
+              </tr>
             </tbody>
             <tbody v-else>
               <tr>
-                <td :colspan="plannerHeaders.length" class="text-center text-muted py-4">
+                <td :colspan="visibleColumnCount" class="text-center text-muted py-4">
                   Нет данных для отображения
                 </td>
               </tr>
@@ -484,7 +495,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
+import { computed, reactive, ref, onMounted, onBeforeUnmount, nextTick, watch, type ComponentPublicInstance } from 'vue'
 import Modal from '@/components/Modal.vue'
 import { apiService } from '@/services/api'
 
@@ -790,6 +801,10 @@ const hideTypeTooltip = () => {
 const filtersRef = ref<HTMLElement | null>(null)
 const tableWrapperRef = ref<HTMLElement | null>(null)
 const tableHeight = ref('60vh')
+const rowHeight = ref(48)
+const tableScrollTop = ref(0)
+const viewportHeight = ref(0)
+const ROW_OVERSCAN = 12
 const filtersError = ref<string | null>(null)
 const isSaving = ref(false)
 const hasStore = ref(false)
@@ -810,6 +825,9 @@ const updateTableHeight = () => {
   const padding = 12
   const height = Math.max(240, viewport - navbarOffset - filtersHeight - padding)
   tableHeight.value = `${height}px`
+  nextTick(() => {
+    viewportHeight.value = tableWrapperRef.value?.clientHeight ?? 0
+  })
 }
 
 const handleResize = () => {
@@ -817,6 +835,62 @@ const handleResize = () => {
   hideCategoryTooltip()
   hideTypeTooltip()
 }
+
+const handleTableScroll = () => {
+  if (activeTable.value !== 'planner') return
+  const wrapper = tableWrapperRef.value
+  if (!wrapper) return
+  tableScrollTop.value = wrapper.scrollTop
+}
+
+const resetTableScroll = () => {
+  tableScrollTop.value = 0
+  if (tableWrapperRef.value) {
+    tableWrapperRef.value.scrollTop = 0
+  }
+}
+
+const measureRowHeight = (row: Element | ComponentPublicInstance | null) => {
+  const element = row as HTMLTableRowElement | null
+  if (!element) return
+  const next = Math.ceil(element.getBoundingClientRect().height)
+  if (next > 0 && Math.abs(next - rowHeight.value) > 1) {
+    rowHeight.value = next
+  }
+}
+
+const visibleColumnCount = computed(() => {
+  const count = plannerHeaders.reduce((total, _header, idx) => {
+    return total + (isColumnVisible(idx) ? 1 : 0)
+  }, 0)
+  return Math.max(1, count)
+})
+
+const visibleRowRange = computed(() => {
+  if (activeTable.value !== 'planner') {
+    return { start: 0, end: 0 }
+  }
+  const total = plannerRows.value.length
+  if (!total) {
+    return { start: 0, end: 0 }
+  }
+  const height = Math.max(1, rowHeight.value)
+  const view = viewportHeight.value || height * 8
+  const start = Math.max(0, Math.floor(tableScrollTop.value / height) - ROW_OVERSCAN)
+  const end = Math.min(total, Math.ceil((tableScrollTop.value + view) / height) + ROW_OVERSCAN)
+  return { start, end }
+})
+
+const visibleRows = computed(() => {
+  const range = visibleRowRange.value
+  return plannerRows.value.slice(range.start, range.end)
+})
+
+const topSpacerHeight = computed(() => visibleRowRange.value.start * rowHeight.value)
+const bottomSpacerHeight = computed(() => {
+  const total = plannerRows.value.length
+  return Math.max(0, total - visibleRowRange.value.end) * rowHeight.value
+})
 
 const handleGlobalScroll = () => {
   if (categoryTooltip.visible || typeTooltip.visible) {
@@ -1027,6 +1101,10 @@ const fetchPlannerData = async () => {
     const parsed = extractPlannerData(response)
     plannerRows.value = parsed.rows
     summaryRows.value = parsed.summary
+    nextTick(() => {
+      resetTableScroll()
+      viewportHeight.value = tableWrapperRef.value?.clientHeight ?? 0
+    })
   } catch (error) {
     plannerError.value = error instanceof Error ? error.message : 'Не удалось загрузить данные планера'
     plannerRows.value = []
@@ -1160,6 +1238,7 @@ watch(
     plannerRows.value = []
     summaryRows.value = []
     isPlannerLoading.value = true
+    resetTableScroll()
     await fetchFilters()
     await fetchPlannerData()
   },
@@ -1386,6 +1465,12 @@ watch(
 .planner-table td.quantity-last {
   text-align: center;
   font-weight: 600;
+}
+
+.planner-spacer-row td {
+  padding: 0;
+  border: none;
+  background: transparent;
 }
 
 .planner-table .photo-col {
