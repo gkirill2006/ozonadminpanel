@@ -699,18 +699,19 @@ const getSlotsGroupedByDate = (draft: any) => {
   return Object.fromEntries(Object.entries(grouped).sort(([a], [b]) => String(a).localeCompare(String(b))))
 }
 
-const toggleDateExpanded = (draft: any, date: string) => {
+const toggleDateExpanded = (draft: any, date: string | number) => {
   const draftKey = getDraftKey(draft)
-  const current = expandedDates.value[draftKey]?.[date]
+  const dateKey = String(date)
+  const current = expandedDates.value[draftKey]?.[dateKey]
   expandedDates.value[draftKey] = {}
   if (!current) {
-    expandedDates.value[draftKey][date] = true
+    expandedDates.value[draftKey][dateKey] = true
   }
 }
 
-const isDateExpanded = (draft: any, date: string) => {
+const isDateExpanded = (draft: any, date: string | number) => {
   const draftKey = getDraftKey(draft)
-  return !!expandedDates.value[draftKey]?.[date]
+  return !!expandedDates.value[draftKey]?.[String(date)]
 }
 
 const getCommonTimeslotsByDate = (batch: any) => {
@@ -751,15 +752,16 @@ const getCommonTimeslotsByDate = (batch: any) => {
   return sorted
 }
 
-const toggleCommonDateExpanded = (batch: any, date: string) => {
+const toggleCommonDateExpanded = (batch: any, date: string | number) => {
   const key = getBatchKey(batch)
+  const dateKey = String(date)
   if (!expandedCommonDates.value[key]) expandedCommonDates.value[key] = {}
-  expandedCommonDates.value[key][date] = !expandedCommonDates.value[key][date]
+  expandedCommonDates.value[key][dateKey] = !expandedCommonDates.value[key][dateKey]
 }
 
-const isCommonDateExpanded = (batch: any, date: string) => {
+const isCommonDateExpanded = (batch: any, date: string | number) => {
   const key = getBatchKey(batch)
-  return !!expandedCommonDates.value[key]?.[date]
+  return !!expandedCommonDates.value[key]?.[String(date)]
 }
 
 const toggleCommonTimeslot = (batchKey: string, slotKey: string) => {
