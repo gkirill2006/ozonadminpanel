@@ -10,7 +10,7 @@
 
       <div v-if="showWorkspaceTabs" class="workspace-tabs flex-grow-1">
         <router-link
-          v-for="section in workspaceSections"
+          v-for="section in workspaceTabs"
           :key="section.key"
           class="workspace-tabs__item"
           :class="{ active: activeWorkspaceSection === section.key }"
@@ -32,14 +32,14 @@
           </a>
           <div class="dropdown-menu dropdown-menu-end py-0 dropdown-menu-user">
             <div class="bg-200 rounded-top-3 py-3 px-4">
-              <h6 class="mb-0 text-900">{{ user?.username || 'Администратор' }}</h6>
+              <h6 class="mb-0 text-900">{{ userDisplayName }}</h6>
             </div>
             <div class="p-3">
               <a class="dropdown-item py-2 d-flex align-items-center" href="#">
                 <span class="text-900" data-feather="user" style="height:16px;width:16px;"></span>
                 <span class="ms-2 text-900">Профиль</span>
               </a>
-              <a class="dropdown-item py-2 d-flex align-items-center" href="#">
+              <a class="dropdown-item py-2 d-flex align-items-center" href="#" @click.prevent="openWorkspaceSettings">
                 <span class="text-900" data-feather="settings" style="height:16px;width:16px;"></span>
                 <span class="ms-2 text-900">Настройки</span>
               </a>
@@ -76,6 +76,7 @@ const { stores } = storeToRefs(storesStore)
 const navbarEl = ref<HTMLElement | null>(null)
 
 const workspaceSections = WORKSPACE_SECTIONS
+const workspaceTabs = computed(() => workspaceSections.filter((section) => section.key !== 'settings'))
 
 const user = computed(() => authStore.user)
 
@@ -91,6 +92,16 @@ const userInitials = computed(() => {
   const first = parts[0]?.[0] || cleaned[0] || 'А'
   const second = parts[1]?.[0] || cleaned[1] || ''
   return (first + second).toUpperCase()
+})
+
+const userDisplayName = computed(() => {
+  const name =
+    user.value?.telegram_username ||
+    user.value?.username ||
+    user.value?.email ||
+    ''
+  const trimmed = String(name || '').trim()
+  return trimmed || 'Администратор'
 })
 
 const isWorkspaceRoute = computed(() => route.name === 'store-workspace')
@@ -129,6 +140,17 @@ const workspaceRoute = (sectionKey: WorkspaceSectionKey) => {
     name: 'store-workspace',
     params: { id, section: sectionKey }
   }
+}
+
+const openWorkspaceSettings = () => {
+  if (currentStoreId.value) {
+    router.push({
+      name: 'store-workspace',
+      params: { id: currentStoreId.value, section: 'settings' }
+    })
+    return
+  }
+  router.push({ name: 'settings' })
 }
 
 const goHome = () => {

@@ -258,6 +258,94 @@ class ApiService {
     return this.handleResponse(response)
   }
 
+  async syncFbsPostings(payload: Record<string, unknown>) {
+    const response = await fetch(`${API_BASE_URL}/api/ozon/postings/sync/`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(payload)
+    })
+    return this.handleResponse(response)
+  }
+
+  async refreshFbsPostings(payload: Record<string, unknown>) {
+    const response = await fetch(`${API_BASE_URL}/api/ozon/postings/refresh/`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(payload)
+    })
+    return this.handleResponse(response)
+  }
+
+  async getFbsPostings(params: Record<string, string>) {
+    const url = new URL(`${API_BASE_URL}/api/ozon/postings/`, window.location.origin)
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        url.searchParams.set(key, String(value))
+      }
+    })
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: this.getHeaders()
+    })
+    return this.handleResponse(response)
+  }
+
+  async getFbsPostingCounts(params: { storeId: string | number; includeArchived?: boolean | number }) {
+    const url = new URL(`${API_BASE_URL}/api/ozon/postings/counts/`, window.location.origin)
+    url.searchParams.set('store_id', String(params.storeId))
+    if (params.includeArchived) {
+      url.searchParams.set('include_archived', '1')
+    }
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: this.getHeaders()
+    })
+    return this.handleResponse(response)
+  }
+
+  async printFbsPostings(payload: Record<string, unknown>) {
+    const response = await fetch(`${API_BASE_URL}/api/ozon/postings/print/`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(payload)
+    })
+
+    if (response.status === 409) {
+      try {
+        const data = await response.json()
+        return { needsForce: true, ...data }
+      } catch {
+        return { needsForce: true, message: 'Этот заказ уже был распечатан. Повторить?' }
+      }
+    }
+
+    return this.handleResponse(response)
+  }
+
+  async createFbsLabels(payload: Record<string, unknown>) {
+    const response = await fetch(`${API_BASE_URL}/api/ozon/postings/labels/`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(payload)
+    })
+
+    if (response.status === 202) {
+      try {
+        return { pending: true, ...(await response.json()) }
+      } catch {
+        return { pending: true }
+      }
+    }
+
+    const contentType = response.headers.get('content-type') || ''
+    if (response.ok && contentType.includes('application/pdf')) {
+      const blob = await response.blob()
+      return { blob }
+    }
+
+    return this.handleResponse(response)
+  }
+
   async createSupplyDrafts(payload: Record<string, unknown>) {
     const response = await fetch(`${API_BASE_URL}/api/ozon/drafts/create/`, {
       method: 'POST',

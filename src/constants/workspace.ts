@@ -3,6 +3,7 @@ export const WORKSPACE_SECTIONS = [
   { key: 'ads', label: 'Реклама', icon: 'activity' },
   { key: 'supply', label: 'Поставка', icon: 'truck' },
   { key: 'drafts', label: 'Черновики', icon: 'layers' },
+  { key: 'fbs', label: 'FBS', icon: 'package' },
   { key: 'settings', label: 'Настройка', icon: 'sliders' }
 ] as const
 

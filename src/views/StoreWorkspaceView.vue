@@ -16,6 +16,7 @@
           <PlannerSection v-if="activeSection === 'planner'" :store-id="storeId" />
           <SupplySection v-else-if="activeSection === 'supply'" :store-id="storeId" />
           <SupplyDraftsSection v-else-if="activeSection === 'drafts'" :store-id="storeId" />
+          <FbsSection v-else-if="activeSection === 'fbs'" :store-id="storeId" />
           <WorkspaceSettingsSection v-else-if="activeSection === 'settings'" :store-id="storeId" :store="store" />
           <div v-else class="section-body">
             <div class="section-placeholder">
@@ -56,6 +57,7 @@ import {
 import PlannerSection from './workspace/PlannerSection.vue'
 import SupplySection from './workspace/SupplySection.vue'
 import SupplyDraftsSection from './workspace/SupplyDraftsSection.vue'
+import FbsSection from './workspace/FbsSection.vue'
 import WorkspaceSettingsSection from './workspace/SettingsSection.vue'
 import { useStoresStore } from '@/stores/stores'
 
