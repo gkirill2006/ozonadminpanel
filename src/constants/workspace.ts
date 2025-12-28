@@ -1,9 +1,9 @@
 export const WORKSPACE_SECTIONS = [
   { key: 'planner', label: 'Планер', icon: 'calendar' },
-  { key: 'ads', label: 'Реклама', icon: 'activity' },
   { key: 'supply', label: 'Поставка', icon: 'truck' },
-  { key: 'drafts', label: 'Черновики', icon: 'layers' },
+  { key: 'drafts', label: 'Заявки', icon: 'layers' },
   { key: 'fbs', label: 'FBS', icon: 'package' },
+  { key: 'ads', label: 'Реклама', icon: 'activity' },
   { key: 'settings', label: 'Настройка', icon: 'sliders' }
 ] as const
 

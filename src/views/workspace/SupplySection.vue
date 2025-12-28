@@ -51,21 +51,20 @@
           </div>
 
           <div v-if="draftBatchId" class="card shadow-sm mb-2 draft-status-card">
-              <div class="card-header d-flex justify-content-between align-items-center py-2 px-3">
-                <div class="d-flex align-items-center gap-2 flex-wrap">
-                  <span class="fw-semibold">Создание поставки</span>
-                  <span class="badge bg-secondary">{{ draftBatchId }}</span>
-                  <button
-                    class="btn btn-outline-secondary btn-sm"
-                    type="button"
-                    @click="goToCurrentSupply"
-                    :disabled="!isBatchCompleted"
-                  >
-                    Перейти в текущую поставку
-                  </button>
-                </div>
-              <span class="text-muted small">{{ batchStatusMessage }}</span>
+            <div class="card-header d-flex justify-content-between align-items-center py-2 px-3">
+              <div class="d-flex align-items-center gap-2 flex-wrap">
+                <span class="fw-semibold">Создание поставки</span>
+                <span v-if="!isBatchCompleted" class="spinner-border spinner-border-sm" role="status"></span>
               </div>
+              <button
+                v-if="isBatchCompleted"
+                class="btn btn-warning btn-sm"
+                type="button"
+                @click="goToCurrentSupply"
+              >
+                Перейти в текущую поставку
+              </button>
+            </div>
             <div class="card-body py-2 px-3 draft-status-body">
               <div v-if="draftBatchError" class="alert alert-danger py-1 px-2 mb-2">{{ draftBatchError }}</div>
               <div v-if="draftItems.length">
@@ -84,8 +83,8 @@
                     >
                       <td>{{ draft.logistic_cluster_name || draft.warehouse || '—' }}</td>
                       <td>
-                        <span>{{ draft.status || '—' }}</span>
-                        <span v-if="!isFinalDraftStatus(draft.status)" class="spinner-border spinner-border-sm ms-2" role="status"></span>
+                        <span v-if="isFinalDraftStatus(draft.status)">{{ formatDraftStatus(draft.status) }}</span>
+                        <span v-else class="spinner-border spinner-border-sm" role="status"></span>
                       </td>
                     </tr>
                   </tbody>
@@ -112,7 +111,7 @@
                   <th
                     v-for="cluster in visibleClusters"
                     :key="cluster"
-                    class="text-center"
+                    :class="['text-center', getImpactHeaderClass(cluster)]"
                   >
                     <div class="cluster-header">
                       <span class="cluster-name">{{ cluster }}</span>
@@ -321,7 +320,7 @@
     <div class="planner-modal__backdrop" @click="closeBatchesDialog"></div>
     <div class="planner-modal__body card shadow-lg settings-modal batches-modal">
       <div class="card-header d-flex align-items-center justify-content-between">
-        <h5 class="mb-0">Все черновики поставок</h5>
+        <h5 class="mb-0">Все заявки поставок</h5>
         <button type="button" class="btn btn-sm btn-outline-secondary" @click="closeBatchesDialog">Закрыть</button>
       </div>
       <div class="card-body batches-body">
@@ -341,7 +340,7 @@
                 <th>Статус</th>
                 <th>Магазин</th>
                 <th>Склад сдачи</th>
-                <th>Черновики</th>
+                <th>Заявки</th>
               </tr>
             </thead>
             <tbody>
@@ -363,7 +362,7 @@
             </tbody>
           </table>
         </div>
-        <div v-else-if="!batchesLoading" class="text-muted small">Нет черновиков</div>
+        <div v-else-if="!batchesLoading" class="text-muted small">Нет заявок</div>
       </div>
       <div class="card-footer d-flex justify-content-end">
         <button type="button" class="btn btn-primary btn-sm" @click="closeBatchesDialog">OK</button>
@@ -449,6 +448,14 @@ const formatImpactShare = (value: number | null) => {
   return `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(value)}%`
 }
 
+const getImpactHeaderClass = (cluster: string) => {
+  const share = getClusterImpactShare(cluster)
+  if (share === null) return ''
+  if (share > 10) return 'impact-high'
+  if (share > 5) return 'impact-medium'
+  return 'impact-low'
+}
+
 const persistSettings = () => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(displaySettings))
 }
@@ -479,7 +486,7 @@ let draftBatchTimer: ReturnType<typeof setInterval> | null = null
 const draftItems = ref<any[]>([])
 const isBatchCompleted = computed(() => String(draftBatchStatusText.value).toLowerCase() === 'completed')
 const batchStatusMessage = computed(() =>
-  isBatchCompleted.value ? 'Черновик для новой поставки создан.' : 'Создаём черновик для новой поставки...'
+  isBatchCompleted.value ? 'Заявка для новой поставки создана.' : 'Создаём заявку для новой поставки...'
 )
 
 const batchesDialogOpen = ref(false)
@@ -712,6 +719,14 @@ const isFinalDraftStatus = (status?: string | null) => {
     return false
   }
   return true
+}
+
+const formatDraftStatus = (status?: string | null) => {
+  if (!status) return '—'
+  const value = String(status).trim()
+  if (!value) return '—'
+  if (value.toLowerCase() === 'info_loaded') return 'Готово'
+  return value
 }
 
 const goToCurrentSupply = () => {
@@ -1065,9 +1080,24 @@ const loadAllBatches = async () => {
 
 .cluster-share {
   font-size: 0.62rem;
-  color: #94a3b8;
+  color: #000;
   font-weight: 600;
   text-transform: none;
+}
+
+.planner-table thead th.impact-high {
+  background: #ff0000;
+  color: #0f172a;
+}
+
+.planner-table thead th.impact-medium {
+  background: #ffff00;
+  color: #0f172a;
+}
+
+.planner-table thead th.impact-low {
+  background: #bfe5d1;
+  color: #0f172a;
 }
 
 .planner-table-empty {

@@ -2,7 +2,7 @@
   <div class="drafts-page">
     <section class="card shadow-sm">
       <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
-        <h5 class="mb-0">Черновики поставок</h5>
+        <h5 class="mb-0">Заявки поставок</h5>
         <div class="d-flex align-items-center gap-2">
           <span class="text-muted small">Магазин: {{ storeId }}</span>
           <button class="btn btn-outline-secondary btn-sm" type="button" @click="fetchBatches">
@@ -13,7 +13,7 @@
       </div>
       <div class="card-body">
         <div v-if="error" class="alert alert-danger py-2 px-3 mb-3">{{ error }}</div>
-        <div v-else-if="!isLoading && !batches.length" class="text-muted small">Черновиков пока нет.</div>
+        <div v-else-if="!isLoading && !batches.length" class="text-muted small">Заявок пока нет.</div>
         <div v-if="batches.length">
           <div v-for="batch in batches" :key="batch.batch_id" class="batch-block">
             <div class="batch-header d-flex flex-wrap align-items-center gap-3 mb-2">
@@ -307,7 +307,7 @@
 
     <Modal v-if="draftToMove" :show="true" @close="closeMoveDraft">
       <p class="mb-3">
-        Черновик
+        Заявка
         <strong>{{ draftToMove?.draft?.logistic_cluster_name || draftToMove?.draft?.warehouse || draftToMove?.draft?.draft_id }}</strong>
         будет перенесён в новую поставку.
       </p>

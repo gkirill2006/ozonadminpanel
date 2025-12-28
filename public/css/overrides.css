@@ -7,6 +7,50 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+a,
+a *,
+button,
+button *,
+[role='button'],
+[role='button'] *,
+[type='button'],
+[type='submit'],
+[type='reset'],
+[type='image'],
+input[type='checkbox'],
+input[type='radio'],
+select,
+summary,
+label[for],
+.btn,
+.btn *,
+.nav-link,
+.nav-link *,
+.dropdown-item,
+.dropdown-item *,
+.form-check-input,
+.form-check-label,
+.cursor-pointer,
+.clickable,
+.workspace-tabs__item,
+.workspace-tabs__item *,
+.fbs-batch-card,
+.fbs-batch-card *,
+[data-bs-toggle],
+[data-bs-toggle] *,
+[data-action],
+[data-action] * {
+  cursor: pointer !important;
+}
+
+button:disabled,
+.btn:disabled,
+[role='button'][aria-disabled='true'],
+input:disabled,
+select:disabled {
+  cursor: not-allowed !important;
+}
+
 html,
 body {
   height: 100%;

@@ -1,2 +1,3 @@
 /* prettier-ignore */
+a,button,[role=button],[type=button],[type=submit],[type=reset],[type=image],input[type=checkbox],input[type=radio],select,summary,.btn,.nav-link,.dropdown-item,.form-check-input,.form-check-label,.cursor-pointer,.clickable{cursor:pointer}button:disabled,.btn:disabled,[role=button][aria-disabled=true],input:disabled,select:disabled{cursor:not-allowed}
 /*# sourceMappingURL=user.min.css.map */

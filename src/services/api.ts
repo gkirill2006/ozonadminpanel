@@ -346,6 +346,33 @@ class ApiService {
     return this.handleResponse(response)
   }
 
+  async createFbsShipment(payload: Record<string, unknown>) {
+    const response = await fetch(`${API_BASE_URL}/api/ozon/postings/ship/`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(payload)
+    })
+    return this.handleResponse(response)
+  }
+
+  async getFbsShipBatches(params: { storeId: string | number }) {
+    const url = new URL(`${API_BASE_URL}/api/ozon/postings/ship/batches/`, window.location.origin)
+    url.searchParams.set('store_id', String(params.storeId))
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: this.getHeaders()
+    })
+    return this.handleResponse(response)
+  }
+
+  async getFbsShipBatchDetail(batchId: string) {
+    const response = await fetch(`${API_BASE_URL}/api/ozon/postings/ship/batches/${batchId}/`, {
+      method: 'GET',
+      headers: this.getHeaders()
+    })
+    return this.handleResponse(response)
+  }
+
   async createSupplyDrafts(payload: Record<string, unknown>) {
     const response = await fetch(`${API_BASE_URL}/api/ozon/drafts/create/`, {
       method: 'POST',

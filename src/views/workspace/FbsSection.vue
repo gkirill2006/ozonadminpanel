@@ -9,11 +9,12 @@
             </p>
           </div>
           <div class="d-flex flex-wrap gap-2">
-            <button class="btn btn-outline-secondary btn-sm" type="button" @click="refreshPostings()" :disabled="isSyncing">
+            <button class="btn btn-outline-secondary btn-sm" type="button" @click="handleRefresh" :disabled="isSyncing">
               <span v-if="isSyncing" class="spinner-border spinner-border-sm me-2"></span>
               Обновить
             </button>
             <button
+              v-if="isStatusTab"
               class="btn btn-primary btn-sm"
               type="button"
               @click="handlePrint"
@@ -47,8 +48,11 @@
             <span>Синхронизация...</span>
           </div>
         </div>
+        <p v-if="isBatchTab" class="fbs-tab-hint">
+          Батчи отгрузок, сформированные из вкладки "Новые". Нажмите на батч, чтобы увидеть отправления.
+        </p>
 
-        <div class="fbs-toolbar">
+        <div v-if="!isBatchTab" class="fbs-toolbar">
           <div class="fbs-toolbar__row">
             <div class="fbs-filter-group fbs-filter-group--toggle">
               <label class="form-check form-switch mb-0">
@@ -78,7 +82,7 @@
           </div>
         </div>
 
-        <div class="d-flex flex-wrap gap-2 align-items-end mb-2 selection-bar">
+        <div v-if="!isBatchTab" class="d-flex flex-wrap gap-2 align-items-end mb-2 selection-bar">
           <div class="range-inputs d-flex gap-2 align-items-end">
             <div>
               <label class="form-label text-uppercase text-muted small fw-semibold mb-1">С строки</label>
@@ -124,104 +128,279 @@
           {{ labelNotice }}
         </div>
 
-        <div v-if="isLoading" class="fbs-loading">
-          <span class="spinner-border spinner-border-sm me-2"></span>
-          Загружаем заказы...
+        <div v-if="!isBatchTab">
+          <div v-if="isLoading" class="fbs-loading">
+            <span class="spinner-border spinner-border-sm me-2"></span>
+            Загружаем заказы...
+          </div>
+
+          <div v-else class="table-responsive fbs-table-wrapper">
+            <table class="table fbs-table align-middle">
+              <thead>
+                <tr>
+                  <th class="text-center fbs-col-check">
+                    <input
+                      type="checkbox"
+                      class="form-check-input"
+                      :checked="allVisibleSelected"
+                      @change="toggleSelectAll(($event.target as HTMLInputElement).checked)"
+                    />
+                  </th>
+                  <th class="fbs-col-number">Номер отправления</th>
+                  <th class="fbs-col-status">Статус</th>
+                  <th class="fbs-col-date">Дата отгрузки</th>
+                  <th class="fbs-col-products">Товары</th>
+                  <th class="fbs-col-warehouse">Склад</th>
+                  <th class="fbs-col-delivery">Доставка</th>
+                  <th v-if="isAwaitingDeliver" class="fbs-col-label">Этикетка</th>
+                </tr>
+              </thead>
+              <tbody v-if="filteredPostings.length">
+                <tr
+                  v-for="posting in filteredPostings"
+                  :key="posting.id"
+                  :class="{ 'row-selected': isRowSelected(posting.posting_number) }"
+                  @click="toggleRow(posting.posting_number)"
+                >
+                  <td class="text-center">
+                    <input
+                      type="checkbox"
+                      class="form-check-input"
+                      :checked="selectedMap[posting.posting_number]"
+                      @click.stop
+                      @change="toggleSelection(posting.posting_number)"
+                    />
+                  </td>
+                  <td>
+                    <div class="fw-semibold">{{ posting.posting_number }}</div>
+                    <div v-if="posting.order_number" class="text-muted small">{{ posting.order_number }}</div>
+                  </td>
+                  <td>
+                    <span class="status-pill" :class="statusClass(posting.status)">
+                      {{ statusLabel(posting.status) }}
+                    </span>
+                    <div v-if="posting.substatus" class="text-muted small">{{ posting.substatus }}</div>
+                  </td>
+                  <td>
+                    <div class="fw-semibold">{{ formatDateTime(primaryDate(posting)) }}</div>
+                    <div v-if="posting.status_changed_at" class="text-muted small">
+                      Обновлено: {{ formatDateTime(posting.status_changed_at) }}
+                    </div>
+                  </td>
+                  <td>
+                    <div class="fbs-product">
+                      <div class="fw-semibold">{{ primaryProductTitle(posting) }}</div>
+                      <div class="text-muted small">{{ primaryProductMeta(posting) }}</div>
+                      <div v-if="extraProductsCount(posting)" class="text-muted small">
+                        + ещё {{ extraProductsCount(posting) }} товар(ов)
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="fw-semibold">{{ posting.delivery_method_warehouse || '—' }}</div>
+                    <div class="text-muted small">{{ posting.delivery_method_name || '—' }}</div>
+                  </td>
+                  <td>
+                    <div class="fw-semibold">{{ posting.tpl_provider || '—' }}</div>
+                    <div class="text-muted small">{{ posting.tpl_integration_type || '—' }}</div>
+                  </td>
+                  <td v-if="isAwaitingDeliver">
+                    <button
+                      v-if="posting.label_ready && posting.label_file_url"
+                      class="btn btn-outline-primary btn-sm"
+                      type="button"
+                      @click.stop="downloadLabel(posting)"
+                    >
+                      Этикетка
+                    </button>
+                    <span v-else class="text-muted small">
+                      {{ posting.label_status || '—' }}
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+              <tbody v-else>
+                <tr>
+                  <td :colspan="isAwaitingDeliver ? 8 : 7" class="text-center text-muted py-4">
+                    Нет заказов для отображения
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
 
-        <div v-else class="table-responsive fbs-table-wrapper">
-          <table class="table fbs-table align-middle">
-            <thead>
-              <tr>
-                <th class="text-center fbs-col-check">
-                  <input
-                    type="checkbox"
-                    class="form-check-input"
-                    :checked="allVisibleSelected"
-                    @change="toggleSelectAll(($event.target as HTMLInputElement).checked)"
-                  />
-                </th>
-                <th class="fbs-col-number">Номер отправления</th>
-                <th class="fbs-col-status">Статус</th>
-                <th class="fbs-col-date">Дата отгрузки</th>
-                <th class="fbs-col-products">Товары</th>
-                <th class="fbs-col-warehouse">Склад</th>
-                <th class="fbs-col-delivery">Доставка</th>
-                <th v-if="isAwaitingDeliver" class="fbs-col-label">Этикетка</th>
-              </tr>
-            </thead>
-            <tbody v-if="filteredPostings.length">
-              <tr
-                v-for="posting in filteredPostings"
-                :key="posting.id"
-                :class="{ 'row-selected': isRowSelected(posting.posting_number) }"
-                @click="toggleRow(posting.posting_number)"
-              >
-                <td class="text-center">
-                  <input
-                    type="checkbox"
-                    class="form-check-input"
-                    :checked="selectedMap[posting.posting_number]"
-                    @click.stop
-                    @change="toggleSelection(posting.posting_number)"
-                  />
-                </td>
-                <td>
-                  <div class="fw-semibold">{{ posting.posting_number }}</div>
-                  <div v-if="posting.order_number" class="text-muted small">{{ posting.order_number }}</div>
-                </td>
-                <td>
-                  <span class="status-pill" :class="statusClass(posting.status)">
-                    {{ statusLabel(posting.status) }}
+        <div v-else class="fbs-batches">
+          <div v-if="isBatchLoading" class="fbs-loading">
+            <span class="spinner-border spinner-border-sm me-2"></span>
+            Загружаем батчи...
+          </div>
+          <div v-else-if="!shipBatches.length" class="text-center text-muted py-4">
+            Батчи пока не созданы
+          </div>
+          <div v-else class="fbs-batch-list">
+            <div
+              v-for="batch in shipBatches"
+              :key="batch.batch_id"
+              class="fbs-batch-card"
+              @click="toggleBatch(batch)"
+            >
+              <div class="fbs-batch-header">
+                <div class="fbs-batch-meta">
+                  <span class="fbs-batch-meta__strong">{{ batchTitle(batch) }}</span>
+                  <span class="fbs-batch-meta__sep">|</span>
+                  <span>
+                    Отправлений:
+                    <span class="fbs-batch-meta__strong">{{ batch.postings_count ?? '—' }}</span>
                   </span>
-                  <div v-if="posting.substatus" class="text-muted small">{{ posting.substatus }}</div>
-                </td>
-                <td>
-                  <div class="fw-semibold">{{ formatDateTime(primaryDate(posting)) }}</div>
-                  <div v-if="posting.status_changed_at" class="text-muted small">
-                    Обновлено: {{ formatDateTime(posting.status_changed_at) }}
-                  </div>
-                </td>
-                <td>
-                  <div class="fbs-product">
-                    <div class="fw-semibold">{{ primaryProductTitle(posting) }}</div>
-                    <div class="text-muted small">{{ primaryProductMeta(posting) }}</div>
-                    <div v-if="extraProductsCount(posting)" class="text-muted small">
-                      + ещё {{ extraProductsCount(posting) }} товар(ов)
-                    </div>
-                  </div>
-                </td>
-                <td>
-                  <div class="fw-semibold">{{ posting.delivery_method_warehouse || '—' }}</div>
-                  <div class="text-muted small">{{ posting.delivery_method_name || '—' }}</div>
-                </td>
-                <td>
-                  <div class="fw-semibold">{{ posting.tpl_provider || '—' }}</div>
-                  <div class="text-muted small">{{ posting.tpl_integration_type || '—' }}</div>
-                </td>
-                <td v-if="isAwaitingDeliver">
+                  <span class="fbs-batch-meta__dot">·</span>
+                  <span>
+                    Товаров:
+                    <span class="fbs-batch-meta__strong">{{ batch.items_count ?? '—' }}</span>
+                  </span>
+                  <template v-if="batch.status">
+                    <span class="fbs-batch-meta__dot">·</span>
+                    <span>Статус: {{ batch.status }}</span>
+                  </template>
+                </div>
+                <div class="d-flex flex-wrap gap-2" @click.stop>
                   <button
-                    v-if="posting.label_ready && posting.label_file_url"
                     class="btn btn-outline-primary btn-sm"
                     type="button"
-                    @click.stop="downloadLabel(posting)"
+                    :disabled="!batchHasPostings(batch) || isLabeling"
+                    @click.stop="handleBatchLabels(batch.batch_id)"
                   >
-                    Этикетка
+                    <span v-if="isLabeling" class="spinner-border spinner-border-sm me-2"></span>
+                    Этикетки
                   </button>
-                  <span v-else class="text-muted small">
-                    {{ posting.label_status || '—' }}
-                  </span>
-                </td>
-              </tr>
-            </tbody>
-            <tbody v-else>
-              <tr>
-                <td :colspan="isAwaitingDeliver ? 8 : 7" class="text-center text-muted py-4">
-                  Нет заказов для отображения
-                </td>
-              </tr>
-            </tbody>
-          </table>
+                  <button class="btn btn-outline-secondary btn-sm" type="button" @click.stop>
+                    Создать отгрузку
+                  </button>
+                </div>
+              </div>
+              <div v-if="isBatchExpanded(batch.batch_id)" class="fbs-batch-body" @click.stop>
+                <div v-if="batchDetailLoading[batch.batch_id]" class="fbs-loading">
+                  <span class="spinner-border spinner-border-sm me-2"></span>
+                  Загружаем отправления...
+                </div>
+                <div v-else-if="batchDetailError[batch.batch_id]" class="alert alert-danger py-1 px-2 mb-2">
+                  {{ batchDetailError[batch.batch_id] }}
+                </div>
+                <div v-else>
+                  <div v-if="batchPostings(batch.batch_id).length">
+                    <div class="batch-selection-bar">
+                      <span class="text-muted small">Выбрано: {{ batchSelectedCount(batch.batch_id) }}</span>
+                      <div class="d-flex flex-wrap gap-2">
+                        <button class="btn btn-outline-secondary btn-sm" type="button" @click.stop="selectBatchAll(batch.batch_id)">
+                          Выделить все
+                        </button>
+                        <button
+                          class="btn btn-outline-secondary btn-sm"
+                          type="button"
+                          @click.stop="resetBatchSelection(batch.batch_id)"
+                          :disabled="!batchSelectedCount(batch.batch_id)"
+                        >
+                          Сброс
+                        </button>
+                        <button
+                          class="btn btn-outline-primary btn-sm"
+                          type="button"
+                          @click.stop="handleBatchSelectionLabels(batch.batch_id)"
+                          :disabled="!batchSelectedCount(batch.batch_id) || isLabeling"
+                        >
+                          <span v-if="isLabeling" class="spinner-border spinner-border-sm me-2"></span>
+                          Этикетки
+                        </button>
+                        <button
+                          class="btn btn-outline-primary btn-sm"
+                          type="button"
+                          @click.stop="handlePrint(batchSelectedNumbers(batch.batch_id))"
+                          :disabled="!batchSelectedCount(batch.batch_id) || isPrinting"
+                        >
+                          <span v-if="isPrinting" class="spinner-border spinner-border-sm me-2"></span>
+                          Печать
+                        </button>
+                      </div>
+                    </div>
+                    <div class="table-responsive fbs-table-wrapper">
+                    <table class="table fbs-table align-middle">
+                      <thead>
+                        <tr>
+                          <th class="text-center fbs-col-check">
+                            <input
+                              type="checkbox"
+                              class="form-check-input"
+                              :checked="isBatchAllSelected(batch.batch_id)"
+                              @change="toggleBatchSelectAll(batch.batch_id, ($event.target as HTMLInputElement).checked)"
+                            />
+                          </th>
+                          <th class="fbs-col-number">Номер отправления</th>
+                          <th class="fbs-col-status">Статус</th>
+                          <th class="fbs-col-date">Дата отгрузки</th>
+                          <th class="fbs-col-products">Товары</th>
+                          <th class="fbs-col-warehouse">Склад</th>
+                          <th class="fbs-col-delivery">Доставка</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr
+                          v-for="posting in batchPostings(batch.batch_id)"
+                          :key="posting.id"
+                          :class="{ 'row-selected': isBatchRowSelected(batch.batch_id, posting.posting_number) }"
+                          @click.stop="toggleBatchRow(batch.batch_id, posting.posting_number)"
+                        >
+                          <td class="text-center">
+                            <input
+                              type="checkbox"
+                              class="form-check-input"
+                              :checked="batchSelectedMap(batch.batch_id)[posting.posting_number]"
+                              @click.stop
+                              @change="toggleBatchRow(batch.batch_id, posting.posting_number)"
+                            />
+                          </td>
+                          <td>
+                            <div class="fw-semibold">{{ posting.posting_number }}</div>
+                            <div v-if="posting.order_number" class="text-muted small">{{ posting.order_number }}</div>
+                          </td>
+                          <td>
+                            <span class="status-pill" :class="statusClass(posting.status)">
+                              {{ statusLabel(posting.status) }}
+                            </span>
+                            <div v-if="posting.substatus" class="text-muted small">{{ posting.substatus }}</div>
+                          </td>
+                          <td>
+                            <div class="fw-semibold">{{ formatDateTime(primaryDate(posting)) }}</div>
+                            <div v-if="posting.status_changed_at" class="text-muted small">
+                              Обновлено: {{ formatDateTime(posting.status_changed_at) }}
+                            </div>
+                          </td>
+                          <td>
+                            <div class="fbs-product">
+                              <div class="fw-semibold">{{ primaryProductTitle(posting) }}</div>
+                              <div class="text-muted small">{{ primaryProductMeta(posting) }}</div>
+                              <div v-if="extraProductsCount(posting)" class="text-muted small">
+                                + ещё {{ extraProductsCount(posting) }} товар(ов)
+                              </div>
+                            </div>
+                          </td>
+                          <td>
+                            <div class="fw-semibold">{{ posting.delivery_method_warehouse || '—' }}</div>
+                            <div class="text-muted small">{{ posting.delivery_method_name || '—' }}</div>
+                          </td>
+                          <td>
+                            <div class="fw-semibold">{{ posting.tpl_provider || '—' }}</div>
+                            <div class="text-muted small">{{ posting.tpl_integration_type || '—' }}</div>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  </div>
+                  <div v-else class="text-muted py-3 text-center">Нет отправлений</div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
         <div
           v-if="isAwaitingDeliver && selectedPostingNumbers.length"
@@ -237,13 +416,53 @@
             Сформировать этикетки
           </button>
         </div>
+        <div
+          v-if="isAwaitingPackaging && selectedPostingNumbers.length"
+          class="fbs-ship-fab"
+        >
+          <button
+            class="btn btn-primary btn-sm"
+            type="button"
+            @click="openShipmentDialog"
+          >
+            Создать отгрузку
+          </button>
+        </div>
       </div>
     </section>
   </div>
+
+  <Modal v-if="shipmentDialogOpen" @close="closeShipmentDialog">
+    <div class="fbs-modal">
+      <h5 class="mb-3">Создать отгрузку</h5>
+      <label class="form-label text-uppercase text-muted small fw-semibold">Название отгрузки</label>
+      <input
+        type="text"
+        class="form-control form-control-sm"
+        v-model="shipmentName"
+        placeholder="Введите название"
+      />
+      <div class="d-flex justify-content-end gap-2 mt-3">
+        <button class="btn btn-outline-secondary btn-sm" type="button" @click="closeShipmentDialog">
+          Отмена
+        </button>
+        <button
+          class="btn btn-primary btn-sm"
+          type="button"
+          @click="createShipment"
+          :disabled="isShipping"
+        >
+          <span v-if="isShipping" class="spinner-border spinner-border-sm me-2"></span>
+          Создать
+        </button>
+      </div>
+    </div>
+  </Modal>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import Modal from '@/components/Modal.vue'
 import { apiService } from '@/services/api'
 
 const props = defineProps<{
@@ -277,6 +496,9 @@ interface FbsPosting {
   delivered_at?: string | null
   cancelled_at?: string | null
   needs_label?: boolean
+  shipment_batch_id?: string | null
+  shipment_batch_seq?: number | null
+  shipment_batch_name?: string | null
   label_ready?: boolean
   label_status?: string | null
   label_file_url?: string | null
@@ -285,8 +507,35 @@ interface FbsPosting {
   last_synced_at?: string | null
 }
 
+interface FbsShipBatch {
+  batch_id: string
+  batch_seq?: number | null
+  name?: string | null
+  status?: string | null
+  total_count?: number | null
+  success_count?: number | null
+  failed_count?: number | null
+  error_message?: string | null
+  started_at?: string | null
+  finished_at?: string | null
+  created_at?: string | null
+  updated_at?: string | null
+  postings_count?: number | null
+  items_count?: number | null
+}
+
+interface FbsShipBatchDetail {
+  batch: FbsShipBatch
+  postings: FbsPosting[]
+  count?: number | null
+  items_count?: number | null
+}
+
+const statusKeys = ['awaiting_packaging', 'awaiting_deliver', 'acceptance_in_progress', 'delivering']
+
 const statusTabs = [
-  { key: 'awaiting_packaging', label: 'Ожидают сборки' },
+  { key: 'awaiting_packaging', label: 'Новые' },
+  { key: 'ship_batches', label: 'На сборке' },
   { key: 'awaiting_deliver', label: 'Ожидают отгрузки' },
   { key: 'acceptance_in_progress', label: 'Приемка' },
   { key: 'delivering', label: 'Доставляются' }
@@ -296,17 +545,28 @@ const activeStatus = ref<string>('awaiting_packaging')
 const needsLabel = ref(false)
 const searchQuery = ref('')
 const postings = ref<FbsPosting[]>([])
+const shipBatches = ref<FbsShipBatch[]>([])
+const shipBatchDetails = ref<Record<string, FbsShipBatchDetail>>({})
+const shipBatchExpanded = ref<Set<string>>(new Set())
+const batchDetailLoading = ref<Record<string, boolean>>({})
+const batchDetailError = ref<Record<string, string>>({})
 const statusCounts = ref<Record<string, number>>({})
+const onPackagingTotal = ref<number | null>(null)
 const totalCount = ref<number | null>(null)
 const isLoading = ref(false)
+const isBatchLoading = ref(false)
 const isSyncing = ref(false)
 const isPrinting = ref(false)
 const isLabeling = ref(false)
+const isShipping = ref(false)
 const errorMessage = ref<string | null>(null)
 const labelNotice = ref<string | null>(null)
+const shipmentDialogOpen = ref(false)
+const shipmentName = ref('')
 const selectedPostings = ref<Set<string>>(new Set())
 const rangeFrom = ref('')
 const rangeTo = ref('')
+const batchSelections = ref<Record<string, Set<string>>>({})
 
 const statusLabelMap: Record<string, string> = {
   awaiting_packaging: 'Ожидает сборки',
@@ -351,7 +611,10 @@ const filteredPostings = computed(() => {
   })
 })
 
+const isBatchTab = computed(() => activeStatus.value === 'ship_batches')
+const isStatusTab = computed(() => statusKeys.includes(activeStatus.value))
 const isAwaitingDeliver = computed(() => activeStatus.value === 'awaiting_deliver')
+const isAwaitingPackaging = computed(() => activeStatus.value === 'awaiting_packaging')
 
 const missingLabelPostings = computed(() =>
   filteredPostings.value.filter((posting) => !posting.label_ready)
@@ -362,6 +625,15 @@ const selectedRowsSize = computed(() => selectedPostings.value.size)
 const hasCounts = computed(() => totalCount.value !== null || Object.keys(statusCounts.value).length > 0)
 
 const tabCount = (key: string) => {
+  if (key === 'ship_batches') {
+    if (activeStatus.value === 'ship_batches' && onPackagingTotal.value !== null) {
+      return onPackagingTotal.value
+    }
+    const onPackaging = statusCounts.value.on_packaging
+    if (typeof onPackaging === 'number') return onPackaging
+    if (onPackagingTotal.value !== null) return onPackagingTotal.value
+    return shipBatches.value.length
+  }
   if (key === 'all') {
     return totalCount.value ?? (hasCounts.value ? 0 : filteredPostings.value.length)
   }
@@ -436,12 +708,89 @@ const extraProductsCount = (posting: FbsPosting) => {
   return products.length > 1 ? products.length - 1 : 0
 }
 
+const batchTitle = (batch: FbsShipBatch) => {
+  if (batch.name) return batch.name
+  if (batch.batch_seq) return `Поставка #${batch.batch_seq}`
+  return 'Поставка без названия'
+}
+
+const isBatchExpanded = (batchId: string) => shipBatchExpanded.value.has(batchId)
+
+const batchPostings = (batchId: string) => {
+  const detail = shipBatchDetails.value[batchId]
+  return Array.isArray(detail?.postings) ? detail!.postings : []
+}
+
+const batchSelectedNumbers = (batchId: string) => Array.from(batchSelections.value[batchId] || new Set())
+
+const batchSelectedCount = (batchId: string) => batchSelections.value[batchId]?.size ?? 0
+
+const batchSelectedMap = (batchId: string) => {
+  const selection = batchSelections.value[batchId] || new Set()
+  const map: Record<string, boolean> = {}
+  selection.forEach((value) => {
+    map[value] = true
+  })
+  return map
+}
+
+const isBatchRowSelected = (batchId: string, postingNumber: string) =>
+  batchSelections.value[batchId]?.has(postingNumber) ?? false
+
+const selectBatchAll = (batchId: string) => {
+  const next = new Set<string>()
+  batchPostings(batchId).forEach((posting) => {
+    if (posting.posting_number) {
+      next.add(posting.posting_number)
+    }
+  })
+  batchSelections.value = { ...batchSelections.value, [batchId]: next }
+}
+
+const resetBatchSelection = (batchId: string) => {
+  batchSelections.value = { ...batchSelections.value, [batchId]: new Set() }
+}
+
+const toggleBatchRow = (batchId: string, postingNumber: string) => {
+  const next = new Set(batchSelections.value[batchId] || [])
+  if (next.has(postingNumber)) {
+    next.delete(postingNumber)
+  } else {
+    next.add(postingNumber)
+  }
+  batchSelections.value = { ...batchSelections.value, [batchId]: next }
+}
+
+const isBatchAllSelected = (batchId: string) => {
+  const postings = batchPostings(batchId)
+  if (!postings.length) return false
+  const selection = batchSelections.value[batchId]
+  if (!selection || !selection.size) return false
+  return postings.every((posting) => selection.has(posting.posting_number))
+}
+
+const toggleBatchSelectAll = (batchId: string, checked: boolean) => {
+  if (checked) {
+    selectBatchAll(batchId)
+  } else {
+    resetBatchSelection(batchId)
+  }
+}
+
+const batchHasPostings = (batch: FbsShipBatch) => {
+  const detail = shipBatchDetails.value[batch.batch_id]
+  if (detail) {
+    return Array.isArray(detail.postings) && detail.postings.length > 0
+  }
+  return (batch.postings_count ?? 0) > 0
+}
+
 const buildSyncPayload = (options?: { includeStatus?: boolean }) => {
   const payload: Record<string, unknown> = {
     store_id: Number(props.storeId),
     limit: 1000
   }
-  if (options?.includeStatus !== false && activeStatus.value !== 'all') {
+  if (options?.includeStatus !== false && isStatusTab.value) {
     payload.status = activeStatus.value
   }
 
@@ -452,11 +801,40 @@ const applyPostingsResponse = (response: unknown, options?: { skipPostings?: boo
   if (response && typeof response === 'object') {
     const counts = (response as any).counts
     const total = (response as any).total
-    if (counts && typeof counts === 'object') {
-      statusCounts.value = counts
+    const sync = (response as any).sync
+    let nextCounts = counts && typeof counts === 'object' ? { ...(counts as Record<string, number>) } : {}
+    let nextTotal = typeof total === 'number' ? total : null
+    const awaitingDeliverCount =
+      counts && typeof counts === 'object'
+        ? (counts as any).awaiting_deliver ?? (counts as any).awaiting_delive
+        : undefined
+    if (typeof awaitingDeliverCount === 'number') {
+      nextCounts.awaiting_deliver = awaitingDeliverCount
     }
-    if (typeof total === 'number') {
-      totalCount.value = total
+
+    if (sync && typeof sync === 'object') {
+      const awaitingPackaging = Number((sync as any).awaiting_packaging?.synced)
+      const awaitingDeliver = Number(
+        (sync as any).awaiting_deliver?.synced ?? (sync as any).awaiting_delive?.synced
+      )
+      const hasPackaging = Number.isFinite(awaitingPackaging)
+      const hasDeliver = Number.isFinite(awaitingDeliver)
+      const hasAwaitingPackagingCount = typeof nextCounts.awaiting_packaging === 'number'
+      const hasAwaitingDeliverCount = typeof nextCounts.awaiting_deliver === 'number'
+      if (!hasAwaitingPackagingCount && hasPackaging) {
+        nextCounts.awaiting_packaging = awaitingPackaging
+      }
+      if (!hasAwaitingDeliverCount && hasDeliver) {
+        nextCounts.awaiting_deliver = awaitingDeliver
+      }
+      if (nextTotal === null && (hasPackaging || hasDeliver)) {
+        nextTotal = (hasPackaging ? awaitingPackaging : 0) + (hasDeliver ? awaitingDeliver : 0)
+      }
+    }
+
+    statusCounts.value = nextCounts
+    if (typeof nextTotal === 'number') {
+      totalCount.value = nextTotal
     }
     if (options?.skipPostings) {
       return
@@ -476,8 +854,81 @@ const applyPostingsResponse = (response: unknown, options?: { skipPostings?: boo
   postings.value = []
 }
 
+const loadShipBatches = async (options?: { showLoader?: boolean }) => {
+  if (!props.storeId) return
+  const showLoader = Boolean(options?.showLoader || !shipBatches.value.length)
+  if (showLoader) {
+    isBatchLoading.value = true
+  }
+  errorMessage.value = null
+  try {
+    const response = await apiService.getFbsShipBatches({ storeId: props.storeId })
+    const total = Number((response as any)?.on_packaging_total)
+    onPackagingTotal.value = Number.isFinite(total) ? total : null
+    const list = (response as any)?.batches
+    shipBatches.value = Array.isArray(list) ? (list as FbsShipBatch[]) : []
+    shipBatchExpanded.value = new Set()
+    shipBatchDetails.value = {}
+    batchDetailLoading.value = {}
+    batchDetailError.value = {}
+    batchSelections.value = {}
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'Не удалось загрузить батчи'
+    shipBatches.value = []
+    onPackagingTotal.value = null
+  } finally {
+    if (showLoader) {
+      isBatchLoading.value = false
+    }
+  }
+}
+
+const loadShipBatchDetail = async (batchId: string) => {
+  if (!batchId) return
+  batchDetailLoading.value = { ...batchDetailLoading.value, [batchId]: true }
+  batchDetailError.value = { ...batchDetailError.value, [batchId]: '' }
+  try {
+    const response = await apiService.getFbsShipBatchDetail(batchId)
+    const detail: FbsShipBatchDetail = {
+      batch: (response as any)?.batch || { batch_id: batchId },
+      postings: Array.isArray((response as any)?.postings) ? (response as any).postings : [],
+      count: (response as any)?.count ?? null,
+      items_count: (response as any)?.items_count ?? null
+    }
+    shipBatchDetails.value = { ...shipBatchDetails.value, [batchId]: detail }
+  } catch (error) {
+    batchDetailError.value = {
+      ...batchDetailError.value,
+      [batchId]: error instanceof Error ? error.message : 'Не удалось загрузить отправления'
+    }
+  } finally {
+    batchDetailLoading.value = { ...batchDetailLoading.value, [batchId]: false }
+  }
+}
+
+const ensureBatchDetail = async (batchId: string) => {
+  if (!shipBatchDetails.value[batchId]) {
+    await loadShipBatchDetail(batchId)
+  }
+}
+
+const toggleBatch = async (batch: FbsShipBatch) => {
+  const batchId = batch.batch_id
+  const next = new Set(shipBatchExpanded.value)
+  if (next.has(batchId)) {
+    next.delete(batchId)
+    shipBatchExpanded.value = next
+    return
+  }
+  next.add(batchId)
+  shipBatchExpanded.value = next
+  await ensureBatchDetail(batchId)
+  selectBatchAll(batchId)
+}
+
 const refreshPostings = async (options?: { showLoader?: boolean }) => {
   if (!props.storeId) return
+  if (!isStatusTab.value) return
   const showLoader = Boolean(options?.showLoader || !postings.value.length)
   const skipPostings = activeStatus.value === 'all'
   if (showLoader) {
@@ -509,6 +960,7 @@ const refreshPostings = async (options?: { showLoader?: boolean }) => {
 
 const loadPostings = async () => {
   if (!props.storeId) return
+  if (!isStatusTab.value) return
   isLoading.value = true
   errorMessage.value = null
   try {
@@ -518,9 +970,7 @@ const loadPostings = async () => {
     if (activeStatus.value !== 'all') {
       params.status = activeStatus.value
     } else {
-      params.status = statusTabs
-        .map((tab) => tab.key)
-        .filter((key) => key !== 'all')
+      params.status = statusKeys
         .join(',')
       params.include_archived = '1'
     }
@@ -536,8 +986,70 @@ const loadPostings = async () => {
   }
 }
 
-const loadImmediate = async () => {
+const handleRefresh = async () => {
+  if (isBatchTab.value) {
+    isSyncing.value = true
+    try {
+      await loadShipBatches({ showLoader: true })
+    } finally {
+      isSyncing.value = false
+    }
+    return
+  }
   await refreshPostings({ showLoader: true })
+}
+
+const loadImmediate = async () => {
+  if (isBatchTab.value) {
+    await loadShipBatches({ showLoader: true })
+    return
+  }
+  await refreshPostings({ showLoader: true })
+}
+
+const pad2 = (value: number) => String(value).padStart(2, '0')
+
+const formatBatchName = (date: Date) => {
+  const day = pad2(date.getDate())
+  const month = pad2(date.getMonth() + 1)
+  const year = date.getFullYear()
+  const hours = pad2(date.getHours())
+  const minutes = pad2(date.getMinutes())
+  return `${day}-${month}-${year} ${hours}-${minutes}`
+}
+
+const openShipmentDialog = () => {
+  if (!selectedPostings.value.size) return
+  shipmentName.value = formatBatchName(new Date())
+  shipmentDialogOpen.value = true
+}
+
+const closeShipmentDialog = () => {
+  shipmentDialogOpen.value = false
+}
+
+const createShipment = async () => {
+  if (!props.storeId || !selectedPostingNumbers.value.length || isShipping.value) return
+  isShipping.value = true
+  errorMessage.value = null
+  try {
+    const payload: Record<string, unknown> = {
+      store_id: Number(props.storeId),
+      posting_numbers: selectedPostingNumbers.value
+    }
+    const trimmed = shipmentName.value.trim()
+    if (trimmed) {
+      payload.batch_name = trimmed
+    }
+    await apiService.createFbsShipment(payload)
+    closeShipmentDialog()
+    resetSelection()
+    await refreshPostings()
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'Не удалось создать отгрузку'
+  } finally {
+    isShipping.value = false
+  }
 }
 
 const selectRange = () => {
@@ -587,14 +1099,15 @@ const toggleSelectAll = (checked: boolean) => {
   })
 }
 
-const handlePrint = async () => {
-  if (!props.storeId || !selectedPostingNumbers.value.length) return
+const handlePrint = async (postingNumbers?: string[]) => {
+  const numbers = postingNumbers && postingNumbers.length ? postingNumbers : selectedPostingNumbers.value
+  if (!props.storeId || !numbers.length) return
   isPrinting.value = true
   errorMessage.value = null
   try {
     const response = await apiService.printFbsPostings({
       store_id: Number(props.storeId),
-      posting_numbers: selectedPostingNumbers.value,
+      posting_numbers: numbers,
       force: false
     })
     if (response && response.needsForce) {
@@ -602,7 +1115,7 @@ const handlePrint = async () => {
       if (window.confirm(confirmText)) {
         await apiService.printFbsPostings({
           store_id: Number(props.storeId),
-          posting_numbers: selectedPostingNumbers.value,
+          posting_numbers: numbers,
           force: true
         })
       }
@@ -612,6 +1125,19 @@ const handlePrint = async () => {
   } finally {
     isPrinting.value = false
   }
+}
+
+const handleBatchLabels = async (batchId: string) => {
+  await ensureBatchDetail(batchId)
+  const numbers = batchPostings(batchId).map((posting) => posting.posting_number).filter(Boolean)
+  if (!numbers.length) return
+  await handleLabels(numbers)
+}
+
+const handleBatchSelectionLabels = async (batchId: string) => {
+  const numbers = batchSelectedNumbers(batchId)
+  if (!numbers.length) return
+  await handleLabels(numbers)
 }
 
 const downloadBlob = (blob: Blob, filename: string) => {
@@ -679,8 +1205,15 @@ watch(
   () => props.storeId,
   async () => {
     postings.value = []
+    shipBatches.value = []
+    shipBatchDetails.value = {}
+    shipBatchExpanded.value = new Set()
+    batchDetailLoading.value = {}
+    batchDetailError.value = {}
+    batchSelections.value = {}
     selectedPostings.value.clear()
     statusCounts.value = {}
+    onPackagingTotal.value = null
     totalCount.value = null
     activeStatus.value = 'awaiting_packaging'
     rangeFrom.value = ''
@@ -696,6 +1229,10 @@ watch(
     selectedPostings.value.clear()
     rangeFrom.value = ''
     rangeTo.value = ''
+    if (isBatchTab.value) {
+      await loadShipBatches()
+      return
+    }
     await loadPostings()
   }
 )
@@ -703,6 +1240,7 @@ watch(
 watch(
   needsLabel,
   async () => {
+    if (isBatchTab.value) return
     await loadPostings()
   }
 )
@@ -730,6 +1268,81 @@ watch(
   border-radius: 999px;
   background: rgba(15, 23, 42, 0.04);
   margin-bottom: 1rem;
+}
+
+.fbs-tab-hint {
+  margin: -0.35rem 0 1rem;
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.fbs-batches {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.fbs-batch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.fbs-batch-card {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 14px;
+  padding: 1rem;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.fbs-batch-card * {
+  cursor: inherit;
+}
+
+.fbs-batch-card:hover {
+  border-color: rgba(15, 23, 42, 0.18);
+  background: #f8fafc;
+}
+
+.fbs-batch-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.fbs-batch-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+  color: #0f172a;
+}
+
+.fbs-batch-meta__strong {
+  font-weight: 700;
+}
+
+.fbs-batch-meta__sep,
+.fbs-batch-meta__dot {
+  font-weight: 500;
+}
+
+.fbs-batch-body {
+  margin-top: 0.75rem;
+}
+
+.batch-selection-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.25rem;
 }
 
 .fbs-tab {
@@ -966,6 +1579,20 @@ watch(
   right: 1.5rem;
   bottom: 1.5rem;
   z-index: 50;
+}
+
+.fbs-ship-fab {
+  position: fixed;
+  left: 50%;
+  bottom: 1.5rem;
+  transform: translateX(-50%);
+  z-index: 50;
+}
+
+.fbs-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
 .selection-bar {

@@ -245,6 +245,11 @@ watch(
   text-decoration: none;
   border: 1px solid transparent;
   transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+  cursor: pointer !important;
+}
+
+.workspace-tabs__item * {
+  cursor: pointer !important;
 }
 
 .workspace-tabs__item:hover {
