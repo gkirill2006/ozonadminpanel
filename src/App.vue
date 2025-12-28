@@ -54,7 +54,12 @@ const handlePointerMove = (event: PointerEvent) => {
   const target = event.target
   cursorRaf = window.requestAnimationFrame(() => {
     cursorRaf = 0
-    const element = target instanceof Element ? target : target?.parentElement
+    const element =
+      target instanceof Element
+        ? target
+        : target instanceof Node
+          ? target.parentElement
+          : null
     if (!element) {
       setBodyCursor(null)
       return

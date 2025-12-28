@@ -17,7 +17,7 @@
               v-if="isStatusTab"
               class="btn btn-primary btn-sm"
               type="button"
-              @click="handlePrint"
+              @click="onPrintClick"
             :disabled="!selectedPostingNumbers.length || isPrinting"
           >
             <span v-if="isPrinting" class="spinner-border spinner-border-sm me-2"></span>
@@ -1125,6 +1125,10 @@ const handlePrint = async (postingNumbers?: string[]) => {
   } finally {
     isPrinting.value = false
   }
+}
+
+const onPrintClick = () => {
+  void handlePrint()
 }
 
 const handleBatchLabels = async (batchId: string) => {
