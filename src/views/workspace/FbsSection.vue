@@ -267,10 +267,10 @@
                   <button
                     class="btn btn-outline-primary btn-sm"
                     type="button"
-                    :disabled="!batchHasPostings(batch) || isLabeling"
+                    :disabled="!batchHasPostings(batch) || batchLabelLoading[batch.batch_id]"
                     @click.stop="handleBatchLabels(batch.batch_id)"
                   >
-                    <span v-if="isLabeling" class="spinner-border spinner-border-sm me-2"></span>
+                    <span v-if="batchLabelLoading[batch.batch_id]" class="spinner-border spinner-border-sm me-2"></span>
                     Этикетки
                   </button>
                   <button class="btn btn-outline-secondary btn-sm" type="button" @click.stop>
@@ -306,9 +306,9 @@
                           class="btn btn-outline-primary btn-sm"
                           type="button"
                           @click.stop="handleBatchSelectionLabels(batch.batch_id)"
-                          :disabled="!batchSelectedCount(batch.batch_id) || isLabeling"
+                          :disabled="!batchSelectedCount(batch.batch_id) || batchLabelLoading[batch.batch_id]"
                         >
-                          <span v-if="isLabeling" class="spinner-border spinner-border-sm me-2"></span>
+                          <span v-if="batchLabelLoading[batch.batch_id]" class="spinner-border spinner-border-sm me-2"></span>
                           Этикетки
                         </button>
                         <button
@@ -567,6 +567,7 @@ const selectedPostings = ref<Set<string>>(new Set())
 const rangeFrom = ref('')
 const rangeTo = ref('')
 const batchSelections = ref<Record<string, Set<string>>>({})
+const batchLabelLoading = ref<Record<string, boolean>>({})
 
 const statusLabelMap: Record<string, string> = {
   awaiting_packaging: 'Ожидает сборки',
@@ -1131,17 +1132,33 @@ const onPrintClick = () => {
   void handlePrint()
 }
 
+const setBatchLabelLoading = (batchId: string, value: boolean) => {
+  batchLabelLoading.value = { ...batchLabelLoading.value, [batchId]: value }
+}
+
 const handleBatchLabels = async (batchId: string) => {
-  await ensureBatchDetail(batchId)
-  const numbers = batchPostings(batchId).map((posting) => posting.posting_number).filter(Boolean)
-  if (!numbers.length) return
-  await handleLabels(numbers)
+  if (batchLabelLoading.value[batchId]) return
+  setBatchLabelLoading(batchId, true)
+  try {
+    await ensureBatchDetail(batchId)
+    const numbers = batchPostings(batchId).map((posting) => posting.posting_number).filter(Boolean)
+    if (!numbers.length) return
+    await handleLabels(numbers, { skipGlobalLoading: true, skipReload: true })
+  } finally {
+    setBatchLabelLoading(batchId, false)
+  }
 }
 
 const handleBatchSelectionLabels = async (batchId: string) => {
-  const numbers = batchSelectedNumbers(batchId)
-  if (!numbers.length) return
-  await handleLabels(numbers)
+  if (batchLabelLoading.value[batchId]) return
+  setBatchLabelLoading(batchId, true)
+  try {
+    const numbers = batchSelectedNumbers(batchId)
+    if (!numbers.length) return
+    await handleLabels(numbers, { skipGlobalLoading: true, skipReload: true })
+  } finally {
+    setBatchLabelLoading(batchId, false)
+  }
 }
 
 const downloadBlob = (blob: Blob, filename: string) => {
@@ -1162,11 +1179,17 @@ const selectMissingLabels = () => {
   })
 }
 
-const handleLabels = async (postingNumbers?: string[]) => {
+const handleLabels = async (
+  postingNumbers?: string[],
+  options?: { skipGlobalLoading?: boolean; skipReload?: boolean }
+) => {
   if (!props.storeId) return
   const numbers = postingNumbers && postingNumbers.length ? postingNumbers : selectedPostingNumbers.value
   if (!numbers.length) return
-  isLabeling.value = true
+  const useGlobalLoading = !options?.skipGlobalLoading
+  if (useGlobalLoading) {
+    isLabeling.value = true
+  }
   errorMessage.value = null
   labelNotice.value = null
   try {
@@ -1192,8 +1215,12 @@ const handleLabels = async (postingNumbers?: string[]) => {
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Не удалось сформировать этикетки'
   } finally {
-    isLabeling.value = false
-    await loadPostings()
+    if (useGlobalLoading) {
+      isLabeling.value = false
+    }
+    if (!options?.skipReload) {
+      await loadPostings()
+    }
   }
 }
 
@@ -1293,10 +1320,10 @@ watch(
 }
 
 .fbs-batch-card {
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(248, 250, 252, 0.18);
   border-radius: 14px;
   padding: 1rem;
-  background: #fff;
+  background: #23364d;
   cursor: pointer;
   transition: border-color 0.2s ease, background-color 0.2s ease;
 }
@@ -1306,8 +1333,8 @@ watch(
 }
 
 .fbs-batch-card:hover {
-  border-color: rgba(15, 23, 42, 0.18);
-  background: #f8fafc;
+  border-color: rgba(248, 250, 252, 0.3);
+  background: #2b445d;
 }
 
 .fbs-batch-header {
@@ -1316,6 +1343,7 @@ watch(
   gap: 0.75rem;
   align-items: center;
   justify-content: space-between;
+  color: #f8fafc;
 }
 
 .fbs-batch-meta {
@@ -1324,7 +1352,7 @@ watch(
   align-items: center;
   gap: 0.35rem;
   font-size: 0.9rem;
-  color: #0f172a;
+  color: #f8fafc;
 }
 
 .fbs-batch-meta__strong {
@@ -1334,10 +1362,26 @@ watch(
 .fbs-batch-meta__sep,
 .fbs-batch-meta__dot {
   font-weight: 500;
+  color: rgba(248, 250, 252, 0.75);
 }
 
 .fbs-batch-body {
   margin-top: 0.75rem;
+  background: #fff;
+  border-radius: 12px;
+  padding: 0.75rem;
+}
+
+.fbs-batch-header .btn-outline-primary,
+.fbs-batch-header .btn-outline-secondary {
+  color: #f8fafc;
+  border-color: rgba(248, 250, 252, 0.6);
+}
+
+.fbs-batch-header .btn-outline-primary:hover,
+.fbs-batch-header .btn-outline-secondary:hover {
+  background: rgba(248, 250, 252, 0.12);
+  color: #fff;
 }
 
 .batch-selection-bar {
