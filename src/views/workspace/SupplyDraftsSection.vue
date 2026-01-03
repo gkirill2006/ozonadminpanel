@@ -823,10 +823,14 @@ const getBundleItemsForDraft = (batchKey: string, draft: any) => {
 }
 
 const getOrderStateForDraft = (batch: any, draft: any) => {
+  const batchKey = getBatchKey(batch)
+  const errorReason = getSupplyErrorForDraft(batchKey, draft)
+  if (errorReason) {
+    return errorReason
+  }
   if (Array.isArray(draft?.supply_order_states) && draft.supply_order_states.length) {
     return draft.supply_order_states.join(', ')
   }
-  const batchKey = getBatchKey(batch)
   const info = supplyInfo.value[batchKey]
   if (!info?.results) return '—'
   const draftId = draft?.id ?? draft?.draft_id
@@ -835,6 +839,22 @@ const getOrderStateForDraft = (batch: any, draft: any) => {
     return entry.order_states.join(', ')
   }
   return '—'
+}
+
+const getSupplyErrorForDraft = (batchKey: string, draft: any) => {
+  const info = supplyInfo.value[batchKey]
+  if (!Array.isArray(info?.errors)) return ''
+  const draftId = draft?.id ?? draft?.draft_id
+  const entry = info.errors.find((err: any) => err?.draft_id === draftId)
+  if (!entry) return ''
+  const errorValue = entry.error
+  if (Array.isArray(errorValue) && errorValue.length) {
+    return String(errorValue[0])
+  }
+  if (errorValue) {
+    return String(errorValue)
+  }
+  return ''
 }
 
 const getDraftTimeslot = (draft: any) => {
