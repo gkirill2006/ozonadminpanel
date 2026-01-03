@@ -189,6 +189,17 @@
                           <span v-if="confirmSupplyLoading === getBatchKey(batch)" class="spinner-border spinner-border-sm me-1"></span>
                           Создать заявку
                         </button>
+                        <div
+                          v-if="confirmSupplyExpired[getBatchKey(batch)]"
+                          class="alert alert-warning py-2 px-3 mt-2"
+                        >
+                          <div class="fw-semibold">Время создания поставки из черновика истекло.</div>
+                          <div class="small text-muted">
+                            Создано:
+                            {{ formatDateTimeShort(confirmSupplyExpired[getBatchKey(batch)]?.createdAt || '') }}
+                          </div>
+                          <div class="small text-muted">Создайте новую поставку.</div>
+                        </div>
                         <div v-if="confirmSupplyError[getBatchKey(batch)]" class="text-danger small mt-2">
                           {{ confirmSupplyError[getBatchKey(batch)] }}
                         </div>
@@ -353,6 +364,7 @@ const selectedTimeslot = ref<Record<string, string>>({})
 const selectedCommonTimeslot = ref<Record<string, string>>({})
 const confirmSupplyLoading = ref<string | null>(null)
 const confirmSupplyError = ref<Record<string, string>>({})
+const confirmSupplyExpired = ref<Record<string, { createdAt?: string }>>({})
 const expandedDraftKey = ref<string | null>(null)
 const warehouseOptionsInline = ref<any[]>([])
 const expandedDates = ref<Record<string, Record<string, boolean>>>({})
@@ -385,6 +397,8 @@ const fetchBatches = async () => {
   timeslotError.value = {}
   selectedTimeslot.value = {}
   expandedDraftKey.value = null
+  confirmSupplyError.value = {}
+  confirmSupplyExpired.value = {}
   try {
     const response = await apiService.getSupplyDraftBatches({ storeId: props.storeId })
     batches.value = Array.isArray(response) ? response : []
@@ -872,6 +886,9 @@ const createCommonApplication = async (batch: any) => {
 
   confirmSupplyLoading.value = key
   confirmSupplyError.value[key] = ''
+  confirmSupplyExpired.value = Object.fromEntries(
+    Object.entries(confirmSupplyExpired.value).filter(([entryKey]) => entryKey !== key)
+  )
   try {
     const result = await apiService.confirmSupplyDraftBatch(batch.batch_id, {
       from_in_timezone: slot.fromRaw,
@@ -880,7 +897,15 @@ const createCommonApplication = async (batch: any) => {
     console.log('[Confirm supply result]', result)
     await fetchBatches()
   } catch (err) {
-    confirmSupplyError.value[key] = err instanceof Error ? err.message : 'Не удалось создать заявку'
+    const errorData = (err as any)?.data
+    if (errorData?.batch_created_at) {
+      confirmSupplyExpired.value = {
+        ...confirmSupplyExpired.value,
+        [key]: { createdAt: String(errorData.batch_created_at) }
+      }
+    } else {
+      confirmSupplyError.value[key] = err instanceof Error ? err.message : 'Не удалось создать заявку'
+    }
   } finally {
     confirmSupplyLoading.value = null
   }

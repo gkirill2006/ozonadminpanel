@@ -51,8 +51,11 @@
         <p v-if="isBatchTab" class="fbs-tab-hint">
           Батчи отгрузок, сформированные из вкладки "Новые". Нажмите на батч, чтобы увидеть отправления.
         </p>
+        <p v-else-if="isCarriageTab" class="fbs-tab-hint">
+          Отгрузки, сформированные из батчей. Нажмите, чтобы увидеть отправления.
+        </p>
 
-        <div v-if="!isBatchTab" class="fbs-toolbar">
+        <div v-if="!isBatchTab && !isCarriageTab" class="fbs-toolbar">
           <div class="fbs-toolbar__row">
             <div class="fbs-filter-group fbs-filter-group--toggle">
               <label class="form-check form-switch mb-0">
@@ -82,7 +85,7 @@
           </div>
         </div>
 
-        <div v-if="!isBatchTab" class="d-flex flex-wrap gap-2 align-items-end mb-2 selection-bar">
+        <div v-if="!isBatchTab && !isCarriageTab" class="d-flex flex-wrap gap-2 align-items-end mb-2 selection-bar">
           <div class="range-inputs d-flex gap-2 align-items-end">
             <div>
               <label class="form-label text-uppercase text-muted small fw-semibold mb-1">С строки</label>
@@ -128,7 +131,7 @@
           {{ labelNotice }}
         </div>
 
-        <div v-if="!isBatchTab">
+        <div v-if="!isBatchTab && !isCarriageTab">
           <div v-if="isLoading" class="fbs-loading">
             <span class="spinner-border spinner-border-sm me-2"></span>
             Загружаем заказы...
@@ -191,6 +194,13 @@
                     <div class="fbs-product">
                       <div class="fw-semibold">{{ primaryProductTitle(posting) }}</div>
                       <div class="text-muted small">{{ primaryProductMeta(posting) }}</div>
+                      <div
+                        v-if="shouldShowWeight(posting)"
+                        class="small"
+                        :class="shouldHighlightWeight(posting) ? 'text-danger fw-semibold' : 'text-muted'"
+                      >
+                        Вес: {{ formatWeight(posting.total_weight_g) }}
+                      </div>
                       <div v-if="extraProductsCount(posting)" class="text-muted small">
                         + ещё {{ extraProductsCount(posting) }} товар(ов)
                       </div>
@@ -230,7 +240,7 @@
           </div>
         </div>
 
-        <div v-else class="fbs-batches">
+        <div v-else-if="isBatchTab" class="fbs-batches">
           <div v-if="isBatchLoading" class="fbs-loading">
             <span class="spinner-border spinner-border-sm me-2"></span>
             Загружаем батчи...
@@ -273,7 +283,13 @@
                     <span v-if="batchLabelLoading[batch.batch_id]" class="spinner-border spinner-border-sm me-2"></span>
                     Этикетки
                   </button>
-                  <button class="btn btn-outline-secondary btn-sm" type="button" @click.stop>
+                  <button
+                    class="btn btn-outline-secondary btn-sm"
+                    type="button"
+                    :disabled="batchCarriageLoading[batch.batch_id]"
+                    @click.stop="openCarriageDialog(batch)"
+                  >
+                    <span v-if="batchCarriageLoading[batch.batch_id]" class="spinner-border spinner-border-sm me-2"></span>
                     Создать отгрузку
                   </button>
                 </div>
@@ -402,6 +418,107 @@
             </div>
           </div>
         </div>
+
+        <div v-else-if="isCarriageTab" class="fbs-batches">
+          <div v-if="isCarriageLoading" class="fbs-loading">
+            <span class="spinner-border spinner-border-sm me-2"></span>
+            Загружаем отгрузки...
+          </div>
+          <div v-else-if="!carriages.length" class="text-center text-muted py-4">
+            Отгрузки пока не созданы
+          </div>
+          <div v-else class="fbs-batch-list">
+            <div
+              v-for="carriage in carriages"
+              :key="carriage.carriage_id"
+              class="fbs-batch-card"
+              @click="toggleCarriage(carriage)"
+            >
+              <div class="fbs-batch-header">
+                <div class="fbs-batch-meta">
+                  <span class="fbs-batch-meta__strong">{{ carriageTitle(carriage) }}</span>
+                  <span class="fbs-batch-meta__sep">|</span>
+                  <span>
+                    Отправлений:
+                    <span class="fbs-batch-meta__strong">{{ carriage.postings_count ?? '—' }}</span>
+                  </span>
+                  <span class="fbs-batch-meta__dot">·</span>
+                  <span>
+                    Товаров:
+                    <span class="fbs-batch-meta__strong">{{ carriage.items_count ?? '—' }}</span>
+                  </span>
+                  <template v-if="carriage.status">
+                    <span class="fbs-batch-meta__dot">·</span>
+                    <span>Статус: {{ carriage.status }}</span>
+                  </template>
+                </div>
+              </div>
+              <div v-if="isCarriageExpanded(carriage.carriage_id)" class="fbs-batch-body" @click.stop>
+                <div v-if="carriageDetailLoading[String(carriage.carriage_id)]" class="fbs-loading">
+                  <span class="spinner-border spinner-border-sm me-2"></span>
+                  Загружаем отправления...
+                </div>
+                <div v-else-if="carriageDetailError[String(carriage.carriage_id)]" class="alert alert-danger py-1 px-2 mb-2">
+                  {{ carriageDetailError[String(carriage.carriage_id)] }}
+                </div>
+                <div v-else>
+                  <div v-if="carriagePostings(carriage.carriage_id).length" class="table-responsive fbs-table-wrapper">
+                    <table class="table fbs-table align-middle">
+                      <thead>
+                        <tr>
+                          <th class="fbs-col-number">Номер отправления</th>
+                          <th class="fbs-col-status">Статус</th>
+                          <th class="fbs-col-date">Дата отгрузки</th>
+                          <th class="fbs-col-products">Товары</th>
+                          <th class="fbs-col-warehouse">Склад</th>
+                          <th class="fbs-col-delivery">Доставка</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="posting in carriagePostings(carriage.carriage_id)" :key="posting.id">
+                          <td>
+                            <div class="fw-semibold">{{ posting.posting_number }}</div>
+                            <div v-if="posting.order_number" class="text-muted small">{{ posting.order_number }}</div>
+                          </td>
+                          <td>
+                            <span class="status-pill" :class="statusClass(posting.status)">
+                              {{ statusLabel(posting.status) }}
+                            </span>
+                            <div v-if="posting.substatus" class="text-muted small">{{ posting.substatus }}</div>
+                          </td>
+                          <td>
+                            <div class="fw-semibold">{{ formatDateTime(primaryDate(posting)) }}</div>
+                            <div v-if="posting.status_changed_at" class="text-muted small">
+                              Обновлено: {{ formatDateTime(posting.status_changed_at) }}
+                            </div>
+                          </td>
+                          <td>
+                            <div class="fbs-product">
+                              <div class="fw-semibold">{{ primaryProductTitle(posting) }}</div>
+                              <div class="text-muted small">{{ primaryProductMeta(posting) }}</div>
+                              <div v-if="extraProductsCount(posting)" class="text-muted small">
+                                + ещё {{ extraProductsCount(posting) }} товар(ов)
+                              </div>
+                            </div>
+                          </td>
+                          <td>
+                            <div class="fw-semibold">{{ posting.delivery_method_warehouse || '—' }}</div>
+                            <div class="text-muted small">{{ posting.delivery_method_name || '—' }}</div>
+                          </td>
+                          <td>
+                            <div class="fw-semibold">{{ posting.tpl_provider || '—' }}</div>
+                            <div class="text-muted small">{{ posting.tpl_integration_type || '—' }}</div>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div v-else class="text-center text-muted py-3">Нет отправлений</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
         <div
           v-if="isAwaitingDeliver && selectedPostingNumbers.length"
           class="fbs-label-fab"
@@ -458,6 +575,46 @@
       </div>
     </div>
   </Modal>
+
+  <Modal v-if="carriageDialogOpen" @close="closeCarriageDialog">
+    <div class="fbs-modal">
+      <h5 class="mb-3">Создать отгрузку</h5>
+      <label class="form-label text-uppercase text-muted small fw-semibold">Количество мест</label>
+      <input
+        type="number"
+        min="1"
+        class="form-control form-control-sm"
+        v-model="carriagePlacesCount"
+        placeholder="Например, 1"
+      />
+      <div class="d-flex justify-content-end gap-2 mt-3">
+        <button class="btn btn-outline-secondary btn-sm" type="button" @click="closeCarriageDialog">
+          Отмена
+        </button>
+        <button
+          class="btn btn-primary btn-sm"
+          type="button"
+          @click="submitBatchCarriage"
+          :disabled="isCarriageSubmitting"
+        >
+          <span v-if="isCarriageSubmitting" class="spinner-border spinner-border-sm me-2"></span>
+          Создать
+        </button>
+      </div>
+    </div>
+  </Modal>
+
+  <Modal v-if="carriageSuccessOpen" @close="closeCarriageSuccess">
+    <div class="fbs-modal">
+      <h5 class="mb-3">Отгрузка создана</h5>
+      <p class="mb-0 text-muted">Данные обновятся во вкладке «На сборке».</p>
+      <div class="d-flex justify-content-end mt-3">
+        <button class="btn btn-primary btn-sm" type="button" @click="closeCarriageSuccess">
+          ОК
+        </button>
+      </div>
+    </div>
+  </Modal>
 </template>
 
 <script setup lang="ts">
@@ -503,6 +660,7 @@ interface FbsPosting {
   label_status?: string | null
   label_file_url?: string | null
   label_file_path?: string | null
+  total_weight_g?: number | string | null
   products?: FbsPostingProduct[]
   last_synced_at?: string | null
 }
@@ -531,11 +689,33 @@ interface FbsShipBatchDetail {
   items_count?: number | null
 }
 
+interface FbsCarriage {
+  carriage_id: string | number
+  status?: string | null
+  delivery_method_id?: string | number | null
+  batch_id?: string | null
+  batch_seq?: number | null
+  batch_name?: string | null
+  response_payload?: Record<string, unknown> | null
+  created_at?: string | null
+  updated_at?: string | null
+  postings_count?: number | null
+  items_count?: number | null
+}
+
+interface FbsCarriageDetail {
+  carriage: FbsCarriage
+  postings: FbsPosting[]
+  count?: number | null
+  items_count?: number | null
+}
+
 const statusKeys = ['awaiting_packaging', 'awaiting_deliver', 'acceptance_in_progress', 'delivering']
 
 const statusTabs = [
   { key: 'awaiting_packaging', label: 'Новые' },
   { key: 'ship_batches', label: 'На сборке' },
+  { key: 'carriages', label: 'В доставке' },
   { key: 'awaiting_deliver', label: 'Ожидают отгрузки' },
   { key: 'acceptance_in_progress', label: 'Приемка' },
   { key: 'delivering', label: 'Доставляются' }
@@ -550,24 +730,36 @@ const shipBatchDetails = ref<Record<string, FbsShipBatchDetail>>({})
 const shipBatchExpanded = ref<Set<string>>(new Set())
 const batchDetailLoading = ref<Record<string, boolean>>({})
 const batchDetailError = ref<Record<string, string>>({})
+const carriages = ref<FbsCarriage[]>([])
+const carriageDetails = ref<Record<string, FbsCarriageDetail>>({})
+const carriageExpanded = ref<Set<string>>(new Set())
+const carriageDetailLoading = ref<Record<string, boolean>>({})
+const carriageDetailError = ref<Record<string, string>>({})
 const statusCounts = ref<Record<string, number>>({})
 const onPackagingTotal = ref<number | null>(null)
 const totalCount = ref<number | null>(null)
 const isLoading = ref(false)
 const isBatchLoading = ref(false)
+const isCarriageLoading = ref(false)
 const isSyncing = ref(false)
 const isPrinting = ref(false)
 const isLabeling = ref(false)
 const isShipping = ref(false)
+const isCarriageSubmitting = ref(false)
 const errorMessage = ref<string | null>(null)
 const labelNotice = ref<string | null>(null)
 const shipmentDialogOpen = ref(false)
 const shipmentName = ref('')
+const carriageDialogOpen = ref(false)
+const carriageSuccessOpen = ref(false)
+const carriagePlacesCount = ref('1')
+const carriageBatch = ref<FbsShipBatch | null>(null)
 const selectedPostings = ref<Set<string>>(new Set())
 const rangeFrom = ref('')
 const rangeTo = ref('')
 const batchSelections = ref<Record<string, Set<string>>>({})
 const batchLabelLoading = ref<Record<string, boolean>>({})
+const batchCarriageLoading = ref<Record<string, boolean>>({})
 
 const statusLabelMap: Record<string, string> = {
   awaiting_packaging: 'Ожидает сборки',
@@ -613,6 +805,7 @@ const filteredPostings = computed(() => {
 })
 
 const isBatchTab = computed(() => activeStatus.value === 'ship_batches')
+const isCarriageTab = computed(() => activeStatus.value === 'carriages')
 const isStatusTab = computed(() => statusKeys.includes(activeStatus.value))
 const isAwaitingDeliver = computed(() => activeStatus.value === 'awaiting_deliver')
 const isAwaitingPackaging = computed(() => activeStatus.value === 'awaiting_packaging')
@@ -634,6 +827,9 @@ const tabCount = (key: string) => {
     if (typeof onPackaging === 'number') return onPackaging
     if (onPackagingTotal.value !== null) return onPackagingTotal.value
     return shipBatches.value.length
+  }
+  if (key === 'carriages') {
+    return carriages.value.length
   }
   if (key === 'all') {
     return totalCount.value ?? (hasCounts.value ? 0 : filteredPostings.value.length)
@@ -680,6 +876,13 @@ const formatDateTime = (value?: string | null) => {
   return `${datePart} ${timePart}`
 }
 
+const formatWeight = (value?: number | string | null) => {
+  if (value === null || value === undefined || value === '') return ''
+  const num = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(num)) return ''
+  return `${Math.round(num)} г`
+}
+
 const primaryDate = (posting: FbsPosting) => {
   const field = statusDateField[posting.status]
   return (field && posting[field] ? String(posting[field]) : posting.shipment_date) || null
@@ -709,16 +912,44 @@ const extraProductsCount = (posting: FbsPosting) => {
   return products.length > 1 ? products.length - 1 : 0
 }
 
+const shouldShowWeight = (posting: FbsPosting) =>
+  isAwaitingPackaging.value && Number.isFinite(Number(posting.total_weight_g))
+
+const postingTotalQuantity = (posting: FbsPosting) => {
+  const products = Array.isArray(posting.products) ? posting.products : []
+  return products.reduce((sum, product) => sum + Number(product.quantity || 0), 0)
+}
+
+const shouldHighlightWeight = (posting: FbsPosting) => {
+  const weight = Number(posting.total_weight_g)
+  if (!Number.isFinite(weight)) return false
+  return weight > 1000 && postingTotalQuantity(posting) > 1
+}
+
 const batchTitle = (batch: FbsShipBatch) => {
   if (batch.name) return batch.name
   if (batch.batch_seq) return `Поставка #${batch.batch_seq}`
   return 'Поставка без названия'
 }
 
+const carriageTitle = (carriage: FbsCarriage) => {
+  if (carriage.batch_name) return carriage.batch_name
+  if (carriage.batch_seq) return `Поставка #${carriage.batch_seq}`
+  return `Отгрузка ${carriage.carriage_id}`
+}
+
 const isBatchExpanded = (batchId: string) => shipBatchExpanded.value.has(batchId)
 
 const batchPostings = (batchId: string) => {
   const detail = shipBatchDetails.value[batchId]
+  return Array.isArray(detail?.postings) ? detail!.postings : []
+}
+
+const isCarriageExpanded = (carriageId: string | number) =>
+  carriageExpanded.value.has(String(carriageId))
+
+const carriagePostings = (carriageId: string | number) => {
+  const detail = carriageDetails.value[String(carriageId)]
   return Array.isArray(detail?.postings) ? detail!.postings : []
 }
 
@@ -873,6 +1104,7 @@ const loadShipBatches = async (options?: { showLoader?: boolean }) => {
     batchDetailLoading.value = {}
     batchDetailError.value = {}
     batchSelections.value = {}
+    batchCarriageLoading.value = {}
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Не удалось загрузить батчи'
     shipBatches.value = []
@@ -925,6 +1157,79 @@ const toggleBatch = async (batch: FbsShipBatch) => {
   shipBatchExpanded.value = next
   await ensureBatchDetail(batchId)
   selectBatchAll(batchId)
+}
+
+const loadCarriages = async (options?: { showLoader?: boolean }) => {
+  if (!props.storeId) return
+  const showLoader = Boolean(options?.showLoader || !carriages.value.length)
+  if (showLoader) {
+    isCarriageLoading.value = true
+  }
+  errorMessage.value = null
+  try {
+    const response = await apiService.getFbsCarriages({ storeId: props.storeId })
+    const counts = (response as any)?.counts
+    if (counts && typeof counts === 'object') {
+      applyPostingsResponse(response, { skipPostings: true })
+    }
+    const list = (response as any)?.carriages
+    carriages.value = Array.isArray(list) ? (list as FbsCarriage[]) : []
+    carriageExpanded.value = new Set()
+    carriageDetails.value = {}
+    carriageDetailLoading.value = {}
+    carriageDetailError.value = {}
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'Не удалось загрузить отгрузки'
+    carriages.value = []
+  } finally {
+    if (showLoader) {
+      isCarriageLoading.value = false
+    }
+  }
+}
+
+const loadCarriageDetail = async (carriageId: string | number) => {
+  if (!carriageId) return
+  const key = String(carriageId)
+  carriageDetailLoading.value = { ...carriageDetailLoading.value, [key]: true }
+  carriageDetailError.value = { ...carriageDetailError.value, [key]: '' }
+  try {
+    const response = await apiService.getFbsCarriageDetail(key)
+    const detail: FbsCarriageDetail = {
+      carriage: (response as any)?.carriage || { carriage_id: carriageId },
+      postings: Array.isArray((response as any)?.postings) ? (response as any).postings : [],
+      count: (response as any)?.count ?? null,
+      items_count: (response as any)?.items_count ?? null
+    }
+    carriageDetails.value = { ...carriageDetails.value, [key]: detail }
+  } catch (error) {
+    carriageDetailError.value = {
+      ...carriageDetailError.value,
+      [key]: error instanceof Error ? error.message : 'Не удалось загрузить отправления'
+    }
+  } finally {
+    carriageDetailLoading.value = { ...carriageDetailLoading.value, [key]: false }
+  }
+}
+
+const ensureCarriageDetail = async (carriageId: string | number) => {
+  const key = String(carriageId)
+  if (!carriageDetails.value[key]) {
+    await loadCarriageDetail(key)
+  }
+}
+
+const toggleCarriage = async (carriage: FbsCarriage) => {
+  const key = String(carriage.carriage_id)
+  const next = new Set(carriageExpanded.value)
+  if (next.has(key)) {
+    next.delete(key)
+    carriageExpanded.value = next
+    return
+  }
+  next.add(key)
+  carriageExpanded.value = next
+  await ensureCarriageDetail(key)
 }
 
 const refreshPostings = async (options?: { showLoader?: boolean }) => {
@@ -997,12 +1302,25 @@ const handleRefresh = async () => {
     }
     return
   }
+  if (isCarriageTab.value) {
+    isSyncing.value = true
+    try {
+      await loadCarriages({ showLoader: true })
+    } finally {
+      isSyncing.value = false
+    }
+    return
+  }
   await refreshPostings({ showLoader: true })
 }
 
 const loadImmediate = async () => {
   if (isBatchTab.value) {
     await loadShipBatches({ showLoader: true })
+    return
+  }
+  if (isCarriageTab.value) {
+    await loadCarriages({ showLoader: true })
     return
   }
   await refreshPostings({ showLoader: true })
@@ -1027,6 +1345,28 @@ const openShipmentDialog = () => {
 
 const closeShipmentDialog = () => {
   shipmentDialogOpen.value = false
+}
+
+const openCarriageDialog = (batch: FbsShipBatch) => {
+  if (!batch) return
+  carriageBatch.value = batch
+  carriagePlacesCount.value = '1'
+  carriageDialogOpen.value = true
+}
+
+const closeCarriageDialog = () => {
+  carriageDialogOpen.value = false
+  carriageBatch.value = null
+}
+
+const closeCarriageSuccess = async () => {
+  carriageSuccessOpen.value = false
+  carriageBatch.value = null
+  if (activeStatus.value === 'ship_batches') {
+    await loadShipBatches()
+    return
+  }
+  activeStatus.value = 'ship_batches'
 }
 
 const createShipment = async () => {
@@ -1161,6 +1501,72 @@ const handleBatchSelectionLabels = async (batchId: string) => {
   }
 }
 
+const setBatchCarriageLoading = (batchId: string, value: boolean) => {
+  batchCarriageLoading.value = { ...batchCarriageLoading.value, [batchId]: value }
+}
+
+const submitBatchCarriage = async () => {
+  const batch = carriageBatch.value
+  if (!batch || !props.storeId) return
+  const places = Number(carriagePlacesCount.value)
+  if (!Number.isFinite(places) || places < 1) {
+    errorMessage.value = 'Укажите количество мест (минимум 1).'
+    return
+  }
+  if (isCarriageSubmitting.value) return
+  isCarriageSubmitting.value = true
+  const success = await handleBatchCarriage(batch, places)
+  if (success) {
+    carriageDialogOpen.value = false
+    carriageSuccessOpen.value = true
+  }
+  isCarriageSubmitting.value = false
+}
+
+const handleBatchCarriage = async (batch: FbsShipBatch, placesCount: number) => {
+  if (!props.storeId) return false
+  const batchId = batch.batch_id
+  if (batchCarriageLoading.value[batchId]) return false
+  setBatchCarriageLoading(batchId, true)
+  errorMessage.value = null
+  labelNotice.value = null
+  let succeeded = false
+  try {
+    await ensureBatchDetail(batchId)
+    const selected = batchSelectedNumbers(batchId)
+    const numbers = selected.length
+      ? selected
+      : batchPostings(batchId).map((posting) => posting.posting_number).filter(Boolean)
+    if (!numbers.length) {
+      errorMessage.value = 'Нет отправлений для отгрузки.'
+      return false
+    }
+    const response = await apiService.createFbsCarriage({
+      store_id: Number(props.storeId),
+      batch_id: batchId,
+      posting_numbers: numbers,
+      places_count: placesCount
+    })
+    const missing = Array.isArray((response as any)?.missing) ? (response as any).missing : []
+    const invalid = Array.isArray((response as any)?.invalid_status) ? (response as any).invalid_status : []
+    const already = Array.isArray((response as any)?.already_in_carriage) ? (response as any).already_in_carriage : []
+    const parts: string[] = []
+    if (missing.length) parts.push(`Не найдено: ${missing.length}`)
+    if (invalid.length) parts.push(`Неверный статус: ${invalid.length}`)
+    if (already.length) parts.push(`Уже в отгрузке: ${already.length}`)
+    if (parts.length) {
+      labelNotice.value = parts.join(' · ')
+    }
+    await loadCarriages()
+    succeeded = true
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'Не удалось создать отгрузку'
+  } finally {
+    setBatchCarriageLoading(batchId, false)
+  }
+  return succeeded
+}
+
 const downloadBlob = (blob: Blob, filename: string) => {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
@@ -1241,14 +1647,21 @@ watch(
     shipBatchExpanded.value = new Set()
     batchDetailLoading.value = {}
     batchDetailError.value = {}
+    carriages.value = []
+    carriageDetails.value = {}
+    carriageExpanded.value = new Set()
+    carriageDetailLoading.value = {}
+    carriageDetailError.value = {}
     batchSelections.value = {}
     selectedPostings.value.clear()
     statusCounts.value = {}
     onPackagingTotal.value = null
     totalCount.value = null
+    isCarriageLoading.value = false
     activeStatus.value = 'awaiting_packaging'
     rangeFrom.value = ''
     rangeTo.value = ''
+    batchCarriageLoading.value = {}
     await loadImmediate()
   },
   { immediate: true }
@@ -1264,6 +1677,10 @@ watch(
       await loadShipBatches()
       return
     }
+    if (isCarriageTab.value) {
+      await loadCarriages()
+      return
+    }
     await loadPostings()
   }
 )
@@ -1271,7 +1688,7 @@ watch(
 watch(
   needsLabel,
   async () => {
-    if (isBatchTab.value) return
+    if (isBatchTab.value || isCarriageTab.value) return
     await loadPostings()
   }
 )

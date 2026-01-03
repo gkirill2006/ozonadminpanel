@@ -46,13 +46,22 @@ class ApiService {
       // Попробуем получить текст ответа для отладки
       const responseText = await response.text()
       console.error('API Error Response:', responseText)
-      
+
+      let errorData: any = null
       try {
-        const errorData = JSON.parse(responseText)
-        throw new Error(errorData.error || `HTTP ${response.status}`)
+        errorData = JSON.parse(responseText)
       } catch {
-        throw new Error(`HTTP ${response.status}: ${responseText.substring(0, 100)}`)
+        errorData = null
       }
+
+      if (errorData) {
+        const error = new Error(errorData.error || `HTTP ${response.status}`)
+        ;(error as any).data = errorData
+        ;(error as any).status = response.status
+        throw error
+      }
+
+      throw new Error(`HTTP ${response.status}: ${responseText.substring(0, 100)}`)
     }
     
     // Безопасная обработка JSON
@@ -367,6 +376,33 @@ class ApiService {
 
   async getFbsShipBatchDetail(batchId: string) {
     const response = await fetch(`${API_BASE_URL}/api/ozon/postings/ship/batches/${batchId}/`, {
+      method: 'GET',
+      headers: this.getHeaders()
+    })
+    return this.handleResponse(response)
+  }
+
+  async createFbsCarriage(payload: Record<string, unknown>) {
+    const response = await fetch(`${API_BASE_URL}/api/ozon/postings/carriage/`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(payload)
+    })
+    return this.handleResponse(response)
+  }
+
+  async getFbsCarriages(params: { storeId: string | number }) {
+    const url = new URL(`${API_BASE_URL}/api/ozon/postings/carriages/`, window.location.origin)
+    url.searchParams.set('store_id', String(params.storeId))
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: this.getHeaders()
+    })
+    return this.handleResponse(response)
+  }
+
+  async getFbsCarriageDetail(carriageId: string | number) {
+    const response = await fetch(`${API_BASE_URL}/api/ozon/postings/carriages/${carriageId}/`, {
       method: 'GET',
       headers: this.getHeaders()
     })
