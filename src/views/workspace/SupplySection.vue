@@ -54,10 +54,17 @@
             <div class="card-header d-flex justify-content-between align-items-center py-2 px-3">
               <div class="d-flex align-items-center gap-2 flex-wrap">
                 <span class="fw-semibold">Создание поставки</span>
-                <span v-if="!isBatchCompleted" class="spinner-border spinner-border-sm" role="status"></span>
+                <span
+                  v-if="draftBatchStatusLabel"
+                  class="draft-status-badge"
+                  :class="draftBatchStatusClass"
+                >
+                  {{ draftBatchStatusLabel }}
+                </span>
+                <span v-if="!isBatchFinal" class="spinner-border spinner-border-sm" role="status"></span>
               </div>
               <button
-                v-if="isBatchCompleted"
+                v-if="isBatchFinal"
                 class="btn btn-warning btn-sm"
                 type="button"
                 @click="goToCurrentSupply"
@@ -484,10 +491,21 @@ const draftBatchStatusText = ref<string>('—')
 const draftBatchError = ref<string | null>(null)
 let draftBatchTimer: ReturnType<typeof setInterval> | null = null
 const draftItems = ref<any[]>([])
-const isBatchCompleted = computed(() => String(draftBatchStatusText.value).toLowerCase() === 'completed')
-const batchStatusMessage = computed(() =>
-  isBatchCompleted.value ? 'Заявка для новой поставки создана.' : 'Создаём заявку для новой поставки...'
-)
+const batchStatusValue = computed(() => String(draftBatchStatusText.value || '').toLowerCase())
+const isBatchFinal = computed(() => batchStatusValue.value === 'completed' || batchStatusValue.value === 'partial')
+const draftBatchStatusLabel = computed(() => {
+  if (!draftBatchStatusText.value || draftBatchStatusText.value === '—') return ''
+  if (batchStatusValue.value === 'completed') return 'Готово'
+  if (batchStatusValue.value === 'partial') return 'Частично'
+  if (batchStatusValue.value === 'processing') return 'В работе'
+  return draftBatchStatusText.value
+})
+const draftBatchStatusClass = computed(() => {
+  if (batchStatusValue.value === 'completed') return 'draft-status-badge--completed'
+  if (batchStatusValue.value === 'partial') return 'draft-status-badge--partial'
+  if (batchStatusValue.value === 'processing') return 'draft-status-badge--processing'
+  return ''
+})
 
 const batchesDialogOpen = ref(false)
 const batchesLoading = ref(false)
@@ -730,7 +748,7 @@ const formatDraftStatus = (status?: string | null) => {
 }
 
 const goToCurrentSupply = () => {
-  if (!isBatchCompleted.value || !props.storeId) return
+  if (!isBatchFinal.value || !props.storeId) return
   router.push({
     name: 'store-workspace',
     params: { id: String(props.storeId), section: 'drafts' }
@@ -1266,6 +1284,32 @@ const loadAllBatches = async () => {
   padding: 0.5rem 0.75rem;
   min-height: 140px;
   position: relative;
+}
+
+.draft-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.draft-status-badge--completed {
+  background: rgba(34, 197, 94, 0.15);
+  color: #15803d;
+}
+
+.draft-status-badge--partial {
+  background: rgba(245, 158, 11, 0.18);
+  color: #b45309;
+}
+
+.draft-status-badge--processing {
+  background: rgba(59, 130, 246, 0.18);
+  color: #1d4ed8;
 }
 
 .draft-status-body {

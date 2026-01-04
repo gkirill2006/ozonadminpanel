@@ -18,197 +18,247 @@
           <div v-for="batch in batches" :key="batch.batch_id" class="batch-block">
             <div class="batch-header d-flex flex-wrap align-items-center gap-3 mb-2">
               <div class="fw-semibold">Поставка: {{ batch.batch_id }}</div>
+              <span
+                v-if="batch.status"
+                class="batch-status-badge"
+                :class="batchStatusClass(batch.status)"
+              >
+                {{ formatBatchStatus(batch.status) }}
+              </span>
               <div class="text-muted small">Склад сдачи: {{ batch.drop_off_point_name || batch.drop_off_point_warehouse?.name || '—' }}</div>
             </div>
-            <div class="d-flex flex-wrap align-items-center gap-2 mb-3 filter-row">
-              <span class="text-muted small me-1">Запросить тайм-слоты:</span>
-              <input
-                type="date"
-                class="form-control form-control-sm date-input"
-                v-model="batchDates[getBatchKey(batch)]"
-              />
-              <input
-                type="number"
-                min="1"
-                max="28"
-                class="form-control form-control-sm days-input"
-                :class="{ 'is-invalid': isTimeslotDaysInvalid(getBatchKey(batch)) }"
-                v-model.number="timeslotDays[getBatchKey(batch)]"
-                placeholder="дней"
-              />
-              <button
-                class="btn btn-outline-secondary btn-sm"
-                type="button"
-                :disabled="timeslotLoading === getBatchKey(batch) || isTimeslotDaysInvalid(getBatchKey(batch))"
-                @click="applyBatchDate(batch, true)"
-              >
-                <span v-if="timeslotLoading === getBatchKey(batch)" class="spinner-border spinner-border-sm me-1"></span>
-                Запросить
-              </button>
-              <div v-if="isTimeslotDaysInvalid(getBatchKey(batch))" class="text-danger small">
-                Максимум 28 дней
+            <div v-if="!shouldShowSupplyCreation(batch)">
+              <div class="d-flex flex-wrap align-items-center gap-2 mb-3 filter-row">
+                <span class="text-muted small me-1">Запросить тайм-слоты:</span>
+                <input
+                  type="date"
+                  class="form-control form-control-sm date-input"
+                  v-model="batchDates[getBatchKey(batch)]"
+                />
+                <input
+                  type="number"
+                  min="1"
+                  max="28"
+                  class="form-control form-control-sm days-input"
+                  :class="{ 'is-invalid': isTimeslotDaysInvalid(getBatchKey(batch)) }"
+                  v-model.number="timeslotDays[getBatchKey(batch)]"
+                  placeholder="дней"
+                />
+                <button
+                  class="btn btn-outline-secondary btn-sm"
+                  type="button"
+                  :disabled="timeslotLoading === getBatchKey(batch) || isTimeslotDaysInvalid(getBatchKey(batch))"
+                  @click="applyBatchDate(batch, true)"
+                >
+                  <span v-if="timeslotLoading === getBatchKey(batch)" class="spinner-border spinner-border-sm me-1"></span>
+                  Запросить
+                </button>
+                <div v-if="isTimeslotDaysInvalid(getBatchKey(batch))" class="text-danger small">
+                  Максимум 28 дней
+                </div>
+                <div class="text-muted small ms-auto">Текущая дата: {{ appliedBatchDates[getBatchKey(batch)] || 'не выбрана' }}</div>
               </div>
-              <div class="text-muted small ms-auto">Текущая дата: {{ appliedBatchDates[getBatchKey(batch)] || 'не выбрана' }}</div>
+
+              <div class="table-responsive drafts-table mb-3">
+                <table class="table table-sm align-middle mb-0">
+                  <thead>
+                    <tr>
+                      <th>Кластер</th>
+                      <th>Склад</th>
+                      <th>Таймслоты</th>
+                      <th>Общие временные слоты</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(draft, draftIndex) in batch.drafts || []" :key="getDraftKey(draft)">
+                      <td class="fw-semibold">
+                        <div class="d-flex align-items-center gap-2 draft-cluster-cell">
+                          <button
+                            class="btn btn-link btn-sm p-0 text-primary move-btn"
+                            type="button"
+                            title="Перенести в новый батч"
+                            @click="openMoveDraft(batch, draft)"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                              <path stroke-linecap="round" stroke-linejoin="round" d="M7.217 10.907a2.25 2.25 0 1 0 0 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186 9.566-5.314m-9.566 7.5 9.566 5.314m0 0a2.25 2.25 0 1 0 3.935 2.186 2.25 2.25 0 0 0-3.935-2.186Zm0-12.814a2.25 2.25 0 1 0 3.933-2.185 2.25 2.25 0 0 0-3.933 2.185Z" />
+                            </svg>
+                          </button>
+                          <span>{{ draft.logistic_cluster_name || draft.warehouse || '—' }}</span>
+                        </div>
+                      </td>
+                      <td>
+                        <div class="small fw-semibold">{{ getSelectedWarehouseName(draft) || '—' }}</div>
+                        <button class="btn btn-link btn-sm p-0" type="button" @click="toggleInlineWarehouse(draft)">
+                          Изменить
+                        </button>
+                        <div v-if="expandedDraftKey === getDraftKey(draft)" class="inline-warehouses mt-2">
+                          <div v-if="warehouseOptionsInline.length" class="list-group">
+                            <label
+                              v-for="option in warehouseOptionsInline"
+                              :key="option.warehouse_id"
+                              class="list-group-item d-flex align-items-start gap-2"
+                              :class="{ 'opacity-50': option.is_available === false }"
+                            >
+                              <input
+                                class="form-check-input mt-1"
+                                type="radio"
+                                :value="option.warehouse_id"
+                                :name="`inline-warehouse-${expandedDraftKey}`"
+                                :checked="Number(option.warehouse_id) === Number(getSelectedWarehouseId(draft))"
+                                :disabled="option.is_available === false"
+                                @change="saveWarehouseSelectionInline(draft, option.warehouse_id)"
+                              />
+                              <div class="flex-grow-1">
+                                <div class="fw-semibold">{{ option.name || '—' }}</div>
+                                <div class="text-muted small">{{ option.address || '—' }}</div>
+                              </div>
+                            </label>
+                          </div>
+                          <div v-else class="text-muted small">Нет доступных складов</div>
+                        </div>
+                      </td>
+                      <td>
+                        <div v-if="timeslotError[getBatchKey(batch)]" class="text-danger small mb-1">
+                          {{ timeslotError[getBatchKey(batch)] }}
+                        </div>
+                        <div v-if="Object.keys(getSlotsGroupedByDate(draft)).length" class="timeslot-block">
+                          <div class="timeslot-grid">
+                            <div
+                              v-for="(slotsByDate, date) in getSlotsGroupedByDate(draft)"
+                              :key="`${getDraftKey(draft)}-${date}`"
+                              class="timeslot-item"
+                            >
+                              <div class="timeslot-date">
+                                <button
+                                  type="button"
+                                  class="timeslot-date-btn"
+                                  :class="{ 'timeslot-date-btn--active': isDateExpanded(draft, date) }"
+                                  @click="toggleDateExpanded(draft, date)"
+                                >
+                                  <span>{{ formatDateDayMonth(date) }}</span>
+                                </button>
+                              </div>
+                              <div v-if="isDateExpanded(draft, date)" class="timeslot-list timeslot-list--draft timeslot-list--full mt-2">
+                                <div class="slot-option" v-for="slot in slotsByDate" :key="slot.key">
+                                  <span>{{ slot.from }} — {{ slot.to }}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        <div v-else class="text-muted small">Слотов нет</div>
+                      </td>
+                      <td
+                        v-if="draftIndex === 0"
+                        :rowspan="(batch.drafts && batch.drafts.length) || 1"
+                        class="common-slots-cell"
+                      >
+                        <div v-if="Object.keys(getCommonTimeslotsByDate(batch)).length">
+                          <div class="timeslot-grid timeslot-grid--single">
+                            <div
+                              v-for="(slotsByDate, date) in getCommonTimeslotsByDate(batch)"
+                              :key="`${getBatchKey(batch)}-common-${date}`"
+                              class="timeslot-item"
+                            >
+                              <div class="timeslot-date">
+                                <button
+                                  type="button"
+                                  class="timeslot-date-btn"
+                                  :class="{ 'timeslot-date-btn--active': isCommonDateExpanded(batch, date) }"
+                                  @click="toggleCommonDateExpanded(batch, date)"
+                                >
+                                  <span>{{ formatDateDayMonth(date) }}</span>
+                                </button>
+                              </div>
+                              <div v-if="isCommonDateExpanded(batch, date)" class="timeslot-list timeslot-list--draft timeslot-list--full mt-2">
+                                <div class="slot-option slot-option--common" v-for="slot in slotsByDate" :key="slot.key">
+                                  <label
+                                    class="d-flex align-items-center gap-2"
+                                    @click.prevent="toggleCommonTimeslot(getBatchKey(batch), slot.key)"
+                                  >
+                                    <input
+                                      type="radio"
+                                      :name="`common-slot-${getBatchKey(batch)}`"
+                                      :value="slot.key"
+                                      :checked="selectedCommonTimeslot[getBatchKey(batch)] === slot.key"
+                                    />
+                                    <span>{{ slot.from }} — {{ slot.to }}</span>
+                                  </label>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            class="btn btn-primary btn-sm mt-3"
+                            type="button"
+                            :disabled="!selectedCommonTimeslot[getBatchKey(batch)] || confirmSupplyLoading === getBatchKey(batch)"
+                            @click="createCommonApplication(batch)"
+                          >
+                            <span v-if="confirmSupplyLoading === getBatchKey(batch)" class="spinner-border spinner-border-sm me-1"></span>
+                            Создать заявку
+                          </button>
+                          <div
+                            v-if="confirmSupplyExpired[getBatchKey(batch)]"
+                            class="alert alert-warning py-2 px-3 mt-2"
+                          >
+                            <div class="fw-semibold">Время создания поставки из черновика истекло.</div>
+                            <div class="small text-muted">
+                              Создано:
+                              {{ formatDateTimeShort(confirmSupplyExpired[getBatchKey(batch)]?.createdAt || '') }}
+                            </div>
+                            <div class="small text-muted">Создайте новую поставку.</div>
+                          </div>
+                          <div v-if="confirmSupplyError[getBatchKey(batch)]" class="text-danger small mt-2">
+                            {{ confirmSupplyError[getBatchKey(batch)] }}
+                          </div>
+                        </div>
+                        <div v-else class="text-muted small">Нет общих слотов</div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
 
-            <div class="table-responsive drafts-table mb-3">
-              <table class="table table-sm align-middle mb-0">
-                <thead>
-                  <tr>
-                    <th>Кластер</th>
-                    <th>Склад</th>
-                    <th>Таймслоты</th>
-                    <th>Общие временные слоты</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="(draft, draftIndex) in batch.drafts || []" :key="getDraftKey(draft)">
-                    <td class="fw-semibold">
-                      <div class="d-flex align-items-center gap-2 draft-cluster-cell">
-                        <button
-                          class="btn btn-link btn-sm p-0 text-primary move-btn"
-                          type="button"
-                          title="Перенести в новый батч"
-                          @click="openMoveDraft(batch, draft)"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M7.217 10.907a2.25 2.25 0 1 0 0 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186 9.566-5.314m-9.566 7.5 9.566 5.314m0 0a2.25 2.25 0 1 0 3.935 2.186 2.25 2.25 0 0 0-3.935-2.186Zm0-12.814a2.25 2.25 0 1 0 3.933-2.185 2.25 2.25 0 0 0-3.933 2.185Z" />
-                          </svg>
-                        </button>
-                        <span>{{ draft.logistic_cluster_name || draft.warehouse || '—' }}</span>
-                      </div>
-                    </td>
-                    <td>
-                      <div class="small fw-semibold">{{ getSelectedWarehouseName(draft) || '—' }}</div>
-                      <button class="btn btn-link btn-sm p-0" type="button" @click="toggleInlineWarehouse(draft)">
-                        Изменить
-                      </button>
-                      <div v-if="expandedDraftKey === getDraftKey(draft)" class="inline-warehouses mt-2">
-                        <div v-if="warehouseOptionsInline.length" class="list-group">
-                          <label
-                            v-for="option in warehouseOptionsInline"
-                            :key="option.warehouse_id"
-                            class="list-group-item d-flex align-items-start gap-2"
-                            :class="{ 'opacity-50': option.is_available === false }"
+            <div v-if="shouldShowSupplyCreation(batch)" class="card shadow-sm supply-status-card">
+              <div class="card-header d-flex justify-content-between align-items-center py-2 px-3">
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                  <span class="fw-semibold">Создание заявки</span>
+                  <span v-if="!isSupplyCreationComplete(batch)" class="spinner-border spinner-border-sm" role="status"></span>
+                </div>
+              </div>
+              <div class="card-body py-2 px-3 supply-status-body">
+                <div v-if="batch.drafts?.length">
+                  <table class="table table-sm mb-0 align-middle">
+                    <thead>
+                      <tr>
+                        <th>Кластер</th>
+                        <th>Статус</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr
+                        v-for="draft in batch.drafts"
+                        :key="getDraftKey(draft)"
+                        :class="{
+                          'supply-row--done': isSupplyResultFinal(getBatchKey(batch), draft, getSupplyResultEntry(getBatchKey(batch), draft))
+                        }"
+                      >
+                        <td>{{ draft.logistic_cluster_name || draft.warehouse || '—' }}</td>
+                        <td>
+                          <span
+                            v-if="isSupplyResultFinal(getBatchKey(batch), draft, getSupplyResultEntry(getBatchKey(batch), draft))"
                           >
-                            <input
-                              class="form-check-input mt-1"
-                              type="radio"
-                              :value="option.warehouse_id"
-                              :name="`inline-warehouse-${expandedDraftKey}`"
-                              :checked="Number(option.warehouse_id) === Number(getSelectedWarehouseId(draft))"
-                              :disabled="option.is_available === false"
-                              @change="saveWarehouseSelectionInline(draft, option.warehouse_id)"
-                            />
-                            <div class="flex-grow-1">
-                              <div class="fw-semibold">{{ option.name || '—' }}</div>
-                              <div class="text-muted small">{{ option.address || '—' }}</div>
-                            </div>
-                          </label>
-                        </div>
-                        <div v-else class="text-muted small">Нет доступных складов</div>
-                      </div>
-                    </td>
-                    <td>
-                      <div v-if="timeslotError[getBatchKey(batch)]" class="text-danger small mb-1">
-                        {{ timeslotError[getBatchKey(batch)] }}
-                      </div>
-                      <div v-if="Object.keys(getSlotsGroupedByDate(draft)).length" class="timeslot-block">
-                        <div class="timeslot-grid">
-                          <div
-                            v-for="(slotsByDate, date) in getSlotsGroupedByDate(draft)"
-                            :key="`${getDraftKey(draft)}-${date}`"
-                            class="timeslot-item"
-                          >
-                            <div class="timeslot-date">
-                              <button
-                                type="button"
-                                class="timeslot-date-btn"
-                                :class="{ 'timeslot-date-btn--active': isDateExpanded(draft, date) }"
-                                @click="toggleDateExpanded(draft, date)"
-                              >
-                                <span>{{ formatDateDayMonth(date) }}</span>
-                              </button>
-                            </div>
-                            <div v-if="isDateExpanded(draft, date)" class="timeslot-list timeslot-list--draft timeslot-list--full mt-2">
-                              <div class="slot-option" v-for="slot in slotsByDate" :key="slot.key">
-                                <span>{{ slot.from }} — {{ slot.to }}</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div v-else class="text-muted small">Слотов нет</div>
-                    </td>
-                    <td
-                      v-if="draftIndex === 0"
-                      :rowspan="(batch.drafts && batch.drafts.length) || 1"
-                      class="common-slots-cell"
-                    >
-                      <div v-if="Object.keys(getCommonTimeslotsByDate(batch)).length">
-                        <div class="timeslot-grid timeslot-grid--single">
-                          <div
-                            v-for="(slotsByDate, date) in getCommonTimeslotsByDate(batch)"
-                            :key="`${getBatchKey(batch)}-common-${date}`"
-                            class="timeslot-item"
-                          >
-                            <div class="timeslot-date">
-                              <button
-                                type="button"
-                                class="timeslot-date-btn"
-                                :class="{ 'timeslot-date-btn--active': isCommonDateExpanded(batch, date) }"
-                                @click="toggleCommonDateExpanded(batch, date)"
-                              >
-                                <span>{{ formatDateDayMonth(date) }}</span>
-                              </button>
-                            </div>
-                            <div v-if="isCommonDateExpanded(batch, date)" class="timeslot-list timeslot-list--draft timeslot-list--full mt-2">
-                              <div class="slot-option slot-option--common" v-for="slot in slotsByDate" :key="slot.key">
-                                <label
-                                  class="d-flex align-items-center gap-2"
-                                  @click.prevent="toggleCommonTimeslot(getBatchKey(batch), slot.key)"
-                                >
-                                  <input
-                                    type="radio"
-                                    :name="`common-slot-${getBatchKey(batch)}`"
-                                    :value="slot.key"
-                                    :checked="selectedCommonTimeslot[getBatchKey(batch)] === slot.key"
-                                  />
-                                  <span>{{ slot.from }} — {{ slot.to }}</span>
-                                </label>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <button
-                          class="btn btn-primary btn-sm mt-3"
-                          type="button"
-                          :disabled="!selectedCommonTimeslot[getBatchKey(batch)] || confirmSupplyLoading === getBatchKey(batch)"
-                          @click="createCommonApplication(batch)"
-                        >
-                          <span v-if="confirmSupplyLoading === getBatchKey(batch)" class="spinner-border spinner-border-sm me-1"></span>
-                          Создать заявку
-                        </button>
-                        <div
-                          v-if="confirmSupplyExpired[getBatchKey(batch)]"
-                          class="alert alert-warning py-2 px-3 mt-2"
-                        >
-                          <div class="fw-semibold">Время создания поставки из черновика истекло.</div>
-                          <div class="small text-muted">
-                            Создано:
-                            {{ formatDateTimeShort(confirmSupplyExpired[getBatchKey(batch)]?.createdAt || '') }}
-                          </div>
-                          <div class="small text-muted">Создайте новую поставку.</div>
-                        </div>
-                        <div v-if="confirmSupplyError[getBatchKey(batch)]" class="text-danger small mt-2">
-                          {{ confirmSupplyError[getBatchKey(batch)] }}
-                        </div>
-                      </div>
-                      <div v-else class="text-muted small">Нет общих слотов</div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+                            {{ formatSupplyCreationStatus(getBatchKey(batch), draft) }}
+                          </span>
+                          <span v-else class="spinner-border spinner-border-sm" role="status"></span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div v-else class="text-muted small">Нет данных по черновикам</div>
+              </div>
             </div>
           </div>
         </div>
@@ -336,7 +386,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import Modal from '@/components/Modal.vue'
 import { apiService } from '@/services/api'
 
@@ -365,6 +415,8 @@ const selectedCommonTimeslot = ref<Record<string, string>>({})
 const confirmSupplyLoading = ref<string | null>(null)
 const confirmSupplyError = ref<Record<string, string>>({})
 const confirmSupplyExpired = ref<Record<string, { createdAt?: string }>>({})
+const supplyPolling = ref<Record<string, boolean>>({})
+const supplyPollTimers: Record<string, ReturnType<typeof setInterval> | null> = {}
 const expandedDraftKey = ref<string | null>(null)
 const warehouseOptionsInline = ref<any[]>([])
 const expandedDates = ref<Record<string, Record<string, boolean>>>({})
@@ -407,6 +459,10 @@ const fetchBatches = async () => {
     for (const batch of batches.value) {
       const key = getBatchKey(batch)
       loadBatchTimeslots(batch, key, true)
+      const drafts = Array.isArray(batch?.drafts) ? batch.drafts : []
+      if (drafts.some((draft: any) => String(draft?.status || '').toLowerCase().includes('supply_'))) {
+        startSupplyInfoPolling(batch)
+      }
     }
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Не удалось загрузить черновики'
@@ -448,9 +504,13 @@ const formatDate = (dateStr?: string) => {
 
 const formatTime = (dateStr?: string) => {
   if (!dateStr) return '—'
-  const date = new Date(dateStr)
-  if (Number.isNaN(date.getTime())) return dateStr
-  return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+  const value = String(dateStr)
+  const match = value.match(/(?:T|^)(\d{1,2}):(\d{2})/)
+  if (match) {
+    const hh = match[1].padStart(2, '0')
+    return `${hh}:${match[2]}`
+  }
+  return value
 }
 
 const formatDateShort = (dateStr?: string) => {
@@ -461,14 +521,9 @@ const formatDateShort = (dateStr?: string) => {
 }
 
 const getLocalMinutes = (raw?: string, fallback?: string) => {
-  if (raw) {
-    const date = new Date(raw)
-    if (!Number.isNaN(date.getTime())) {
-      return date.getHours() * 60 + date.getMinutes()
-    }
-  }
-  if (fallback) {
-    const match = String(fallback).match(/^(\d{1,2}):(\d{2})/)
+  const value = raw ?? fallback
+  if (value) {
+    const match = String(value).match(/(?:T|^)(\d{1,2}):(\d{2})/)
     if (match) {
       return Number(match[1]) * 60 + Number(match[2])
     }
@@ -498,14 +553,30 @@ const getDateKey = (dateStr?: string) => {
 
 const formatDateTimeShort = (dateStr?: string) => {
   if (!dateStr) return '—'
-  const date = new Date(dateStr)
-  if (Number.isNaN(date.getTime())) return dateStr
-  const dd = String(date.getDate()).padStart(2, '0')
-  const mm = String(date.getMonth() + 1).padStart(2, '0')
-  const yy = String(date.getFullYear()).slice(-2)
-  const hh = String(date.getHours()).padStart(2, '0')
-  const min = String(date.getMinutes()).padStart(2, '0')
-  return `${dd}-${mm}-${yy} ${hh}:${min}`
+  const value = String(dateStr)
+  const match = value.match(/(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})/)
+  if (match) {
+    const yy = match[1].slice(-2)
+    return `${match[3]}-${match[2]}-${yy} ${match[4]}:${match[5]}`
+  }
+  return value
+}
+
+const formatBatchStatus = (status?: string | null) => {
+  if (!status) return '—'
+  const value = String(status).toLowerCase()
+  if (value === 'completed') return 'Готово'
+  if (value === 'partial') return 'Частично'
+  if (value === 'processing') return 'В работе'
+  return status
+}
+
+const batchStatusClass = (status?: string | null) => {
+  const value = String(status || '').toLowerCase()
+  if (value === 'completed') return 'batch-status-badge--completed'
+  if (value === 'partial') return 'batch-status-badge--partial'
+  if (value === 'processing') return 'batch-status-badge--processing'
+  return ''
 }
 
 const getBatchKey = (batch: any) => String(batch?.batch_id ?? Math.random())
@@ -648,7 +719,8 @@ const mapTimeslotsForDraft = (draft: any) => {
             date: getDateKey(day?.date || from),
             from: formatTime(from),
             to: formatTime(to),
-            fromRaw: from
+            fromRaw: from,
+            toRaw: to
           })
         })
       })
@@ -828,23 +900,29 @@ const getOrderStateForDraft = (batch: any, draft: any) => {
   if (errorReason) {
     return errorReason
   }
-  if (Array.isArray(draft?.supply_order_states) && draft.supply_order_states.length) {
-    return draft.supply_order_states.join(', ')
-  }
   const info = supplyInfo.value[batchKey]
-  if (!info?.results) return '—'
   const draftId = draft?.id ?? draft?.draft_id
-  const entry = info.results.find((r: any) => r?.draft_id === draftId)
+  const entry = Array.isArray(info?.results) ? info.results.find((r: any) => r?.draft_id === draftId) : null
   if (Array.isArray(entry?.order_states) && entry.order_states.length) {
     return entry.order_states.join(', ')
+  }
+  if (Array.isArray(draft?.supply_order_states) && draft.supply_order_states.length) {
+    return draft.supply_order_states.join(', ')
   }
   return '—'
 }
 
 const getSupplyErrorForDraft = (batchKey: string, draft: any) => {
   const info = supplyInfo.value[batchKey]
-  if (!Array.isArray(info?.errors)) return ''
   const draftId = draft?.id ?? draft?.draft_id
+  if (Array.isArray(info?.results)) {
+    const entry = info.results.find((result: any) => result?.draft_id === draftId)
+    const status = String(entry?.status || '').toLowerCase()
+    if (status.includes('failed') && entry?.error_message) {
+      return String(entry.error_message)
+    }
+  }
+  if (!Array.isArray(info?.errors)) return ''
   const entry = info.errors.find((err: any) => err?.draft_id === draftId)
   if (!entry) return ''
   const errorValue = entry.error
@@ -855,6 +933,95 @@ const getSupplyErrorForDraft = (batchKey: string, draft: any) => {
     return String(errorValue)
   }
   return ''
+}
+
+const getSupplyResultEntry = (batchKey: string, draft: any) => {
+  const info = supplyInfo.value[batchKey]
+  if (!Array.isArray(info?.results)) return null
+  const draftId = draft?.id ?? draft?.draft_id
+  return info.results.find((entry: any) => entry?.draft_id === draftId) || null
+}
+
+const isSupplyResultFinal = (batchKey: string, draft: any, entry: any) => {
+  if (getSupplyErrorForDraft(batchKey, draft)) return true
+  if (!entry) return false
+  if (entry.pending) return false
+  const status = String(entry.status || '').toLowerCase()
+  if (!status) return false
+  if (status.includes('in_progress') || status.includes('queued')) return false
+  return true
+}
+
+const formatSupplyCreationStatus = (batchKey: string, draft: any) => {
+  const errorReason = getSupplyErrorForDraft(batchKey, draft)
+  if (errorReason) return errorReason
+  const entry = getSupplyResultEntry(batchKey, draft)
+  const raw = entry?.status ?? draft?.status
+  if (!raw) return '—'
+  if (String(raw).toLowerCase() === 'success') return 'Готово'
+  return String(raw)
+}
+
+const shouldShowSupplyCreation = (batch: any) => {
+  const key = getBatchKey(batch)
+  if (supplyPolling.value[key]) return true
+  const info = supplyInfo.value[key]
+  if (Array.isArray(info?.results) && info.results.length) return true
+  const drafts = Array.isArray(batch?.drafts) ? batch.drafts : []
+  return drafts.some((draft: any) => String(draft?.status || '').toLowerCase().includes('supply_'))
+}
+
+const isSupplyCreationComplete = (batch: any) => {
+  const key = getBatchKey(batch)
+  const drafts = Array.isArray(batch?.drafts) ? batch.drafts : []
+  if (!drafts.length) return false
+  return drafts.every((draft: any) => {
+    const entry = getSupplyResultEntry(key, draft)
+    return isSupplyResultFinal(key, draft, entry)
+  })
+}
+
+const stopSupplyInfoPolling = (batchKey: string) => {
+  const timer = supplyPollTimers[batchKey]
+  if (timer) {
+    clearInterval(timer)
+    supplyPollTimers[batchKey] = null
+  }
+  const next = { ...supplyPolling.value }
+  delete next[batchKey]
+  supplyPolling.value = next
+}
+
+const stopAllSupplyPolling = () => {
+  Object.keys(supplyPollTimers).forEach((key) => stopSupplyInfoPolling(key))
+}
+
+const startSupplyInfoPolling = async (batch: any) => {
+  const key = getBatchKey(batch)
+  stopSupplyInfoPolling(key)
+  supplyPolling.value = { ...supplyPolling.value, [key]: true }
+  let info: any = null
+  try {
+    info = await fetchSupplyInfo(batch, true)
+  } catch {
+    stopSupplyInfoPolling(key)
+    return
+  }
+  if (info && isSupplyCreationComplete(batch)) {
+    stopSupplyInfoPolling(key)
+    return
+  }
+  supplyPollTimers[key] = setInterval(async () => {
+    if (supplyInfoLoading.value[key]) return
+    try {
+      const nextInfo = await fetchSupplyInfo(batch, true)
+      if (nextInfo && isSupplyCreationComplete(batch)) {
+        stopSupplyInfoPolling(key)
+      }
+    } catch {
+      // ignore polling errors
+    }
+  }, 5000)
 }
 
 const getDraftTimeslot = (draft: any) => {
@@ -875,6 +1042,7 @@ const fetchSupplyInfo = async (batch: any, refresh = false) => {
   try {
     const info = await apiService.getSupplyInfo(batch.batch_id, refresh ? { refresh: true } : undefined)
     supplyInfo.value[key] = info
+    return info
   } finally {
     supplyInfoLoading.value[key] = false
   }
@@ -916,6 +1084,9 @@ const createCommonApplication = async (batch: any) => {
     })
     console.log('[Confirm supply result]', result)
     await fetchBatches()
+    const freshBatch =
+      batches.value.find((item) => String(item?.batch_id) === String(batch?.batch_id)) || batch
+    await startSupplyInfoPolling(freshBatch)
   } catch (err) {
     const errorData = (err as any)?.data
     if (errorData?.batch_created_at) {
@@ -1069,10 +1240,16 @@ watch(
   () => {
     batches.value = []
     confirmedBatches.value = []
+    supplyInfo.value = {}
+    stopAllSupplyPolling()
     fetchBatches()
     fetchConfirmedBatches()
   }
 )
+
+onBeforeUnmount(() => {
+  stopAllSupplyPolling()
+})
 </script>
 
 <style scoped>
@@ -1096,6 +1273,32 @@ watch(
 .batch-header {
   border-bottom: 1px dashed rgba(15, 23, 42, 0.1);
   padding-bottom: 0.4rem;
+}
+
+.batch-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.batch-status-badge--completed {
+  background: rgba(34, 197, 94, 0.15);
+  color: #15803d;
+}
+
+.batch-status-badge--partial {
+  background: rgba(245, 158, 11, 0.18);
+  color: #b45309;
+}
+
+.batch-status-badge--processing {
+  background: rgba(59, 130, 246, 0.18);
+  color: #1d4ed8;
 }
 
 .confirmed-drafts {
@@ -1165,6 +1368,20 @@ watch(
 .drafts-table th:nth-child(4),
 .drafts-table td:nth-child(4) {
   min-width: 220px;
+}
+
+.supply-status-card {
+  border-radius: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+}
+
+.supply-status-body {
+  background: #fff;
+}
+
+.supply-row--done {
+  background: rgba(34, 197, 94, 0.08);
 }
 
 .drafts-list {
