@@ -295,7 +295,7 @@ const applyShipmentSettings = (data: any) => {
 }
 
 const fetchShipmentSettings = async () => {
-  if (!props.storeId) return
+  if (!props.storeId || !canEditShipmentSettings.value) return
   shipmentSettingsLoading.value = true
   shipmentSettingsError.value = null
   try {
@@ -385,8 +385,18 @@ const fetchStore = async () => {
     storeDetail.value = data
     if (storeDetail.value?.is_owner) {
       await fetchAccesses()
+      await fetchShipmentSettings()
+    } else {
+      shipmentSettings.value = {
+        weightLimitKg: '',
+        maxItemsPerBox: '',
+        notificationTime: ''
+      }
+      shipmentSettingsError.value = null
+      shipmentSettingsMessage.value = null
+      shipmentSettingsLoading.value = false
+      shipmentSettingsSaving.value = false
     }
-    await fetchShipmentSettings()
     await fetchNotificationSettings()
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Не удалось загрузить магазин'
