@@ -632,7 +632,7 @@ class ApiService {
   }
 
   async getUserStoreFilters(storeId: string | number) {
-    const response = await fetch(`${API_BASE_URL}/users/stores/${storeId}/filters/`, {
+    const response = await fetch(`${API_BASE_URL}/auth/stores/${storeId}/filters/`, {
       method: 'GET',
       headers: this.getHeaders()
     })
@@ -640,7 +640,7 @@ class ApiService {
   }
 
   async updateUserStoreFilters(storeId: string | number, payload: Record<string, unknown>) {
-    const response = await fetch(`${API_BASE_URL}/users/stores/${storeId}/filters/`, {
+    const response = await fetch(`${API_BASE_URL}/auth/stores/${storeId}/filters/`, {
       method: 'PATCH',
       headers: this.getHeaders(),
       body: JSON.stringify(payload)
