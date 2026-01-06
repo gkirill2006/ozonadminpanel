@@ -101,6 +101,97 @@
       </div>
     </div>
 
+    <div v-if="!loading && !error" class="settings-card mt-3">
+      <div class="settings-card__header">
+        <div>
+          <h5 class="mb-1">Настройки отправлений</h5>
+          <p class="text-muted small mb-0">Параметры применяются к уведомлениям и упаковке.</p>
+        </div>
+      </div>
+      <div class="settings-card__body">
+        <div v-if="shipmentSettingsLoading" class="text-muted small d-flex align-items-center gap-2">
+          <span class="spinner-border spinner-border-sm"></span>
+          <span>Загружаем параметры...</span>
+        </div>
+        <div v-else class="d-flex flex-column gap-3">
+          <div>
+            <label class="form-label">Лимит на вес отправления</label>
+            <div class="input-group">
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                class="form-control"
+                v-model="shipmentSettings.weightLimitKg"
+                :disabled="!canEditShipmentSettings"
+                placeholder="1"
+              />
+              <span class="input-group-text">кг</span>
+            </div>
+          </div>
+          <div>
+            <label class="form-label">Макс. кол-во товаров в коробке</label>
+            <div class="input-group">
+              <input
+                type="number"
+                min="1"
+                class="form-control"
+                v-model="shipmentSettings.maxItemsPerBox"
+                :disabled="!canEditShipmentSettings"
+                placeholder="5"
+              />
+              <span class="input-group-text">шт.</span>
+            </div>
+          </div>
+          <div>
+            <label class="form-label">Время уведомлений о неотправленных заказах</label>
+            <input
+              type="time"
+              class="form-control"
+              v-model="shipmentSettings.notificationTime"
+              :disabled="!canEditShipmentSettings"
+            />
+          </div>
+          <div class="form-check form-switch">
+            <input
+              id="notifySwitch"
+              class="form-check-input"
+              type="checkbox"
+              v-model="notificationSettings.notifyEnabled"
+              :disabled="notificationSettingsLoading || notificationSettingsSaving"
+              @change="saveNotificationSettings"
+            />
+            <label class="form-check-label" for="notifySwitch">
+              Получать уведомления о неотправленных заказах
+            </label>
+          </div>
+          <div class="d-flex flex-wrap gap-2 align-items-center">
+            <button
+              v-if="canEditShipmentSettings"
+              class="btn btn-primary btn-sm"
+              type="button"
+              :disabled="shipmentSettingsSaving"
+              @click="saveShipmentSettings"
+            >
+              <span v-if="shipmentSettingsSaving" class="spinner-border spinner-border-sm me-1"></span>
+              Сохранить
+            </button>
+            <span v-if="shipmentSettingsMessage" class="text-success small">{{ shipmentSettingsMessage }}</span>
+            <span v-if="shipmentSettingsError" class="text-danger small">{{ shipmentSettingsError }}</span>
+            <span v-if="notificationSettingsMessage" class="text-success small">
+              {{ notificationSettingsMessage }}
+            </span>
+            <span v-if="notificationSettingsError" class="text-danger small">
+              {{ notificationSettingsError }}
+            </span>
+            <span v-if="!canEditShipmentSettings" class="text-muted small">
+              Редактирование доступно только владельцу магазина.
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <Modal v-if="removeTarget" :show="true" @close="closeRemove">
       <h5 class="mb-3">Удалить доступ?</h5>
       <p class="mb-3">
@@ -144,6 +235,7 @@ const removeError = ref<string | null>(null)
 const ownerUsername = computed(
   () => storeDetail.value?.owner_username || storeDetail.value?.owner?.username || ''
 )
+const canEditShipmentSettings = computed(() => Boolean(storeDetail.value?.is_owner))
 
 const accesses = ref<any[]>([])
 const accessesLoading = ref(false)
@@ -169,6 +261,121 @@ const pendingInvites = computed(() => {
 
 const getUserName = (user: any) => user?.username || user?.telegram_username || user?.name || ''
 
+const shipmentSettings = ref({
+  weightLimitKg: '',
+  maxItemsPerBox: '',
+  notificationTime: ''
+})
+const shipmentSettingsLoading = ref(false)
+const shipmentSettingsSaving = ref(false)
+const shipmentSettingsError = ref<string | null>(null)
+const shipmentSettingsMessage = ref<string | null>(null)
+
+const notificationSettings = ref({
+  notifyEnabled: true,
+  notificationTime: ''
+})
+const notificationSettingsLoading = ref(false)
+const notificationSettingsSaving = ref(false)
+const notificationSettingsError = ref<string | null>(null)
+const notificationSettingsMessage = ref<string | null>(null)
+
+const normalizeSettingsError = (err: unknown, fallback: string) => {
+  const message = err instanceof Error ? err.message : fallback
+  return message.replace(/^HTTP\s+\d+:\s*/i, '')
+}
+
+const applyShipmentSettings = (data: any) => {
+  const weightG = Number(data?.shipment_weight_limit_g)
+  shipmentSettings.value.weightLimitKg = Number.isFinite(weightG) ? String(weightG / 1000) : ''
+  const maxItems = Number(data?.max_items_per_box)
+  shipmentSettings.value.maxItemsPerBox = Number.isFinite(maxItems) ? String(maxItems) : ''
+  const time = data?.unshipped_notification_time
+  shipmentSettings.value.notificationTime = time ? String(time).slice(0, 5) : ''
+}
+
+const fetchShipmentSettings = async () => {
+  if (!props.storeId) return
+  shipmentSettingsLoading.value = true
+  shipmentSettingsError.value = null
+  try {
+    const data = await apiService.getUserStoreFilters(props.storeId)
+    applyShipmentSettings(data)
+  } catch (err) {
+    shipmentSettingsError.value = normalizeSettingsError(err, 'Не удалось загрузить параметры')
+  } finally {
+    shipmentSettingsLoading.value = false
+  }
+}
+
+const saveShipmentSettings = async () => {
+  if (!props.storeId || !canEditShipmentSettings.value) return
+  shipmentSettingsSaving.value = true
+  shipmentSettingsError.value = null
+  shipmentSettingsMessage.value = null
+  try {
+    const weightKg = Number(String(shipmentSettings.value.weightLimitKg).replace(',', '.'))
+    const maxItems = Number(shipmentSettings.value.maxItemsPerBox)
+    const payload: Record<string, unknown> = {}
+    if (Number.isFinite(weightKg)) {
+      payload.shipment_weight_limit_g = Math.round(weightKg * 1000)
+    }
+    if (Number.isFinite(maxItems)) {
+      payload.max_items_per_box = Math.max(1, Math.round(maxItems))
+    }
+    if (shipmentSettings.value.notificationTime) {
+      payload.unshipped_notification_time = shipmentSettings.value.notificationTime
+    }
+    const result = await apiService.updateUserStoreFilters(props.storeId, payload)
+    applyShipmentSettings(result)
+    shipmentSettingsMessage.value = 'Настройки сохранены'
+    setTimeout(() => (shipmentSettingsMessage.value = null), 3000)
+  } catch (err) {
+    shipmentSettingsError.value = normalizeSettingsError(err, 'Не удалось сохранить параметры')
+  } finally {
+    shipmentSettingsSaving.value = false
+  }
+}
+
+const applyNotificationSettings = (data: any) => {
+  notificationSettings.value.notifyEnabled = Boolean(data?.notify_unshipped)
+  const time = data?.unshipped_notification_time
+  notificationSettings.value.notificationTime = time ? String(time).slice(0, 5) : ''
+}
+
+const fetchNotificationSettings = async () => {
+  if (!props.storeId) return
+  notificationSettingsLoading.value = true
+  notificationSettingsError.value = null
+  try {
+    const data = await apiService.getStoreNotifications(props.storeId)
+    applyNotificationSettings(data)
+  } catch (err) {
+    notificationSettingsError.value = normalizeSettingsError(err, 'Не удалось загрузить уведомления')
+  } finally {
+    notificationSettingsLoading.value = false
+  }
+}
+
+const saveNotificationSettings = async () => {
+  if (!props.storeId) return
+  notificationSettingsSaving.value = true
+  notificationSettingsError.value = null
+  notificationSettingsMessage.value = null
+  try {
+    const result = await apiService.updateStoreNotifications(props.storeId, {
+      notify_unshipped: notificationSettings.value.notifyEnabled
+    })
+    applyNotificationSettings(result)
+    notificationSettingsMessage.value = 'Настройки сохранены'
+    setTimeout(() => (notificationSettingsMessage.value = null), 3000)
+  } catch (err) {
+    notificationSettingsError.value = normalizeSettingsError(err, 'Не удалось сохранить уведомления')
+  } finally {
+    notificationSettingsSaving.value = false
+  }
+}
+
 const fetchStore = async () => {
   if (!props.storeId) return
   loading.value = true
@@ -179,6 +386,8 @@ const fetchStore = async () => {
     if (storeDetail.value?.is_owner) {
       await fetchAccesses()
     }
+    await fetchShipmentSettings()
+    await fetchNotificationSettings()
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Не удалось загрузить магазин'
   } finally {

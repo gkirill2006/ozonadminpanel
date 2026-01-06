@@ -409,6 +409,34 @@ class ApiService {
     return this.handleResponse(response)
   }
 
+  async getFbsNotShipped(params: {
+    storeId: string | number
+    refresh?: boolean | number
+    since?: string
+    to?: string
+    limit?: number
+  }) {
+    const url = new URL(`${API_BASE_URL}/api/ozon/postings/not-shipped/`, window.location.origin)
+    url.searchParams.set('store_id', String(params.storeId))
+    if (params.refresh) {
+      url.searchParams.set('refresh', '1')
+    }
+    if (params.since) {
+      url.searchParams.set('since', params.since)
+    }
+    if (params.to) {
+      url.searchParams.set('to', params.to)
+    }
+    if (params.limit) {
+      url.searchParams.set('limit', String(params.limit))
+    }
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: this.getHeaders()
+    })
+    return this.handleResponse(response)
+  }
+
   async createSupplyDrafts(payload: Record<string, unknown>) {
     const response = await fetch(`${API_BASE_URL}/api/ozon/drafts/create/`, {
       method: 'POST',
@@ -560,6 +588,23 @@ class ApiService {
     return this.handleResponse(response)
   }
 
+  async getStoreNotifications(storeId: string | number) {
+    const response = await fetch(`${API_BASE_URL}/auth/stores/${storeId}/notifications/`, {
+      method: 'GET',
+      headers: this.getHeaders()
+    })
+    return this.handleResponse(response)
+  }
+
+  async updateStoreNotifications(storeId: string | number, payload: Record<string, unknown>) {
+    const response = await fetch(`${API_BASE_URL}/auth/stores/${storeId}/notifications/`, {
+      method: 'PATCH',
+      headers: this.getHeaders(),
+      body: JSON.stringify(payload)
+    })
+    return this.handleResponse(response)
+  }
+
   async deleteStoreAccess(storeId: string | number, userId: string | number) {
     const response = await fetch(`${API_BASE_URL}/auth/stores/${storeId}/accesses/${userId}/`, {
       method: 'DELETE',
@@ -582,6 +627,23 @@ class ApiService {
       method: 'PATCH',
       headers: this.getHeaders(),
       body: JSON.stringify(storeData)
+    })
+    return this.handleResponse(response)
+  }
+
+  async getUserStoreFilters(storeId: string | number) {
+    const response = await fetch(`${API_BASE_URL}/users/stores/${storeId}/filters/`, {
+      method: 'GET',
+      headers: this.getHeaders()
+    })
+    return this.handleResponse(response)
+  }
+
+  async updateUserStoreFilters(storeId: string | number, payload: Record<string, unknown>) {
+    const response = await fetch(`${API_BASE_URL}/users/stores/${storeId}/filters/`, {
+      method: 'PATCH',
+      headers: this.getHeaders(),
+      body: JSON.stringify(payload)
     })
     return this.handleResponse(response)
   }

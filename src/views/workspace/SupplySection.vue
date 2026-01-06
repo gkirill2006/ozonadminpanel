@@ -101,7 +101,7 @@
             </div>
           </div>
 
-          <div class="table-wrapper mt-2">
+          <div ref="tableWrapperRef" class="table-wrapper mt-2">
             <div v-if="isLoading && !products.length" class="planner-table-splash">
               <span class="spinner-border spinner-border-sm me-2"></span>
               Готовим таблицу...
@@ -121,6 +121,9 @@
                     :class="['text-center', getImpactHeaderClass(cluster)]"
                   >
                     <div class="cluster-header">
+                      <span v-if="selectedRowsSize" class="cluster-sum">
+                        {{ formatNumber(selectedClusterTotals[cluster]) }}
+                      </span>
                       <span class="cluster-name">{{ cluster }}</span>
                       <span v-if="getClusterImpactShare(cluster) !== null" class="cluster-share">
                         {{ formatImpactShare(getClusterImpactShare(cluster)) }}
@@ -134,6 +137,7 @@
               <tr
                 v-for="(row, idx) in products"
                 :key="row.id"
+                :data-row="idx + 1"
                 :class="{ 'row-selected': isRowSelected(idx + 1) }"
                 @click="toggleRow(idx + 1)"
               >
@@ -161,8 +165,20 @@
                     v-for="cluster in visibleClusters"
                     :key="cluster"
                     class="text-center"
+                    @click.stop="startEditCell(row, idx, cluster)"
                   >
-                    {{ formatNumber(row.clusters[cluster]) }}
+                    <input
+                      v-if="isEditingCell(idx, cluster)"
+                      :data-edit-key="getEditKey(idx, cluster)"
+                      type="text"
+                      class="cluster-edit-input"
+                      v-model="editingValue"
+                      @click.stop
+                      @keydown.enter.prevent="commitEdit"
+                      @keydown.escape.prevent="cancelEdit"
+                      @blur="commitEdit"
+                    />
+                    <span v-else>{{ formatNumber(getClusterValue(row, idx, cluster)) }}</span>
                   </td>
                 </template>
               </tr>
@@ -379,7 +395,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { apiService } from '@/services/api'
 
@@ -415,6 +431,7 @@ const rangeFrom = ref('')
 const rangeTo = ref('')
 const selectedRowsSize = computed(() => selectedRows.value.size)
 const settingsOpen = ref(false)
+const tableWrapperRef = ref<HTMLElement | null>(null)
 
 const defaultDisplaySettings = {
   showImage: true,
@@ -438,10 +455,114 @@ const visibleClusters = computed(() =>
     : []
 )
 
+const editedClusterValues = ref<Record<string, Record<string, number>>>({})
+const editingCell = ref<{ rowIndex: number; rowKey: string; cluster: string } | null>(null)
+const editingValue = ref('')
+
+const selectedClusterTotals = computed(() => {
+  const totals: Record<string, number> = {}
+  if (!selectedRows.value.size) return totals
+  const clusters = visibleClusters.value
+  clusters.forEach((cluster) => {
+    totals[cluster] = 0
+  })
+  selectedRows.value.forEach((rowNumber) => {
+    const row = products.value[rowNumber - 1]
+    if (!row) return
+    clusters.forEach((cluster) => {
+      const value = getClusterValue(row, rowNumber - 1, cluster)
+      const num = Number(value)
+      if (Number.isFinite(num)) {
+        totals[cluster] += num
+      }
+    })
+  })
+  return totals
+})
+
 const formatNumber = (value: number | null | undefined) => {
   const num = Number(value)
   if (!Number.isFinite(num)) return '—'
   return new Intl.NumberFormat('ru-RU').format(num)
+}
+
+const getRowKey = (row: PivotProduct, rowIndex: number) => String(row.id ?? rowIndex)
+
+const getClusterValue = (row: PivotProduct, rowIndex: number, cluster: string) => {
+  const rowKey = getRowKey(row, rowIndex)
+  const overrides = editedClusterValues.value[rowKey]
+  if (overrides && overrides[cluster] !== undefined) {
+    return overrides[cluster]
+  }
+  const raw = row.clusters?.[cluster]
+  const num = Number(raw)
+  return Number.isFinite(num) ? num : null
+}
+
+const getEditKey = (rowIndex: number, cluster: string) => `${rowIndex}:${cluster}`
+
+const isEditingCell = (rowIndex: number, cluster: string) => {
+  const current = editingCell.value
+  return Boolean(current && current.rowIndex === rowIndex && current.cluster === cluster)
+}
+
+const startEditCell = (row: PivotProduct, rowIndex: number, cluster: string) => {
+  if (editingCell.value && !isEditingCell(rowIndex, cluster)) {
+    commitEdit()
+  }
+  const rowKey = getRowKey(row, rowIndex)
+  const value = getClusterValue(row, rowIndex, cluster)
+  editingCell.value = { rowIndex, rowKey, cluster }
+  editingValue.value = value !== null && value !== undefined ? String(value) : ''
+  nextTick(() => {
+    const input = document.querySelector<HTMLInputElement>(
+      `.cluster-edit-input[data-edit-key="${getEditKey(rowIndex, cluster)}"]`
+    )
+    if (input) {
+      input.focus()
+      input.select()
+    }
+  })
+}
+
+const applyEditValue = (rowKey: string, cluster: string, value: number | null) => {
+  const current = editedClusterValues.value[rowKey] || {}
+  const nextRow = { ...current }
+  if (value === null) {
+    delete nextRow[cluster]
+  } else {
+    nextRow[cluster] = value
+  }
+  const next = { ...editedClusterValues.value }
+  if (Object.keys(nextRow).length) {
+    next[rowKey] = nextRow
+  } else {
+    delete next[rowKey]
+  }
+  editedClusterValues.value = next
+}
+
+const commitEdit = () => {
+  const current = editingCell.value
+  if (!current) return
+  const raw = editingValue.value.trim()
+  if (!raw) {
+    applyEditValue(current.rowKey, current.cluster, null)
+    editingCell.value = null
+    return
+  }
+  const normalized = raw.replace(/\s/g, '').replace(',', '.')
+  const num = Number(normalized)
+  if (!Number.isFinite(num)) {
+    editingCell.value = null
+    return
+  }
+  applyEditValue(current.rowKey, current.cluster, num)
+  editingCell.value = null
+}
+
+const cancelEdit = () => {
+  editingCell.value = null
 }
 
 const getClusterImpactShare = (cluster: string) => {
@@ -582,6 +703,8 @@ watch(
     selectedRows.value = new Set()
     rangeFrom.value = ''
     rangeTo.value = ''
+    editedClusterValues.value = {}
+    editingCell.value = null
     fetchPivotData()
   }
 )
@@ -595,6 +718,7 @@ const selectRange = () => {
     next.add(i)
   }
   selectedRows.value = next
+  scrollToRow(from)
 }
 
 const resetSelection = () => {
@@ -614,6 +738,20 @@ const toggleRow = (rowNumber: number) => {
 }
 
 const isRowSelected = (rowNumber: number) => selectedRows.value.has(rowNumber)
+
+const scrollToRow = async (rowNumber: number) => {
+  await nextTick()
+  const wrapper = tableWrapperRef.value
+  if (!wrapper) return
+  const row = wrapper.querySelector(`tr[data-row="${rowNumber}"]`) as HTMLElement | null
+  if (!row) return
+  const wrapperRect = wrapper.getBoundingClientRect()
+  const rowRect = row.getBoundingClientRect()
+  const header = wrapper.querySelector('thead') as HTMLElement | null
+  const headerHeight = header ? header.getBoundingClientRect().height : 0
+  const offset = rowRect.top - wrapperRect.top + wrapper.scrollTop - headerHeight - 8
+  wrapper.scrollTo({ top: Math.max(offset, 0), behavior: 'smooth' })
+}
 
 const openShipmentDialog = () => {
   if (!selectedRows.value.size) return
@@ -863,8 +1001,8 @@ const submitSupplyCreation = () => {
     const product = products.value[rowNumber - 1]
     const sku = product?.sku || product?.offerId || '—'
     warehouses.forEach((warehouse) => {
-      const rawQty = Number(product?.clusters?.[warehouse] ?? 0)
-      const qty = Number.isFinite(rawQty) ? rawQty : 0
+      const rawQty = product ? getClusterValue(product, rowNumber - 1, warehouse) : null
+      const qty = Number.isFinite(Number(rawQty)) ? Number(rawQty) : 0
       if (!groupedByWarehouse[warehouse]) groupedByWarehouse[warehouse] = []
       groupedByWarehouse[warehouse].push({ sku, quantity: qty })
     })
@@ -1085,6 +1223,25 @@ const loadAllBatches = async () => {
   box-shadow: inset -1px 0 rgba(15, 23, 42, 0.08);
 }
 
+.cluster-edit-input {
+  width: 100%;
+  min-width: 60px;
+  border: 1px solid rgba(15, 23, 42, 0.2);
+  border-radius: 4px;
+  padding: 0.1rem 0.25rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #0f172a;
+  background: #fff;
+  text-align: center;
+}
+
+.cluster-edit-input:focus {
+  outline: none;
+  border-color: rgba(59, 130, 246, 0.6);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
 .cluster-header {
   display: flex;
   flex-direction: column;
@@ -1094,6 +1251,16 @@ const loadAllBatches = async () => {
 
 .cluster-name {
   line-height: 1.2;
+}
+
+.cluster-sum {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #0f172a;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.15);
+  border-radius: 4px;
+  padding: 0.05rem 0.4rem;
 }
 
 .cluster-share {

@@ -57,7 +57,7 @@
 
         <div v-if="!isBatchTab && !isCarriageTab" class="fbs-toolbar">
           <div class="fbs-toolbar__row">
-            <div class="fbs-filter-group fbs-filter-group--toggle">
+            <div v-if="isStatusTab" class="fbs-filter-group fbs-filter-group--toggle">
               <label class="form-check form-switch mb-0">
                 <input class="form-check-input" type="checkbox" v-model="needsLabel">
                 <span class="form-check-label">Требуют печать</span>
@@ -74,6 +74,121 @@
               Без этикеток
             </button>
 
+            <div v-if="isAwaitingPackaging" class="fbs-filter-group fbs-filter-group--sort">
+              <span class="text-muted small">Сортировка:</span>
+              <button
+                class="btn btn-outline-secondary btn-sm"
+                type="button"
+                :class="{ 'btn-primary text-white': newSortBy === 'offer_id' }"
+                @click="setNewSort('offer_id')"
+              >
+                По артикулу
+                <span
+                  class="sort-arrow"
+                  :class="{ 'sort-arrow--hidden': newSortBy !== 'offer_id' }"
+                >
+                  <svg
+                    v-if="newSortDirection === 1"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke-width="1.5"
+                    stroke="currentColor"
+                    class="sort-arrow__icon"
+                    aria-hidden="true"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75 12 3m0 0 3.75 3.75M12 3v18" />
+                  </svg>
+                  <svg
+                    v-else
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke-width="1.5"
+                    stroke="currentColor"
+                    class="sort-arrow__icon"
+                    aria-hidden="true"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25 12 21m0 0-3.75-3.75M12 21V3" />
+                  </svg>
+                </span>
+              </button>
+              <button
+                class="btn btn-outline-secondary btn-sm"
+                type="button"
+                :class="{ 'btn-primary text-white': newSortBy === 'weight' }"
+                @click="setNewSort('weight')"
+              >
+                По весу
+                <span
+                  class="sort-arrow"
+                  :class="{ 'sort-arrow--hidden': newSortBy !== 'weight' }"
+                >
+                  <svg
+                    v-if="newSortDirection === 1"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke-width="1.5"
+                    stroke="currentColor"
+                    class="sort-arrow__icon"
+                    aria-hidden="true"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75 12 3m0 0 3.75 3.75M12 3v18" />
+                  </svg>
+                  <svg
+                    v-else
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke-width="1.5"
+                    stroke="currentColor"
+                    class="sort-arrow__icon"
+                    aria-hidden="true"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25 12 21m0 0-3.75-3.75M12 21V3" />
+                  </svg>
+                </span>
+              </button>
+              <button
+                class="btn btn-outline-secondary btn-sm"
+                type="button"
+                :class="{ 'btn-primary text-white': newSortBy === 'date' }"
+                @click="setNewSort('date')"
+              >
+                По времени
+                <span
+                  class="sort-arrow"
+                  :class="{ 'sort-arrow--hidden': newSortBy !== 'date' }"
+                >
+                  <svg
+                    v-if="newSortDirection === 1"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke-width="1.5"
+                    stroke="currentColor"
+                    class="sort-arrow__icon"
+                    aria-hidden="true"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75 12 3m0 0 3.75 3.75M12 3v18" />
+                  </svg>
+                  <svg
+                    v-else
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke-width="1.5"
+                    stroke="currentColor"
+                    class="sort-arrow__icon"
+                    aria-hidden="true"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25 12 21m0 0-3.75-3.75M12 21V3" />
+                  </svg>
+                </span>
+              </button>
+            </div>
+
             <div class="fbs-filter-group fbs-filter-group--search">
               <input
                 type="text"
@@ -85,14 +200,14 @@
           </div>
         </div>
 
-        <div v-if="!isBatchTab && !isCarriageTab" class="d-flex flex-wrap gap-2 align-items-end mb-2 selection-bar">
+        <div v-if="isStatusTab" class="d-flex flex-wrap gap-2 align-items-end mb-2 selection-bar">
           <div class="range-inputs d-flex gap-2 align-items-end">
             <div>
               <label class="form-label text-uppercase text-muted small fw-semibold mb-1">С строки</label>
               <input
                 type="number"
                 min="1"
-                :max="filteredPostings.length || 1"
+                :max="displayPostings.length || 1"
                 class="form-control form-control-sm"
                 v-model="rangeFrom"
               />
@@ -102,7 +217,7 @@
               <input
                 type="number"
                 min="1"
-                :max="filteredPostings.length || 1"
+                :max="displayPostings.length || 1"
                 class="form-control form-control-sm"
                 v-model="rangeTo"
               />
@@ -132,7 +247,7 @@
         </div>
 
         <div v-if="!isBatchTab && !isCarriageTab">
-          <div v-if="isLoading" class="fbs-loading">
+          <div v-if="isTableLoading" class="fbs-loading">
             <span class="spinner-border spinner-border-sm me-2"></span>
             Загружаем заказы...
           </div>
@@ -141,7 +256,7 @@
             <table class="table fbs-table align-middle">
               <thead>
                 <tr>
-                  <th class="text-center fbs-col-check">
+                  <th v-if="isStatusTab" class="text-center fbs-col-check">
                     <input
                       type="checkbox"
                       class="form-check-input"
@@ -158,14 +273,14 @@
                   <th v-if="isAwaitingDeliver" class="fbs-col-label">Этикетка</th>
                 </tr>
               </thead>
-              <tbody v-if="filteredPostings.length">
+              <tbody v-if="displayPostings.length">
                 <tr
-                  v-for="posting in filteredPostings"
+                  v-for="posting in displayPostings"
                   :key="posting.id"
                   :class="{ 'row-selected': isRowSelected(posting.posting_number) }"
-                  @click="toggleRow(posting.posting_number)"
+                  @click="handleRowClick(posting.posting_number)"
                 >
-                  <td class="text-center">
+                  <td v-if="isStatusTab" class="text-center">
                     <input
                       type="checkbox"
                       class="form-check-input"
@@ -191,7 +306,23 @@
                     </div>
                   </td>
                   <td>
-                    <div class="fbs-product">
+                    <div v-if="isNotShippedTab" class="fbs-product-list">
+                      <div
+                        v-for="(product, index) in posting.products || []"
+                        :key="`${product.offer_id || product.sku || 'item'}-${index}`"
+                        class="fbs-product-item"
+                      >
+                        <div class="fw-semibold">
+                          {{ product.offer_id || product.name || (product.sku ? `SKU ${product.sku}` : '—') }}
+                        </div>
+                        <div class="text-muted small">
+                          <span v-if="product.quantity">Кол-во: {{ product.quantity }}</span>
+                          <span v-if="product.sku"> · SKU {{ product.sku }}</span>
+                        </div>
+                      </div>
+                      <div v-if="!(posting.products || []).length" class="text-muted small">Товары отсутствуют</div>
+                    </div>
+                    <div v-else class="fbs-product">
                       <div class="fw-semibold">{{ primaryProductTitle(posting) }}</div>
                       <div class="text-muted small">{{ primaryProductMeta(posting) }}</div>
                       <div
@@ -231,7 +362,7 @@
               </tbody>
               <tbody v-else>
                 <tr>
-                  <td :colspan="isAwaitingDeliver ? 8 : 7" class="text-center text-muted py-4">
+                  <td :colspan="tableColumnCount" class="text-center text-muted py-4">
                     Нет заказов для отображения
                   </td>
                 </tr>
@@ -336,6 +467,118 @@
                           <span v-if="isPrinting" class="spinner-border spinner-border-sm me-2"></span>
                           Печать
                         </button>
+                        <span class="text-muted small ms-2">Сортировка:</span>
+                        <button
+                          class="btn btn-outline-secondary btn-sm"
+                          type="button"
+                          :class="{ 'btn-primary text-white': getBatchSortKey(batch.batch_id) === 'offer_id' }"
+                          @click.stop="setBatchSort(batch.batch_id, 'offer_id')"
+                        >
+                          По артикулу
+                          <span
+                            class="sort-arrow"
+                            :class="{ 'sort-arrow--hidden': getBatchSortKey(batch.batch_id) !== 'offer_id' }"
+                          >
+                            <svg
+                              v-if="getBatchSortDirection(batch.batch_id) === 1"
+                              xmlns="http://www.w3.org/2000/svg"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke-width="1.5"
+                              stroke="currentColor"
+                              class="sort-arrow__icon"
+                              aria-hidden="true"
+                            >
+                              <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75 12 3m0 0 3.75 3.75M12 3v18" />
+                            </svg>
+                            <svg
+                              v-else
+                              xmlns="http://www.w3.org/2000/svg"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke-width="1.5"
+                              stroke="currentColor"
+                              class="sort-arrow__icon"
+                              aria-hidden="true"
+                            >
+                              <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25 12 21m0 0-3.75-3.75M12 21V3" />
+                            </svg>
+                          </span>
+                        </button>
+                        <button
+                          class="btn btn-outline-secondary btn-sm"
+                          type="button"
+                          :class="{ 'btn-primary text-white': getBatchSortKey(batch.batch_id) === 'weight' }"
+                          @click.stop="setBatchSort(batch.batch_id, 'weight')"
+                        >
+                          По весу
+                          <span
+                            class="sort-arrow"
+                            :class="{ 'sort-arrow--hidden': getBatchSortKey(batch.batch_id) !== 'weight' }"
+                          >
+                            <svg
+                              v-if="getBatchSortDirection(batch.batch_id) === 1"
+                              xmlns="http://www.w3.org/2000/svg"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke-width="1.5"
+                              stroke="currentColor"
+                              class="sort-arrow__icon"
+                              aria-hidden="true"
+                            >
+                              <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75 12 3m0 0 3.75 3.75M12 3v18" />
+                            </svg>
+                            <svg
+                              v-else
+                              xmlns="http://www.w3.org/2000/svg"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke-width="1.5"
+                              stroke="currentColor"
+                              class="sort-arrow__icon"
+                              aria-hidden="true"
+                            >
+                              <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25 12 21m0 0-3.75-3.75M12 21V3" />
+                            </svg>
+                          </span>
+                        </button>
+                        <button
+                          class="btn btn-outline-secondary btn-sm"
+                          type="button"
+                          :class="{ 'btn-primary text-white': getBatchSortKey(batch.batch_id) === 'date' }"
+                          @click.stop="setBatchSort(batch.batch_id, 'date')"
+                        >
+                          По времени
+                          <span
+                            class="sort-arrow"
+                            :class="{ 'sort-arrow--hidden': getBatchSortKey(batch.batch_id) !== 'date' }"
+                          >
+                            <svg
+                              v-if="getBatchSortDirection(batch.batch_id) === 1"
+                              xmlns="http://www.w3.org/2000/svg"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke-width="1.5"
+                              stroke="currentColor"
+                              class="sort-arrow__icon"
+                              aria-hidden="true"
+                            >
+                              <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75 12 3m0 0 3.75 3.75M12 3v18" />
+                            </svg>
+                            <svg
+                              v-else
+                              xmlns="http://www.w3.org/2000/svg"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke-width="1.5"
+                              stroke="currentColor"
+                              class="sort-arrow__icon"
+                              aria-hidden="true"
+                            >
+                              <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25 12 21m0 0-3.75-3.75M12 21V3" />
+                            </svg>
+                          </span>
+                        </button>
                       </div>
                     </div>
                     <div class="table-responsive fbs-table-wrapper">
@@ -360,7 +603,7 @@
                       </thead>
                       <tbody>
                         <tr
-                          v-for="posting in batchPostings(batch.batch_id)"
+                          v-for="posting in batchDisplayPostings(batch.batch_id)"
                           :key="posting.id"
                           :class="{ 'row-selected': isBatchRowSelected(batch.batch_id, posting.posting_number) }"
                           @click.stop="toggleBatchRow(batch.batch_id, posting.posting_number)"
@@ -632,12 +875,15 @@ interface FbsPostingProduct {
   quantity?: number
   sku?: number | string
   price?: number
+  weight_g?: number | string
+  total_weight_g?: number | string
 }
 
 interface FbsPosting {
   id: number | string
   posting_number: string
   order_number?: string
+  order_id?: number | string
   status: string
   substatus?: string
   delivery_method_name?: string
@@ -646,6 +892,7 @@ interface FbsPosting {
   tpl_integration_type?: string
   shipment_date?: string | null
   status_changed_at?: string | null
+  in_process_at?: string | null
   awaiting_packaging_at?: string | null
   awaiting_deliver_at?: string | null
   acceptance_in_progress_at?: string | null
@@ -716,6 +963,7 @@ const statusTabs = [
   { key: 'awaiting_packaging', label: 'Новые' },
   { key: 'ship_batches', label: 'На сборке' },
   { key: 'carriages', label: 'В доставке' },
+  { key: 'not_shipped', label: 'Не переданы в доставку' },
   { key: 'awaiting_deliver', label: 'Ожидают отгрузки' },
   { key: 'acceptance_in_progress', label: 'Приемка' },
   { key: 'delivering', label: 'Доставляются' }
@@ -737,10 +985,13 @@ const carriageDetailLoading = ref<Record<string, boolean>>({})
 const carriageDetailError = ref<Record<string, string>>({})
 const statusCounts = ref<Record<string, number>>({})
 const onPackagingTotal = ref<number | null>(null)
+const notShippedCount = ref<number | null>(null)
+const notShippedLastSync = ref<string | null>(null)
 const totalCount = ref<number | null>(null)
 const isLoading = ref(false)
 const isBatchLoading = ref(false)
 const isCarriageLoading = ref(false)
+const isNotShippedLoading = ref(false)
 const isSyncing = ref(false)
 const isPrinting = ref(false)
 const isLabeling = ref(false)
@@ -760,6 +1011,10 @@ const rangeTo = ref('')
 const batchSelections = ref<Record<string, Set<string>>>({})
 const batchLabelLoading = ref<Record<string, boolean>>({})
 const batchCarriageLoading = ref<Record<string, boolean>>({})
+const batchSortBy = ref<Record<string, 'offer_id' | 'weight' | 'date'>>({})
+const batchSortDirection = ref<Record<string, 1 | -1>>({})
+const newSortBy = ref<'' | 'offer_id' | 'weight' | 'date'>('')
+const newSortDirection = ref<1 | -1>(1)
 
 const statusLabelMap: Record<string, string> = {
   awaiting_packaging: 'Ожидает сборки',
@@ -804,8 +1059,27 @@ const filteredPostings = computed(() => {
   })
 })
 
+const displayPostings = computed(() => {
+  const list = filteredPostings.value
+  if (!isAwaitingPackaging.value || !newSortBy.value) return list
+  const direction = newSortDirection.value
+  return [...list].sort((a, b) => {
+    if (newSortBy.value === 'offer_id') {
+      const compare = postingPrimaryOfferId(a).localeCompare(postingPrimaryOfferId(b), 'ru', {
+        sensitivity: 'base'
+      })
+      return direction * compare
+    }
+    if (newSortBy.value === 'weight') {
+      return direction * (postingTotalWeight(a) - postingTotalWeight(b))
+    }
+    return direction * (postingSortDate(a) - postingSortDate(b))
+  })
+})
+
 const isBatchTab = computed(() => activeStatus.value === 'ship_batches')
 const isCarriageTab = computed(() => activeStatus.value === 'carriages')
+const isNotShippedTab = computed(() => activeStatus.value === 'not_shipped')
 const isStatusTab = computed(() => statusKeys.includes(activeStatus.value))
 const isAwaitingDeliver = computed(() => activeStatus.value === 'awaiting_deliver')
 const isAwaitingPackaging = computed(() => activeStatus.value === 'awaiting_packaging')
@@ -817,6 +1091,18 @@ const missingLabelPostings = computed(() =>
 const selectedRowsSize = computed(() => selectedPostings.value.size)
 
 const hasCounts = computed(() => totalCount.value !== null || Object.keys(statusCounts.value).length > 0)
+
+const tableColumnCount = computed(() => {
+  if (isStatusTab.value) {
+    return isAwaitingDeliver.value ? 8 : 7
+  }
+  return 6
+})
+
+const isTableLoading = computed(() => {
+  if (isNotShippedTab.value) return isNotShippedLoading.value
+  return isLoading.value
+})
 
 const tabCount = (key: string) => {
   if (key === 'ship_batches') {
@@ -831,6 +1117,11 @@ const tabCount = (key: string) => {
   if (key === 'carriages') {
     return carriages.value.length
   }
+  if (key === 'not_shipped') {
+    if (typeof notShippedCount.value === 'number') return notShippedCount.value
+    const count = statusCounts.value.acceptance_in_progress
+    return typeof count === 'number' ? count : 0
+  }
   if (key === 'all') {
     return totalCount.value ?? (hasCounts.value ? 0 : filteredPostings.value.length)
   }
@@ -843,11 +1134,14 @@ const tabCount = (key: string) => {
 }
 
 const allVisibleSelected = computed(() => {
-  if (!filteredPostings.value.length) return false
-  return filteredPostings.value.every((posting) => selectedPostings.value.has(posting.posting_number))
+  if (!displayPostings.value.length) return false
+  return displayPostings.value.every((posting) => selectedPostings.value.has(posting.posting_number))
 })
 
 const lastSyncedAt = computed(() => {
+  if (isNotShippedTab.value && notShippedLastSync.value) {
+    return notShippedLastSync.value
+  }
   const dates = postings.value
     .map((posting) => posting.last_synced_at)
     .filter((value): value is string => Boolean(value))
@@ -884,6 +1178,7 @@ const formatWeight = (value?: number | string | null) => {
 }
 
 const primaryDate = (posting: FbsPosting) => {
+  if (posting.in_process_at) return String(posting.in_process_at)
   const field = statusDateField[posting.status]
   return (field && posting[field] ? String(posting[field]) : posting.shipment_date) || null
 }
@@ -968,6 +1263,71 @@ const batchSelectedMap = (batchId: string) => {
 
 const isBatchRowSelected = (batchId: string, postingNumber: string) =>
   batchSelections.value[batchId]?.has(postingNumber) ?? false
+
+const getBatchSortKey = (batchId: string) => batchSortBy.value[batchId] || ''
+
+const getBatchSortDirection = (batchId: string) => batchSortDirection.value[batchId] ?? 1
+
+const setBatchSort = (batchId: string, key: 'offer_id' | 'weight' | 'date') => {
+  const currentKey = batchSortBy.value[batchId]
+  const currentDirection = batchSortDirection.value[batchId] ?? 1
+  if (currentKey === key) {
+    batchSortDirection.value = {
+      ...batchSortDirection.value,
+      [batchId]: currentDirection === 1 ? -1 : 1
+    }
+    return
+  }
+  batchSortBy.value = { ...batchSortBy.value, [batchId]: key }
+  batchSortDirection.value = { ...batchSortDirection.value, [batchId]: 1 }
+}
+
+const postingTotalWeight = (posting: FbsPosting) => {
+  const products = Array.isArray(posting.products) ? posting.products : []
+  return products.reduce((sum, product) => {
+    const quantity = Number(product.quantity || 0)
+    const total = Number(product.total_weight_g)
+    const single = Number(product.weight_g)
+    if (Number.isFinite(total)) {
+      return sum + total
+    }
+    if (Number.isFinite(single)) {
+      return sum + single * (Number.isFinite(quantity) ? quantity : 0)
+    }
+    return sum
+  }, 0)
+}
+
+const postingPrimaryOfferId = (posting: FbsPosting) => {
+  const product = primaryProduct(posting)
+  return product?.offer_id ? String(product.offer_id) : ''
+}
+
+const postingSortDate = (posting: FbsPosting) => {
+  const value = primaryDate(posting)
+  if (!value) return Number.POSITIVE_INFINITY
+  const ts = Date.parse(value)
+  return Number.isNaN(ts) ? Number.POSITIVE_INFINITY : ts
+}
+
+const batchDisplayPostings = (batchId: string) => {
+  const list = batchPostings(batchId)
+  const sortKey = getBatchSortKey(batchId)
+  if (!sortKey) return list
+  const direction = getBatchSortDirection(batchId)
+  return [...list].sort((a, b) => {
+    if (sortKey === 'offer_id') {
+      const compare = postingPrimaryOfferId(a).localeCompare(postingPrimaryOfferId(b), 'ru', {
+        sensitivity: 'base'
+      })
+      return direction * compare
+    }
+    if (sortKey === 'weight') {
+      return direction * (postingTotalWeight(a) - postingTotalWeight(b))
+    }
+    return direction * (postingSortDate(a) - postingSortDate(b))
+  })
+}
 
 const selectBatchAll = (batchId: string) => {
   const next = new Set<string>()
@@ -1188,6 +1548,39 @@ const loadCarriages = async (options?: { showLoader?: boolean }) => {
   }
 }
 
+const loadNotShipped = async (options?: { showLoader?: boolean; refresh?: boolean }) => {
+  if (!props.storeId) return
+  const showLoader = options?.showLoader ?? true
+  if (showLoader) {
+    isNotShippedLoading.value = true
+  }
+  errorMessage.value = null
+  try {
+    const response = await apiService.getFbsNotShipped({
+      storeId: props.storeId,
+      refresh: options?.refresh ? 1 : 0,
+      limit: 1000
+    })
+    const list = (response as any)?.postings
+    postings.value = Array.isArray(list) ? (list as FbsPosting[]) : []
+    const count = Number((response as any)?.count)
+    notShippedCount.value = Number.isFinite(count) ? count : postings.value.length
+    const lastSync = (response as any)?.last_sync
+    notShippedLastSync.value = lastSync ? String(lastSync) : null
+    if (Number.isFinite(count)) {
+      statusCounts.value = { ...statusCounts.value, acceptance_in_progress: count }
+    }
+    selectedPostings.value.clear()
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'Не удалось загрузить отправления'
+    postings.value = []
+  } finally {
+    if (showLoader) {
+      isNotShippedLoading.value = false
+    }
+  }
+}
+
 const loadCarriageDetail = async (carriageId: string | number) => {
   if (!carriageId) return
   const key = String(carriageId)
@@ -1311,6 +1704,15 @@ const handleRefresh = async () => {
     }
     return
   }
+  if (isNotShippedTab.value) {
+    isSyncing.value = true
+    try {
+      await loadNotShipped({ showLoader: true, refresh: true })
+    } finally {
+      isSyncing.value = false
+    }
+    return
+  }
   await refreshPostings({ showLoader: true })
 }
 
@@ -1321,6 +1723,10 @@ const loadImmediate = async () => {
   }
   if (isCarriageTab.value) {
     await loadCarriages({ showLoader: true })
+    return
+  }
+  if (isNotShippedTab.value) {
+    await loadNotShipped({ showLoader: true })
     return
   }
   await refreshPostings({ showLoader: true })
@@ -1396,11 +1802,11 @@ const createShipment = async () => {
 const selectRange = () => {
   const from = Number(rangeFrom.value)
   const to = Number(rangeTo.value)
-  const total = filteredPostings.value.length
+  const total = displayPostings.value.length
   if (Number.isNaN(from) || Number.isNaN(to) || from < 1 || to < from || to > total) return
   const next = new Set(selectedPostings.value)
   for (let i = from; i <= to; i++) {
-    const posting = filteredPostings.value[i - 1]
+    const posting = displayPostings.value[i - 1]
     if (posting?.posting_number) {
       next.add(posting.posting_number)
     }
@@ -1424,6 +1830,20 @@ const toggleRow = (postingNumber: string) => {
   selectedPostings.value = next
 }
 
+const handleRowClick = (postingNumber: string) => {
+  if (!isStatusTab.value) return
+  toggleRow(postingNumber)
+}
+
+const setNewSort = (key: 'offer_id' | 'weight' | 'date') => {
+  if (newSortBy.value === key) {
+    newSortDirection.value = newSortDirection.value === 1 ? -1 : 1
+    return
+  }
+  newSortBy.value = key
+  newSortDirection.value = 1
+}
+
 const isRowSelected = (postingNumber: string) => selectedPostings.value.has(postingNumber)
 
 const toggleSelection = (postingNumber: string) => {
@@ -1435,7 +1855,7 @@ const toggleSelectAll = (checked: boolean) => {
     selectedPostings.value.clear()
     return
   }
-  filteredPostings.value.forEach((posting) => {
+  displayPostings.value.forEach((posting) => {
     selectedPostings.value.add(posting.posting_number)
   })
 }
@@ -1656,8 +2076,11 @@ watch(
     selectedPostings.value.clear()
     statusCounts.value = {}
     onPackagingTotal.value = null
+    notShippedCount.value = null
+    notShippedLastSync.value = null
     totalCount.value = null
     isCarriageLoading.value = false
+    isNotShippedLoading.value = false
     activeStatus.value = 'awaiting_packaging'
     rangeFrom.value = ''
     rangeTo.value = ''
@@ -1681,6 +2104,10 @@ watch(
       await loadCarriages()
       return
     }
+    if (isNotShippedTab.value) {
+      await loadNotShipped()
+      return
+    }
     await loadPostings()
   }
 )
@@ -1688,7 +2115,7 @@ watch(
 watch(
   needsLabel,
   async () => {
-    if (isBatchTab.value || isCarriageTab.value) return
+    if (isBatchTab.value || isCarriageTab.value || isNotShippedTab.value) return
     await loadPostings()
   }
 )
@@ -1808,6 +2235,33 @@ watch(
   justify-content: space-between;
   gap: 0.75rem;
   padding: 0.5rem 0.25rem;
+}
+
+.batch-selection-bar .btn-primary {
+  border-color: transparent;
+}
+
+.sort-arrow {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.35rem;
+  position: relative;
+  top: 1px;
+  width: 0.9rem;
+  height: 0.9rem;
+  justify-content: center;
+  flex: 0 0 0.9rem;
+}
+
+.sort-arrow__icon {
+  width: 0.8rem;
+  height: 0.8rem;
+  display: block;
+  transform-origin: center;
+}
+
+.sort-arrow--hidden {
+  visibility: hidden;
 }
 
 .fbs-tab {
@@ -2037,6 +2491,22 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
+}
+
+.fbs-product-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.fbs-product-item {
+  padding-bottom: 0.35rem;
+  border-bottom: 1px dashed rgba(148, 163, 184, 0.4);
+}
+
+.fbs-product-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
 }
 
 .fbs-label-fab {
