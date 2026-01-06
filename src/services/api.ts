@@ -331,6 +331,60 @@ class ApiService {
     return this.handleResponse(response)
   }
 
+  async exportFbsPostings(storeId: string | number) {
+    const url = new URL(`${API_BASE_URL}/api/ozon/postings/export/`, window.location.origin)
+    url.searchParams.set('store_id', String(storeId))
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: this.getHeaders()
+    })
+    if (!response.ok) {
+      return this.handleResponse(response)
+    }
+    const blob = await response.blob()
+    return { blob }
+  }
+
+  async getFbsHistory(params: {
+    storeId: string | number
+    includeArchived?: boolean | number
+    postingNumbers?: string
+    status?: string
+    since?: string
+    to?: string
+    limit?: number
+    offset?: number
+  }) {
+    const url = new URL(`${API_BASE_URL}/api/ozon/postings/history/`, window.location.origin)
+    url.searchParams.set('store_id', String(params.storeId))
+    if (params.includeArchived) {
+      url.searchParams.set('include_archived', '1')
+    }
+    if (params.postingNumbers) {
+      url.searchParams.set('posting_numbers', params.postingNumbers)
+    }
+    if (params.status) {
+      url.searchParams.set('status', params.status)
+    }
+    if (params.since) {
+      url.searchParams.set('since', params.since)
+    }
+    if (params.to) {
+      url.searchParams.set('to', params.to)
+    }
+    if (params.limit) {
+      url.searchParams.set('limit', String(params.limit))
+    }
+    if (params.offset) {
+      url.searchParams.set('offset', String(params.offset))
+    }
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: this.getHeaders()
+    })
+    return this.handleResponse(response)
+  }
+
   async createFbsLabels(payload: Record<string, unknown>) {
     const response = await fetch(`${API_BASE_URL}/api/ozon/postings/labels/`, {
       method: 'POST',

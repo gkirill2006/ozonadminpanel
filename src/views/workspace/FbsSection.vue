@@ -14,15 +14,14 @@
               Обновить
             </button>
             <button
-              v-if="isStatusTab"
               class="btn btn-primary btn-sm"
               type="button"
-              @click="onPrintClick"
-            :disabled="!selectedPostingNumbers.length || isPrinting"
-          >
-            <span v-if="isPrinting" class="spinner-border spinner-border-sm me-2"></span>
-            Печать
-          </button>
+              @click="handleExport"
+              :disabled="isExporting"
+            >
+              <span v-if="isExporting" class="spinner-border spinner-border-sm me-2"></span>
+              Экспорт
+            </button>
         </div>
       </div>
       <div class="card-body">
@@ -249,125 +248,170 @@
         <div v-if="!isBatchTab && !isCarriageTab">
           <div v-if="isTableLoading" class="fbs-loading">
             <span class="spinner-border spinner-border-sm me-2"></span>
-            Загружаем заказы...
+            {{ isHistoryTab ? 'Загружаем историю...' : 'Загружаем заказы...' }}
           </div>
 
-          <div v-else class="table-responsive fbs-table-wrapper">
-            <table class="table fbs-table align-middle">
-              <thead>
-                <tr>
-                  <th v-if="isStatusTab" class="text-center fbs-col-check">
-                    <input
-                      type="checkbox"
-                      class="form-check-input"
-                      :checked="allVisibleSelected"
-                      @change="toggleSelectAll(($event.target as HTMLInputElement).checked)"
-                    />
-                  </th>
-                  <th class="fbs-col-number">Номер отправления</th>
-                  <th class="fbs-col-status">Статус</th>
-                  <th class="fbs-col-date">Дата отгрузки</th>
-                  <th class="fbs-col-products">Товары</th>
-                  <th class="fbs-col-warehouse">Склад</th>
-                  <th class="fbs-col-delivery">Доставка</th>
-                  <th v-if="isAwaitingDeliver" class="fbs-col-label">Этикетка</th>
-                </tr>
-              </thead>
-              <tbody v-if="displayPostings.length">
-                <tr
-                  v-for="posting in displayPostings"
-                  :key="posting.id"
-                  :class="{ 'row-selected': isRowSelected(posting.posting_number) }"
-                  @click="handleRowClick(posting.posting_number)"
-                >
-                  <td v-if="isStatusTab" class="text-center">
-                    <input
-                      type="checkbox"
-                      class="form-check-input"
-                      :checked="selectedMap[posting.posting_number]"
-                      @click.stop
-                      @change="toggleSelection(posting.posting_number)"
-                    />
-                  </td>
-                  <td>
-                    <div class="fw-semibold">{{ posting.posting_number }}</div>
-                    <div v-if="posting.order_number" class="text-muted small">{{ posting.order_number }}</div>
-                  </td>
-                  <td>
-                    <span class="status-pill" :class="statusClass(posting.status)">
-                      {{ statusLabel(posting.status) }}
-                    </span>
-                    <div v-if="posting.substatus" class="text-muted small">{{ posting.substatus }}</div>
-                  </td>
-                  <td>
-                    <div class="fw-semibold">{{ formatDateTime(primaryDate(posting)) }}</div>
-                    <div v-if="posting.status_changed_at" class="text-muted small">
-                      Обновлено: {{ formatDateTime(posting.status_changed_at) }}
-                    </div>
-                  </td>
-                  <td>
-                    <div v-if="isNotShippedTab" class="fbs-product-list">
-                      <div
-                        v-for="(product, index) in posting.products || []"
-                        :key="`${product.offer_id || product.sku || 'item'}-${index}`"
-                        class="fbs-product-item"
-                      >
-                        <div class="fw-semibold">
-                          {{ product.offer_id || product.name || (product.sku ? `SKU ${product.sku}` : '—') }}
+          <div v-else>
+            <div v-if="isHistoryTab" class="table-responsive fbs-table-wrapper">
+              <table class="table fbs-table align-middle">
+                <thead>
+                  <tr>
+                    <th class="fbs-col-number">Номер отправления</th>
+                    <th class="fbs-col-date">Ожидают сборки</th>
+                    <th class="fbs-col-date">Ожидают отгрузки</th>
+                    <th class="fbs-col-date">Отгружены</th>
+                    <th class="fbs-col-date">Доставляются</th>
+                    <th class="fbs-col-date">Отменены</th>
+                  </tr>
+                </thead>
+                <tbody v-if="historyItems.length">
+                  <tr v-for="(item, index) in historyItems" :key="`${item.posting_number}-${index}`">
+                    <td>
+                      <div class="fw-semibold">{{ item.posting_number }}</div>
+                    </td>
+                    <td>
+                      <div class="fw-semibold">{{ formatDateTime(item.awaiting_packaging) }}</div>
+                    </td>
+                    <td>
+                      <div class="fw-semibold">{{ formatDateTime(item.awaiting_deliver) }}</div>
+                    </td>
+                    <td>
+                      <div class="fw-semibold">{{ formatDateTime(item.acceptance_in_progress) }}</div>
+                    </td>
+                    <td>
+                      <div class="fw-semibold">{{ formatDateTime(item.delivering) }}</div>
+                    </td>
+                    <td>
+                      <div class="fw-semibold">{{ formatDateTime(item.cancelled) }}</div>
+                    </td>
+                  </tr>
+                </tbody>
+                <tbody v-else>
+                  <tr>
+                    <td colspan="6" class="text-center text-muted py-4">
+                      Нет истории для отображения
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div v-else class="table-responsive fbs-table-wrapper">
+              <table class="table fbs-table align-middle">
+                <thead>
+                  <tr>
+                    <th v-if="isStatusTab" class="text-center fbs-col-check">
+                      <input
+                        type="checkbox"
+                        class="form-check-input"
+                        :checked="allVisibleSelected"
+                        @change="toggleSelectAll(($event.target as HTMLInputElement).checked)"
+                      />
+                    </th>
+                    <th class="fbs-col-number">Номер отправления</th>
+                    <th class="fbs-col-status">Статус</th>
+                    <th class="fbs-col-date">Дата отгрузки</th>
+                    <th class="fbs-col-products">Товары</th>
+                    <th class="fbs-col-warehouse">Склад</th>
+                    <th class="fbs-col-delivery">Доставка</th>
+                    <th v-if="isAwaitingDeliver" class="fbs-col-label">Этикетка</th>
+                  </tr>
+                </thead>
+                <tbody v-if="displayPostings.length">
+                  <tr
+                    v-for="posting in displayPostings"
+                    :key="posting.id"
+                    :class="{ 'row-selected': isRowSelected(posting.posting_number) }"
+                    @click="handleRowClick(posting.posting_number)"
+                  >
+                    <td v-if="isStatusTab" class="text-center">
+                      <input
+                        type="checkbox"
+                        class="form-check-input"
+                        :checked="selectedMap[posting.posting_number]"
+                        @click.stop
+                        @change="toggleSelection(posting.posting_number)"
+                      />
+                    </td>
+                    <td>
+                      <div class="fw-semibold">{{ posting.posting_number }}</div>
+                      <div v-if="posting.order_number" class="text-muted small">{{ posting.order_number }}</div>
+                    </td>
+                    <td>
+                      <span class="status-pill" :class="statusClass(posting.status)">
+                        {{ statusLabel(posting.status) }}
+                      </span>
+                      <div v-if="posting.substatus" class="text-muted small">{{ posting.substatus }}</div>
+                    </td>
+                    <td>
+                      <div class="fw-semibold">{{ formatDateTime(primaryDate(posting)) }}</div>
+                      <div v-if="posting.status_changed_at" class="text-muted small">
+                        Обновлено: {{ formatDateTime(posting.status_changed_at) }}
+                      </div>
+                    </td>
+                    <td>
+                      <div v-if="isNotShippedTab" class="fbs-product-list">
+                        <div
+                          v-for="(product, index) in posting.products || []"
+                          :key="`${product.offer_id || product.sku || 'item'}-${index}`"
+                          class="fbs-product-item"
+                        >
+                          <div class="fw-semibold">
+                            {{ product.offer_id || product.name || (product.sku ? `SKU ${product.sku}` : '—') }}
+                          </div>
+                          <div class="text-muted small">
+                            <span v-if="product.quantity">Кол-во: {{ product.quantity }}</span>
+                            <span v-if="product.sku"> · SKU {{ product.sku }}</span>
+                          </div>
                         </div>
-                        <div class="text-muted small">
-                          <span v-if="product.quantity">Кол-во: {{ product.quantity }}</span>
-                          <span v-if="product.sku"> · SKU {{ product.sku }}</span>
+                        <div v-if="!(posting.products || []).length" class="text-muted small">Товары отсутствуют</div>
+                      </div>
+                      <div v-else class="fbs-product">
+                        <div class="fw-semibold">{{ primaryProductTitle(posting) }}</div>
+                        <div class="text-muted small">{{ primaryProductMeta(posting) }}</div>
+                        <div
+                          v-if="shouldShowWeight(posting)"
+                          class="small"
+                          :class="shouldHighlightWeight(posting) ? 'text-danger fw-semibold' : 'text-muted'"
+                        >
+                          Вес: {{ formatWeight(posting.total_weight_g) }}
+                        </div>
+                        <div v-if="extraProductsCount(posting)" class="text-muted small">
+                          + ещё {{ extraProductsCount(posting) }} товар(ов)
                         </div>
                       </div>
-                      <div v-if="!(posting.products || []).length" class="text-muted small">Товары отсутствуют</div>
-                    </div>
-                    <div v-else class="fbs-product">
-                      <div class="fw-semibold">{{ primaryProductTitle(posting) }}</div>
-                      <div class="text-muted small">{{ primaryProductMeta(posting) }}</div>
-                      <div
-                        v-if="shouldShowWeight(posting)"
-                        class="small"
-                        :class="shouldHighlightWeight(posting) ? 'text-danger fw-semibold' : 'text-muted'"
+                    </td>
+                    <td>
+                      <div class="fw-semibold">{{ posting.delivery_method_warehouse || '—' }}</div>
+                      <div class="text-muted small">{{ posting.delivery_method_name || '—' }}</div>
+                    </td>
+                    <td>
+                      <div class="fw-semibold">{{ posting.tpl_provider || '—' }}</div>
+                      <div class="text-muted small">{{ posting.tpl_integration_type || '—' }}</div>
+                    </td>
+                    <td v-if="isAwaitingDeliver">
+                      <button
+                        v-if="posting.label_ready && posting.label_file_url"
+                        class="btn btn-outline-primary btn-sm"
+                        type="button"
+                        @click.stop="downloadLabel(posting)"
                       >
-                        Вес: {{ formatWeight(posting.total_weight_g) }}
-                      </div>
-                      <div v-if="extraProductsCount(posting)" class="text-muted small">
-                        + ещё {{ extraProductsCount(posting) }} товар(ов)
-                      </div>
-                    </div>
-                  </td>
-                  <td>
-                    <div class="fw-semibold">{{ posting.delivery_method_warehouse || '—' }}</div>
-                    <div class="text-muted small">{{ posting.delivery_method_name || '—' }}</div>
-                  </td>
-                  <td>
-                    <div class="fw-semibold">{{ posting.tpl_provider || '—' }}</div>
-                    <div class="text-muted small">{{ posting.tpl_integration_type || '—' }}</div>
-                  </td>
-                  <td v-if="isAwaitingDeliver">
-                    <button
-                      v-if="posting.label_ready && posting.label_file_url"
-                      class="btn btn-outline-primary btn-sm"
-                      type="button"
-                      @click.stop="downloadLabel(posting)"
-                    >
-                      Этикетка
-                    </button>
-                    <span v-else class="text-muted small">
-                      {{ posting.label_status || '—' }}
-                    </span>
-                  </td>
-                </tr>
-              </tbody>
-              <tbody v-else>
-                <tr>
-                  <td :colspan="tableColumnCount" class="text-center text-muted py-4">
-                    Нет заказов для отображения
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                        Этикетка
+                      </button>
+                      <span v-else class="text-muted small">
+                        {{ posting.label_status || '—' }}
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+                <tbody v-else>
+                  <tr>
+                    <td :colspan="tableColumnCount" class="text-center text-muted py-4">
+                      Нет заказов для отображения
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
@@ -957,6 +1001,15 @@ interface FbsCarriageDetail {
   items_count?: number | null
 }
 
+interface FbsHistoryItem {
+  posting_number: string
+  awaiting_packaging?: string | null
+  awaiting_deliver?: string | null
+  acceptance_in_progress?: string | null
+  delivering?: string | null
+  cancelled?: string | null
+}
+
 const statusKeys = ['awaiting_packaging', 'awaiting_deliver', 'acceptance_in_progress', 'delivering']
 
 const statusTabs = [
@@ -966,7 +1019,8 @@ const statusTabs = [
   { key: 'not_shipped', label: 'Не переданы в доставку' },
   { key: 'awaiting_deliver', label: 'Ожидают отгрузки' },
   { key: 'acceptance_in_progress', label: 'Приемка' },
-  { key: 'delivering', label: 'Доставляются' }
+  { key: 'delivering', label: 'Доставляются' },
+  { key: 'history', label: 'История' }
 ]
 
 const activeStatus = ref<string>('awaiting_packaging')
@@ -983,6 +1037,10 @@ const carriageDetails = ref<Record<string, FbsCarriageDetail>>({})
 const carriageExpanded = ref<Set<string>>(new Set())
 const carriageDetailLoading = ref<Record<string, boolean>>({})
 const carriageDetailError = ref<Record<string, string>>({})
+const historyItems = ref<FbsHistoryItem[]>([])
+const historyCount = ref<number | null>(null)
+const historyTotal = ref<number | null>(null)
+const historyLastSync = ref<string | null>(null)
 const statusCounts = ref<Record<string, number>>({})
 const onPackagingTotal = ref<number | null>(null)
 const notShippedCount = ref<number | null>(null)
@@ -992,11 +1050,13 @@ const isLoading = ref(false)
 const isBatchLoading = ref(false)
 const isCarriageLoading = ref(false)
 const isNotShippedLoading = ref(false)
+const isHistoryLoading = ref(false)
 const isSyncing = ref(false)
 const isPrinting = ref(false)
 const isLabeling = ref(false)
 const isShipping = ref(false)
 const isCarriageSubmitting = ref(false)
+const isExporting = ref(false)
 const errorMessage = ref<string | null>(null)
 const labelNotice = ref<string | null>(null)
 const shipmentDialogOpen = ref(false)
@@ -1080,6 +1140,7 @@ const displayPostings = computed(() => {
 const isBatchTab = computed(() => activeStatus.value === 'ship_batches')
 const isCarriageTab = computed(() => activeStatus.value === 'carriages')
 const isNotShippedTab = computed(() => activeStatus.value === 'not_shipped')
+const isHistoryTab = computed(() => activeStatus.value === 'history')
 const isStatusTab = computed(() => statusKeys.includes(activeStatus.value))
 const isAwaitingDeliver = computed(() => activeStatus.value === 'awaiting_deliver')
 const isAwaitingPackaging = computed(() => activeStatus.value === 'awaiting_packaging')
@@ -1101,6 +1162,7 @@ const tableColumnCount = computed(() => {
 
 const isTableLoading = computed(() => {
   if (isNotShippedTab.value) return isNotShippedLoading.value
+  if (isHistoryTab.value) return isHistoryLoading.value
   return isLoading.value
 })
 
@@ -1125,6 +1187,9 @@ const tabCount = (key: string) => {
   if (key === 'all') {
     return totalCount.value ?? (hasCounts.value ? 0 : filteredPostings.value.length)
   }
+  if (key === 'history') {
+    return historyTotal.value ?? historyCount.value ?? 0
+  }
   const value = statusCounts.value[key]
   if (typeof value === 'number') return value
   if (!hasCounts.value && key === activeStatus.value) {
@@ -1141,6 +1206,9 @@ const allVisibleSelected = computed(() => {
 const lastSyncedAt = computed(() => {
   if (isNotShippedTab.value && notShippedLastSync.value) {
     return notShippedLastSync.value
+  }
+  if (isHistoryTab.value && historyLastSync.value) {
+    return historyLastSync.value
   }
   const dates = postings.value
     .map((posting) => posting.last_synced_at)
@@ -1581,6 +1649,35 @@ const loadNotShipped = async (options?: { showLoader?: boolean; refresh?: boolea
   }
 }
 
+const loadHistory = async (options?: { showLoader?: boolean }) => {
+  if (!props.storeId) return
+  const showLoader = options?.showLoader ?? true
+  if (showLoader) {
+    isHistoryLoading.value = true
+  }
+  errorMessage.value = null
+  try {
+    const response = await apiService.getFbsHistory({
+      storeId: props.storeId,
+      limit: 1000
+    })
+    const list = (response as any)?.results
+    historyItems.value = Array.isArray(list) ? (list as FbsHistoryItem[]) : []
+    const count = Number((response as any)?.count)
+    historyCount.value = Number.isFinite(count) ? count : historyItems.value.length
+    const total = Number((response as any)?.total)
+    historyTotal.value = Number.isFinite(total) ? total : historyCount.value
+    historyLastSync.value = new Date().toISOString()
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'Не удалось загрузить историю'
+    historyItems.value = []
+  } finally {
+    if (showLoader) {
+      isHistoryLoading.value = false
+    }
+  }
+}
+
 const loadCarriageDetail = async (carriageId: string | number) => {
   if (!carriageId) return
   const key = String(carriageId)
@@ -1704,6 +1801,15 @@ const handleRefresh = async () => {
     }
     return
   }
+  if (isHistoryTab.value) {
+    isSyncing.value = true
+    try {
+      await loadHistory({ showLoader: true })
+    } finally {
+      isSyncing.value = false
+    }
+    return
+  }
   if (isNotShippedTab.value) {
     isSyncing.value = true
     try {
@@ -1723,6 +1829,10 @@ const loadImmediate = async () => {
   }
   if (isCarriageTab.value) {
     await loadCarriages({ showLoader: true })
+    return
+  }
+  if (isHistoryTab.value) {
+    await loadHistory({ showLoader: true })
     return
   }
   if (isNotShippedTab.value) {
@@ -1888,8 +1998,20 @@ const handlePrint = async (postingNumbers?: string[]) => {
   }
 }
 
-const onPrintClick = () => {
-  void handlePrint()
+const handleExport = async () => {
+  if (!props.storeId || isExporting.value) return
+  isExporting.value = true
+  errorMessage.value = null
+  try {
+    const response = await apiService.exportFbsPostings(props.storeId)
+    if (response && response.blob instanceof Blob) {
+      downloadBlob(response.blob, `fbs_export_${Date.now()}.csv`)
+    }
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'Не удалось сформировать экспорт'
+  } finally {
+    isExporting.value = false
+  }
 }
 
 const setBatchLabelLoading = (batchId: string, value: boolean) => {
@@ -2078,9 +2200,14 @@ watch(
     onPackagingTotal.value = null
     notShippedCount.value = null
     notShippedLastSync.value = null
+    historyItems.value = []
+    historyCount.value = null
+    historyTotal.value = null
+    historyLastSync.value = null
     totalCount.value = null
     isCarriageLoading.value = false
     isNotShippedLoading.value = false
+    isHistoryLoading.value = false
     activeStatus.value = 'awaiting_packaging'
     rangeFrom.value = ''
     rangeTo.value = ''
@@ -2104,6 +2231,10 @@ watch(
       await loadCarriages()
       return
     }
+    if (isHistoryTab.value) {
+      await loadHistory()
+      return
+    }
     if (isNotShippedTab.value) {
       await loadNotShipped()
       return
@@ -2115,7 +2246,8 @@ watch(
 watch(
   needsLabel,
   async () => {
-    if (isBatchTab.value || isCarriageTab.value || isNotShippedTab.value) return
+    if (isBatchTab.value || isCarriageTab.value || isNotShippedTab.value || isHistoryTab.value)
+      return
     await loadPostings()
   }
 )
@@ -2378,8 +2510,8 @@ watch(
 .fbs-table-wrapper {
   border: 1px solid rgba(15, 23, 42, 0.08);
   border-radius: 14px;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: auto;
+  max-height: calc(100vh - var(--workspace-sticky-offset, 64px) -  140px);
   position: relative;
 }
 
@@ -2394,6 +2526,9 @@ watch(
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: #64748b;
+  position: sticky;
+  top: 0;
+  z-index: 6;
 }
 
 .fbs-col-check {
