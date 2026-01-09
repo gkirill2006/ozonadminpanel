@@ -933,10 +933,6 @@
         <span>Готово {{ batchProgressText(shipmentProgressBatch) }}</span>
         <span>{{ batchProgressPercent(shipmentProgressBatch) }}%</span>
       </div>
-      <div v-if="shipmentProgressLoading" class="text-muted small mt-2 d-flex align-items-center gap-2">
-        <span class="spinner-border spinner-border-sm"></span>
-        Обновляем прогресс...
-      </div>
       <div v-if="shipmentProgressError" class="alert alert-danger py-1 px-2 mt-2">
         {{ shipmentProgressError }}
       </div>
@@ -3050,6 +3046,7 @@ onBeforeUnmount(() => {
   border-radius: 999px;
   transition: width 0.3s ease;
 }
+
 
 .selection-bar {
   align-items: flex-end !important;
