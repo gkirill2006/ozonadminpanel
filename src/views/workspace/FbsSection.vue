@@ -705,10 +705,30 @@
         <span>Готово {{ batchProgressText(shipmentProgressBatch) }}</span>
         <span>{{ batchProgressPercent(shipmentProgressBatch) }}%</span>
       </div>
+      <div v-if="labelStatusTotal(shipmentProgressBatch)" class="mt-3">
+        <div class="fbs-progress">
+          <span
+            class="fbs-progress__bar"
+            :style="{ width: `${labelProgressPercent(shipmentProgressBatch)}%` }"
+          ></span>
+        </div>
+        <div class="d-flex justify-content-between text-muted small mt-2">
+          <span>Этикетки: готово {{ labelProgressText(shipmentProgressBatch) }}</span>
+          <span>{{ labelProgressPercent(shipmentProgressBatch) }}%</span>
+        </div>
+      </div>
       <div v-if="shipmentProgressError" class="alert alert-danger py-1 px-2 mt-2">
         {{ shipmentProgressError }}
       </div>
-      <div class="d-flex justify-content-end mt-3">
+      <div class="d-flex justify-content-end gap-2 mt-3">
+        <button
+          v-if="shipmentProgressBatch?.status === 'completed'"
+          class="btn btn-primary btn-sm"
+          type="button"
+          @click="goToShipBatchesFromProgress"
+        >
+          Перейти в отгрузку
+        </button>
         <button class="btn btn-outline-secondary btn-sm" type="button" @click="closeShipmentProgress">
           Закрыть
         </button>
@@ -819,6 +839,18 @@ interface FbsShipBatch {
   failed_count?: number | null
   processed_count?: number | null
   progress?: number | null
+  label_tasks?: {
+    created?: number | null
+    errors?: number | null
+    skipped?: number | null
+  } | null
+  label_status?: {
+    ready?: number | null
+    pending?: number | null
+    error?: number | null
+    missing?: number | null
+    total?: number | null
+  } | null
   error_message?: string | null
   started_at?: string | null
   finished_at?: string | null
@@ -1220,8 +1252,10 @@ const postingPrimaryOfferId = (posting: FbsPosting) => {
 }
 
 const offerIdGroup = (value: string) => {
-  if (/[A-Za-z]/.test(value)) return 0
-  if (/[А-Яа-яЁё]/.test(value)) return 1
+  const match = value.match(/[A-Za-zА-Яа-яЁё]/)
+  const firstLetter = match?.[0] || ''
+  if (/[A-Za-z]/.test(firstLetter)) return 0
+  if (/[А-Яа-яЁё]/.test(firstLetter)) return 1
   return 2
 }
 
@@ -1271,6 +1305,37 @@ const batchProgressText = (batch?: FbsShipBatch | null) => {
     return `${processed} из ${total}`
   }
   return '—'
+}
+
+const labelStatusTotal = (batch?: FbsShipBatch | null) => {
+  const status = batch?.label_status
+  if (!status) return 0
+  const total = Number(status.total)
+  if (Number.isFinite(total)) return total
+  const ready = Number(status.ready) || 0
+  const pending = Number(status.pending) || 0
+  const error = Number(status.error) || 0
+  const missing = Number(status.missing) || 0
+  return ready + pending + error + missing
+}
+
+const labelStatusReady = (batch?: FbsShipBatch | null) => {
+  const status = batch?.label_status
+  if (!status) return 0
+  const ready = Number(status.ready)
+  return Number.isFinite(ready) ? ready : 0
+}
+
+const labelProgressPercent = (batch?: FbsShipBatch | null) => {
+  const total = labelStatusTotal(batch)
+  if (!total) return 0
+  return Math.max(0, Math.min(100, Math.round((labelStatusReady(batch) / total) * 100)))
+}
+
+const labelProgressText = (batch?: FbsShipBatch | null) => {
+  const total = labelStatusTotal(batch)
+  if (!total) return '—'
+  return `${labelStatusReady(batch)} из ${total}`
 }
 
 const isBatchFinished = (batch?: FbsShipBatch | null) => {
@@ -1550,10 +1615,14 @@ const fetchShipmentProgress = async (batchId: string) => {
   try {
     const response = await apiService.getFbsShipBatchDetail(batchId)
     const batch = ((response as any)?.batch || response) as FbsShipBatch
+    const labelStatus = (response as any)?.label_status ?? (batch as any)?.label_status
+    const labelTasks = (response as any)?.label_tasks ?? (batch as any)?.label_tasks
     if (batch && batch.batch_id) {
       shipmentProgressBatch.value = {
         ...(shipmentProgressBatch.value || { batch_id: batchId }),
-        ...batch
+        ...batch,
+        label_status: labelStatus ?? null,
+        label_tasks: labelTasks ?? null
       }
       updateBatchInList(batch)
       updateShipBatchPolling()
@@ -1917,6 +1986,12 @@ const closeShipmentProgress = () => {
   shipmentProgressBatch.value = null
   shipmentProgressError.value = null
   stopShipmentProgressPolling()
+}
+
+const goToShipBatchesFromProgress = async () => {
+  closeShipmentProgress()
+  activeStatus.value = 'ship_batches'
+  await loadShipBatches({ showLoader: true })
 }
 
 const openCarriageDialog = (batch: FbsShipBatch) => {
