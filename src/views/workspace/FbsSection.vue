@@ -82,35 +82,6 @@
                 @click="setNewSort('offer_id')"
               >
                 По артикулу
-                <span
-                  class="sort-arrow"
-                  :class="{ 'sort-arrow--hidden': newSortBy !== 'offer_id' }"
-                >
-                  <svg
-                    v-if="newSortDirection === 1"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke-width="1.5"
-                    stroke="currentColor"
-                    class="sort-arrow__icon"
-                    aria-hidden="true"
-                  >
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75 12 3m0 0 3.75 3.75M12 3v18" />
-                  </svg>
-                  <svg
-                    v-else
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke-width="1.5"
-                    stroke="currentColor"
-                    class="sort-arrow__icon"
-                    aria-hidden="true"
-                  >
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25 12 21m0 0-3.75-3.75M12 21V3" />
-                  </svg>
-                </span>
               </button>
               <button
                 class="btn btn-outline-secondary btn-sm"
@@ -119,35 +90,6 @@
                 @click="setNewSort('weight')"
               >
                 По весу
-                <span
-                  class="sort-arrow"
-                  :class="{ 'sort-arrow--hidden': newSortBy !== 'weight' }"
-                >
-                  <svg
-                    v-if="newSortDirection === 1"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke-width="1.5"
-                    stroke="currentColor"
-                    class="sort-arrow__icon"
-                    aria-hidden="true"
-                  >
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75 12 3m0 0 3.75 3.75M12 3v18" />
-                  </svg>
-                  <svg
-                    v-else
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke-width="1.5"
-                    stroke="currentColor"
-                    class="sort-arrow__icon"
-                    aria-hidden="true"
-                  >
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25 12 21m0 0-3.75-3.75M12 21V3" />
-                  </svg>
-                </span>
               </button>
               <button
                 class="btn btn-outline-secondary btn-sm"
@@ -156,35 +98,6 @@
                 @click="setNewSort('date')"
               >
                 По времени
-                <span
-                  class="sort-arrow"
-                  :class="{ 'sort-arrow--hidden': newSortBy !== 'date' }"
-                >
-                  <svg
-                    v-if="newSortDirection === 1"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke-width="1.5"
-                    stroke="currentColor"
-                    class="sort-arrow__icon"
-                    aria-hidden="true"
-                  >
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75 12 3m0 0 3.75 3.75M12 3v18" />
-                  </svg>
-                  <svg
-                    v-else
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke-width="1.5"
-                    stroke="currentColor"
-                    class="sort-arrow__icon"
-                    aria-hidden="true"
-                  >
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25 12 21m0 0-3.75-3.75M12 21V3" />
-                  </svg>
-                </span>
               </button>
             </div>
 
@@ -448,16 +361,7 @@
                     <span>Статус: {{ batch.status }}</span>
                   </template>
                 </div>
-                <div class="d-flex flex-wrap gap-2" @click.stop>
-                  <button
-                    class="btn btn-outline-primary btn-sm"
-                    type="button"
-                    :disabled="!batchHasPostings(batch) || batchLabelLoading[batch.batch_id]"
-                    @click.stop="handleBatchLabels(batch.batch_id)"
-                  >
-                    <span v-if="batchLabelLoading[batch.batch_id]" class="spinner-border spinner-border-sm me-2"></span>
-                    Этикетки
-                  </button>
+                <div class="fbs-batch-actions" @click.stop>
                   <select
                     class="form-select form-select-sm fbs-label-sort-select"
                     v-model="labelSortMode"
@@ -469,42 +373,13 @@
                     <option value="created_at">По дате заказа</option>
                   </select>
                   <button
-                    class="btn btn-outline-secondary btn-sm fbs-label-sort-toggle"
+                    class="btn btn-outline-primary btn-sm"
                     type="button"
-                    :disabled="labelSortSaving"
-                    @click.stop="toggleLabelSortDirection"
+                    :disabled="!batchHasPostings(batch) || batchLabelLoading[batch.batch_id]"
+                    @click.stop="handleBatchLabels(batch.batch_id)"
                   >
-                    <svg
-                      v-if="labelSortAscending"
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke-width="1.5"
-                      stroke="currentColor"
-                      aria-hidden="true"
-                    >
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75 12 3m0 0 3.75 3.75M12 3v18" />
-                    </svg>
-                    <svg
-                      v-else
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke-width="1.5"
-                      stroke="currentColor"
-                      aria-hidden="true"
-                    >
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25 12 21m0 0-3.75-3.75M12 21V3" />
-                    </svg>
-                  </button>
-                  <button
-                    class="btn btn-outline-secondary btn-sm"
-                    type="button"
-                    :disabled="batchCarriageLoading[batch.batch_id]"
-                    @click.stop="openCarriageDialog(batch)"
-                  >
-                    <span v-if="batchCarriageLoading[batch.batch_id]" class="spinner-border spinner-border-sm me-2"></span>
-                    Создать отгрузку
+                    <span v-if="batchLabelLoading[batch.batch_id]" class="spinner-border spinner-border-sm me-2"></span>
+                    Скачать этикетки
                   </button>
                 </div>
               </div>
@@ -531,148 +406,41 @@
                 <div v-else>
                   <div v-if="batchPostings(batch.batch_id).length">
                     <div class="batch-selection-bar">
-                      <span class="text-muted small">Выбрано: {{ batchSelectedCount(batch.batch_id) }}</span>
-                      <div class="d-flex flex-wrap gap-2">
-                        <button class="btn btn-outline-secondary btn-sm" type="button" @click.stop="selectBatchAll(batch.batch_id)">
-                          Выделить все
-                        </button>
-                        <button
-                          class="btn btn-outline-secondary btn-sm"
-                          type="button"
-                          @click.stop="resetBatchSelection(batch.batch_id)"
-                          :disabled="!batchSelectedCount(batch.batch_id)"
-                        >
-                          Сброс
-                        </button>
-                        <button
-                          class="btn btn-outline-primary btn-sm"
-                          type="button"
-                          @click.stop="handleBatchSelectionLabels(batch.batch_id)"
-                          :disabled="!batchSelectedCount(batch.batch_id) || batchLabelLoading[batch.batch_id]"
-                        >
-                          <span v-if="batchLabelLoading[batch.batch_id]" class="spinner-border spinner-border-sm me-2"></span>
-                          Этикетки
-                        </button>
-                        <button
-                          class="btn btn-outline-primary btn-sm"
-                          type="button"
-                          @click.stop="handlePrint(batchSelectedNumbers(batch.batch_id))"
-                          :disabled="!batchSelectedCount(batch.batch_id) || isPrinting"
-                        >
-                          <span v-if="isPrinting" class="spinner-border spinner-border-sm me-2"></span>
-                          Печать
-                        </button>
-                        <span class="text-muted small ms-2">Сортировка:</span>
-                        <button
-                          class="btn btn-outline-secondary btn-sm"
-                          type="button"
-                          :class="{ 'btn-primary text-white': getBatchSortKey(batch.batch_id) === 'offer_id' }"
-                          @click.stop="setBatchSort(batch.batch_id, 'offer_id')"
-                        >
-                          По артикулу
-                          <span
-                            class="sort-arrow"
-                            :class="{ 'sort-arrow--hidden': getBatchSortKey(batch.batch_id) !== 'offer_id' }"
+                      <div class="batch-selection-left">
+                        <span class="text-muted small">Выбрано: {{ batchSelectedCount(batch.batch_id) }}</span>
+                        <div class="batch-selection-controls">
+                          <button class="btn btn-outline-secondary btn-sm" type="button" @click.stop="selectBatchAll(batch.batch_id)">
+                            Выделить все
+                          </button>
+                          <button
+                            class="btn btn-outline-secondary btn-sm"
+                            type="button"
+                            @click.stop="resetBatchSelection(batch.batch_id)"
+                            :disabled="!batchSelectedCount(batch.batch_id)"
                           >
-                            <svg
-                              v-if="getBatchSortDirection(batch.batch_id) === 1"
-                              xmlns="http://www.w3.org/2000/svg"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke-width="1.5"
-                              stroke="currentColor"
-                              class="sort-arrow__icon"
-                              aria-hidden="true"
-                            >
-                              <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75 12 3m0 0 3.75 3.75M12 3v18" />
-                            </svg>
-                            <svg
-                              v-else
-                              xmlns="http://www.w3.org/2000/svg"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke-width="1.5"
-                              stroke="currentColor"
-                              class="sort-arrow__icon"
-                              aria-hidden="true"
-                            >
-                              <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25 12 21m0 0-3.75-3.75M12 21V3" />
-                            </svg>
-                          </span>
-                        </button>
+                            Сброс
+                          </button>
+                          <select
+                            class="form-select form-select-sm fbs-batch-sort-select"
+                            :value="getBatchSortKey(batch.batch_id) || ''"
+                            @change="setBatchSort(batch.batch_id, ($event.target as HTMLSelectElement).value as 'offer_id' | 'weight' | 'date')"
+                          >
+                            <option value="" disabled>Сортировка</option>
+                            <option value="offer_id">По артикулу</option>
+                            <option value="weight">По весу</option>
+                            <option value="date">По времени</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div class="batch-selection-right">
                         <button
                           class="btn btn-outline-secondary btn-sm"
                           type="button"
-                          :class="{ 'btn-primary text-white': getBatchSortKey(batch.batch_id) === 'weight' }"
-                          @click.stop="setBatchSort(batch.batch_id, 'weight')"
+                          :disabled="batchCarriageLoading[batch.batch_id]"
+                          @click.stop="openCarriageDialog(batch)"
                         >
-                          По весу
-                          <span
-                            class="sort-arrow"
-                            :class="{ 'sort-arrow--hidden': getBatchSortKey(batch.batch_id) !== 'weight' }"
-                          >
-                            <svg
-                              v-if="getBatchSortDirection(batch.batch_id) === 1"
-                              xmlns="http://www.w3.org/2000/svg"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke-width="1.5"
-                              stroke="currentColor"
-                              class="sort-arrow__icon"
-                              aria-hidden="true"
-                            >
-                              <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75 12 3m0 0 3.75 3.75M12 3v18" />
-                            </svg>
-                            <svg
-                              v-else
-                              xmlns="http://www.w3.org/2000/svg"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke-width="1.5"
-                              stroke="currentColor"
-                              class="sort-arrow__icon"
-                              aria-hidden="true"
-                            >
-                              <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25 12 21m0 0-3.75-3.75M12 21V3" />
-                            </svg>
-                          </span>
-                        </button>
-                        <button
-                          class="btn btn-outline-secondary btn-sm"
-                          type="button"
-                          :class="{ 'btn-primary text-white': getBatchSortKey(batch.batch_id) === 'date' }"
-                          @click.stop="setBatchSort(batch.batch_id, 'date')"
-                        >
-                          По времени
-                          <span
-                            class="sort-arrow"
-                            :class="{ 'sort-arrow--hidden': getBatchSortKey(batch.batch_id) !== 'date' }"
-                          >
-                            <svg
-                              v-if="getBatchSortDirection(batch.batch_id) === 1"
-                              xmlns="http://www.w3.org/2000/svg"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke-width="1.5"
-                              stroke="currentColor"
-                              class="sort-arrow__icon"
-                              aria-hidden="true"
-                            >
-                              <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75 12 3m0 0 3.75 3.75M12 3v18" />
-                            </svg>
-                            <svg
-                              v-else
-                              xmlns="http://www.w3.org/2000/svg"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke-width="1.5"
-                              stroke="currentColor"
-                              class="sort-arrow__icon"
-                              aria-hidden="true"
-                            >
-                              <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25 12 21m0 0-3.75-3.75M12 21V3" />
-                            </svg>
-                          </span>
+                          <span v-if="batchCarriageLoading[batch.batch_id]" class="spinner-border spinner-border-sm me-2"></span>
+                          Создать отгрузку
                         </button>
                       </div>
                     </div>
@@ -1163,9 +931,7 @@ const batchSelections = ref<Record<string, Set<string>>>({})
 const batchLabelLoading = ref<Record<string, boolean>>({})
 const batchCarriageLoading = ref<Record<string, boolean>>({})
 const batchSortBy = ref<Record<string, 'offer_id' | 'weight' | 'date'>>({})
-const batchSortDirection = ref<Record<string, 1 | -1>>({})
 const newSortBy = ref<'' | 'offer_id' | 'weight' | 'date'>('')
-const newSortDirection = ref<1 | -1>(1)
 const shipBatchPollingTimer = ref<number | null>(null)
 
 const statusLabelMap: Record<string, string> = {
@@ -1214,18 +980,17 @@ const filteredPostings = computed(() => {
 const displayPostings = computed(() => {
   const list = filteredPostings.value
   if (!isAwaitingPackaging.value || !newSortBy.value) return list
-  const direction = newSortDirection.value
   return [...list].sort((a, b) => {
     if (newSortBy.value === 'offer_id') {
       const compare = postingPrimaryOfferId(a).localeCompare(postingPrimaryOfferId(b), 'ru', {
         sensitivity: 'base'
       })
-      return direction * compare
+      return compare
     }
     if (newSortBy.value === 'weight') {
-      return direction * (postingTotalWeight(a) - postingTotalWeight(b))
+      return postingTotalWeight(a) - postingTotalWeight(b)
     }
-    return direction * (postingSortDate(a) - postingSortDate(b))
+    return postingSortDate(a) - postingSortDate(b)
   })
 })
 
@@ -1426,20 +1191,9 @@ const isBatchRowSelected = (batchId: string, postingNumber: string) =>
 
 const getBatchSortKey = (batchId: string) => batchSortBy.value[batchId] || ''
 
-const getBatchSortDirection = (batchId: string) => batchSortDirection.value[batchId] ?? 1
-
 const setBatchSort = (batchId: string, key: 'offer_id' | 'weight' | 'date') => {
-  const currentKey = batchSortBy.value[batchId]
-  const currentDirection = batchSortDirection.value[batchId] ?? 1
-  if (currentKey === key) {
-    batchSortDirection.value = {
-      ...batchSortDirection.value,
-      [batchId]: currentDirection === 1 ? -1 : 1
-    }
-    return
-  }
+  if (batchSortBy.value[batchId] === key) return
   batchSortBy.value = { ...batchSortBy.value, [batchId]: key }
-  batchSortDirection.value = { ...batchSortDirection.value, [batchId]: 1 }
 }
 
 const postingTotalWeight = (posting: FbsPosting) => {
@@ -1513,18 +1267,17 @@ const batchDisplayPostings = (batchId: string) => {
   const list = batchPostings(batchId)
   const sortKey = getBatchSortKey(batchId)
   if (!sortKey) return list
-  const direction = getBatchSortDirection(batchId)
   return [...list].sort((a, b) => {
     if (sortKey === 'offer_id') {
       const compare = postingPrimaryOfferId(a).localeCompare(postingPrimaryOfferId(b), 'ru', {
         sensitivity: 'base'
       })
-      return direction * compare
+      return compare
     }
     if (sortKey === 'weight') {
-      return direction * (postingTotalWeight(a) - postingTotalWeight(b))
+      return postingTotalWeight(a) - postingTotalWeight(b)
     }
-    return direction * (postingSortDate(a) - postingSortDate(b))
+    return postingSortDate(a) - postingSortDate(b)
   })
 }
 
@@ -1738,8 +1491,7 @@ const applyLabelSortSettings = (data: any) => {
   } else {
     labelSortMode.value = 'offer_id'
   }
-  const ascending = data?.label_sort_ascending
-  labelSortAscending.value = typeof ascending === 'boolean' ? ascending : true
+  labelSortAscending.value = true
 }
 
 const loadLabelSortSettings = async () => {
@@ -1767,11 +1519,6 @@ const saveLabelSortSettings = async () => {
   } finally {
     labelSortSaving.value = false
   }
-}
-
-const toggleLabelSortDirection = () => {
-  labelSortAscending.value = !labelSortAscending.value
-  void saveLabelSortSettings()
 }
 
 const fetchShipmentProgress = async (batchId: string) => {
@@ -2237,12 +1984,8 @@ const handleRowClick = (postingNumber: string) => {
 }
 
 const setNewSort = (key: 'offer_id' | 'weight' | 'date') => {
-  if (newSortBy.value === key) {
-    newSortDirection.value = newSortDirection.value === 1 ? -1 : 1
-    return
-  }
+  if (newSortBy.value === key) return
   newSortBy.value = key
-  newSortDirection.value = 1
 }
 
 const isRowSelected = (postingNumber: string) => selectedPostings.value.has(postingNumber)
@@ -2624,7 +2367,7 @@ onBeforeUnmount(() => {
 
 .fbs-batch-header {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 0.75rem;
   align-items: center;
   justify-content: space-between;
@@ -2633,11 +2376,18 @@ onBeforeUnmount(() => {
 
 .fbs-batch-meta {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 0.35rem;
   font-size: 0.9rem;
   color: #f8fafc;
+}
+
+.fbs-batch-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: nowrap;
 }
 
 .fbs-batch-meta__strong {
@@ -2688,7 +2438,9 @@ onBeforeUnmount(() => {
 }
 
 .fbs-label-sort-select {
-  min-width: 170px;
+  width: max-content;
+  min-width: 0;
+  white-space: nowrap;
   background: rgba(15, 23, 42, 0.15);
   color: #f8fafc;
   border-color: rgba(248, 250, 252, 0.4);
@@ -2700,19 +2452,6 @@ onBeforeUnmount(() => {
 
 .fbs-label-sort-select option {
   color: #0f172a;
-}
-
-.fbs-label-sort-toggle {
-  width: 36px;
-  padding: 0.3rem 0.45rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.fbs-label-sort-toggle svg {
-  width: 18px;
-  height: 18px;
 }
 
 .fbs-batch-header .btn-outline-primary:hover,
@@ -2730,31 +2469,33 @@ onBeforeUnmount(() => {
   padding: 0.5rem 0.25rem;
 }
 
+.batch-selection-left {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.batch-selection-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.batch-selection-right {
+  display: flex;
+  align-items: center;
+}
+
+.fbs-batch-sort-select {
+  min-width: 0;
+  width: max-content;
+  white-space: nowrap;
+}
+
 .batch-selection-bar .btn-primary {
   border-color: transparent;
-}
-
-.sort-arrow {
-  display: inline-flex;
-  align-items: center;
-  margin-left: 0.35rem;
-  position: relative;
-  top: 1px;
-  width: 0.9rem;
-  height: 0.9rem;
-  justify-content: center;
-  flex: 0 0 0.9rem;
-}
-
-.sort-arrow__icon {
-  width: 0.8rem;
-  height: 0.8rem;
-  display: block;
-  transform-origin: center;
-}
-
-.sort-arrow--hidden {
-  visibility: hidden;
 }
 
 .fbs-tab {
