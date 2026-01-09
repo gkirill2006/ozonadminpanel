@@ -702,6 +702,15 @@ class ApiService {
     return this.handleResponse(response)
   }
 
+  async setStoreFilters(storeId: string | number, payload: Record<string, unknown>) {
+    const response = await fetch(`${API_BASE_URL}/auth/stores/${storeId}/filters/`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(payload)
+    })
+    return this.handleResponse(response)
+  }
+
   async deleteStore(storeId: string) {
     const response = await fetch(`${API_BASE_URL}/auth/stores/${storeId}/`, {
       method: 'DELETE',

@@ -458,6 +458,45 @@
                     <span v-if="batchLabelLoading[batch.batch_id]" class="spinner-border spinner-border-sm me-2"></span>
                     Этикетки
                   </button>
+                  <select
+                    class="form-select form-select-sm fbs-label-sort-select"
+                    v-model="labelSortMode"
+                    :disabled="labelSortSaving"
+                    @change="saveLabelSortSettings"
+                  >
+                    <option value="offer_id">По артикулу</option>
+                    <option value="weight">По весу</option>
+                    <option value="created_at">По дате заказа</option>
+                  </select>
+                  <button
+                    class="btn btn-outline-secondary btn-sm fbs-label-sort-toggle"
+                    type="button"
+                    :disabled="labelSortSaving"
+                    @click.stop="toggleLabelSortDirection"
+                  >
+                    <svg
+                      v-if="labelSortAscending"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke-width="1.5"
+                      stroke="currentColor"
+                      aria-hidden="true"
+                    >
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75 12 3m0 0 3.75 3.75M12 3v18" />
+                    </svg>
+                    <svg
+                      v-else
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke-width="1.5"
+                      stroke="currentColor"
+                      aria-hidden="true"
+                    >
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25 12 21m0 0-3.75-3.75M12 21V3" />
+                    </svg>
+                  </button>
                   <button
                     class="btn btn-outline-secondary btn-sm"
                     type="button"
@@ -1114,6 +1153,9 @@ const shipmentProgressBatch = ref<FbsShipBatch | null>(null)
 const shipmentProgressLoading = ref(false)
 const shipmentProgressError = ref<string | null>(null)
 const shipmentProgressTimer = ref<number | null>(null)
+const labelSortMode = ref<'offer_id' | 'weight' | 'created_at'>('offer_id')
+const labelSortAscending = ref(true)
+const labelSortSaving = ref(false)
 const carriageDialogOpen = ref(false)
 const carriageSuccessOpen = ref(false)
 const carriagePlacesCount = ref('1')
@@ -1691,6 +1733,49 @@ const updateBatchInList = (batch: FbsShipBatch) => {
   shipBatches.value = shipBatches.value.map((item) =>
     item.batch_id === batch.batch_id ? { ...item, ...batch } : item
   )
+}
+
+const applyLabelSortSettings = (data: any) => {
+  const mode = data?.label_sort_mode
+  if (mode === 'offer_id' || mode === 'weight' || mode === 'created_at') {
+    labelSortMode.value = mode
+  } else {
+    labelSortMode.value = 'offer_id'
+  }
+  const ascending = data?.label_sort_ascending
+  labelSortAscending.value = typeof ascending === 'boolean' ? ascending : true
+}
+
+const loadLabelSortSettings = async () => {
+  if (!props.storeId) return
+  try {
+    const data = await apiService.getUserStoreFilters(props.storeId)
+    applyLabelSortSettings(data)
+  } catch (error) {
+    labelSortMode.value = 'offer_id'
+    labelSortAscending.value = true
+  }
+}
+
+const saveLabelSortSettings = async () => {
+  if (!props.storeId || labelSortSaving.value) return
+  labelSortSaving.value = true
+  try {
+    await apiService.setStoreFilters(props.storeId, {
+      label_sort_mode: labelSortMode.value,
+      label_sort_ascending: labelSortAscending.value
+    })
+  } catch (error) {
+    errorMessage.value =
+      error instanceof Error ? error.message : 'Не удалось сохранить сортировку этикеток'
+  } finally {
+    labelSortSaving.value = false
+  }
+}
+
+const toggleLabelSortDirection = () => {
+  labelSortAscending.value = !labelSortAscending.value
+  void saveLabelSortSettings()
 }
 
 const fetchShipmentProgress = async (batchId: string) => {
@@ -2355,7 +2440,9 @@ const handleLabels = async (
       store_id: Number(props.storeId),
       posting_numbers: numbers,
       label_type: 'big_label',
-      wait_seconds: 2
+      wait_seconds: 2,
+      sort_mode: labelSortMode.value,
+      sort_ascending: labelSortAscending.value
     })
 
     if (response && response.pending) {
@@ -2419,10 +2506,14 @@ watch(
     isNotShippedLoading.value = false
     isHistoryLoading.value = false
     activeStatus.value = 'awaiting_packaging'
+    labelSortMode.value = 'offer_id'
+    labelSortAscending.value = true
+    labelSortSaving.value = false
     rangeFrom.value = ''
     rangeTo.value = ''
     batchCarriageLoading.value = {}
     await loadImmediate()
+    await loadLabelSortSettings()
   },
   { immediate: true }
 )
@@ -2598,6 +2689,34 @@ onBeforeUnmount(() => {
 .fbs-batch-header .btn-outline-secondary {
   color: #f8fafc;
   border-color: rgba(248, 250, 252, 0.6);
+}
+
+.fbs-label-sort-select {
+  min-width: 170px;
+  background: rgba(15, 23, 42, 0.15);
+  color: #f8fafc;
+  border-color: rgba(248, 250, 252, 0.4);
+}
+
+.fbs-label-sort-select:disabled {
+  opacity: 0.7;
+}
+
+.fbs-label-sort-select option {
+  color: #0f172a;
+}
+
+.fbs-label-sort-toggle {
+  width: 36px;
+  padding: 0.3rem 0.45rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fbs-label-sort-toggle svg {
+  width: 18px;
+  height: 18px;
 }
 
 .fbs-batch-header .btn-outline-primary:hover,
