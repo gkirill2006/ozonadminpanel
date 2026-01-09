@@ -982,10 +982,7 @@ const displayPostings = computed(() => {
   if (!isAwaitingPackaging.value || !newSortBy.value) return list
   return [...list].sort((a, b) => {
     if (newSortBy.value === 'offer_id') {
-      const compare = postingPrimaryOfferId(a).localeCompare(postingPrimaryOfferId(b), 'ru', {
-        sensitivity: 'base'
-      })
-      return compare
+      return compareOfferIds(postingPrimaryOfferId(a), postingPrimaryOfferId(b))
     }
     if (newSortBy.value === 'weight') {
       return postingTotalWeight(a) - postingTotalWeight(b)
@@ -1217,6 +1214,29 @@ const postingPrimaryOfferId = (posting: FbsPosting) => {
   return product?.offer_id ? String(product.offer_id) : ''
 }
 
+const offerIdGroup = (value: string) => {
+  if (/[A-Za-z]/.test(value)) return 0
+  if (/[А-Яа-яЁё]/.test(value)) return 1
+  return 2
+}
+
+const compareOfferIds = (left: string, right: string) => {
+  const leftValue = left.trim()
+  const rightValue = right.trim()
+  const leftGroup = offerIdGroup(leftValue)
+  const rightGroup = offerIdGroup(rightValue)
+  if (leftGroup !== rightGroup) {
+    return leftGroup - rightGroup
+  }
+  if (leftGroup === 0) {
+    return leftValue.localeCompare(rightValue, 'en', { sensitivity: 'base' })
+  }
+  if (leftGroup === 1) {
+    return leftValue.localeCompare(rightValue, 'ru', { sensitivity: 'base' })
+  }
+  return leftValue.localeCompare(rightValue, undefined, { sensitivity: 'base' })
+}
+
 const postingSortDate = (posting: FbsPosting) => {
   const value = primaryDate(posting)
   if (!value) return Number.POSITIVE_INFINITY
@@ -1269,10 +1289,7 @@ const batchDisplayPostings = (batchId: string) => {
   if (!sortKey) return list
   return [...list].sort((a, b) => {
     if (sortKey === 'offer_id') {
-      const compare = postingPrimaryOfferId(a).localeCompare(postingPrimaryOfferId(b), 'ru', {
-        sensitivity: 'base'
-      })
-      return compare
+      return compareOfferIds(postingPrimaryOfferId(a), postingPrimaryOfferId(b))
     }
     if (sortKey === 'weight') {
       return postingTotalWeight(a) - postingTotalWeight(b)
