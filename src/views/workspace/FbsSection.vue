@@ -169,6 +169,7 @@
               <table class="table fbs-table align-middle">
                 <thead>
                   <tr>
+                    <th class="fbs-col-offer">Артикул</th>
                     <th class="fbs-col-number">Номер отправления</th>
                     <th class="fbs-col-date">Ожидают сборки</th>
                     <th class="fbs-col-date">Ожидают отгрузки</th>
@@ -179,6 +180,9 @@
                 </thead>
                 <tbody v-if="historyItems.length">
                   <tr v-for="(item, index) in historyItems" :key="`${item.posting_number}-${index}`">
+                    <td>
+                      <div class="fw-semibold">{{ item.offer_id || '—' }}</div>
+                    </td>
                     <td>
                       <div class="fw-semibold">{{ item.posting_number }}</div>
                     </td>
@@ -201,7 +205,7 @@
                 </tbody>
                 <tbody v-else>
                   <tr>
-                    <td colspan="6" class="text-center text-muted py-4">
+                    <td colspan="7" class="text-center text-muted py-4">
                       Нет истории для отображения
                     </td>
                   </tr>
@@ -854,6 +858,7 @@ interface FbsCarriageDetail {
 
 interface FbsHistoryItem {
   posting_number: string
+  offer_id?: string | null
   awaiting_packaging?: string | null
   awaiting_deliver?: string | null
   acceptance_in_progress?: string | null
@@ -2656,6 +2661,10 @@ onBeforeUnmount(() => {
 
 .fbs-col-number {
   min-width: 160px;
+}
+
+.fbs-col-offer {
+  min-width: 180px;
 }
 
 .fbs-col-status {
