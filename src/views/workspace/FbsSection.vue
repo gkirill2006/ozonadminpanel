@@ -1433,12 +1433,17 @@ const applyPostingsResponse = (response: unknown, options?: { skipPostings?: boo
     const sync = (response as any).sync
     let nextCounts = counts && typeof counts === 'object' ? { ...(counts as Record<string, number>) } : {}
     let nextTotal = typeof total === 'number' ? total : null
+    const historyTotalFromCounts =
+      counts && typeof counts === 'object' ? Number((counts as any).history_total) : Number.NaN
     const awaitingDeliverCount =
       counts && typeof counts === 'object'
         ? (counts as any).awaiting_deliver ?? (counts as any).awaiting_delive
         : undefined
     if (typeof awaitingDeliverCount === 'number') {
       nextCounts.awaiting_deliver = awaitingDeliverCount
+    }
+    if (Number.isFinite(historyTotalFromCounts)) {
+      historyTotal.value = historyTotalFromCounts
     }
 
     if (sync && typeof sync === 'object') {
@@ -1492,6 +1497,10 @@ const loadShipBatches = async (options?: { showLoader?: boolean; preserveState?:
   errorMessage.value = null
   try {
     const response = await apiService.getFbsShipBatches({ storeId: props.storeId })
+    const counts = (response as any)?.counts
+    if (counts && typeof counts === 'object') {
+      applyPostingsResponse(response, { skipPostings: true })
+    }
     const total = Number((response as any)?.on_packaging_total)
     onPackagingTotal.value = Number.isFinite(total) ? total : null
     const list = (response as any)?.batches
@@ -1738,6 +1747,10 @@ const loadNotShipped = async (options?: { showLoader?: boolean; refresh?: boolea
       refresh: options?.refresh ? 1 : 0,
       limit: 1000
     })
+    const counts = (response as any)?.counts
+    if (counts && typeof counts === 'object') {
+      applyPostingsResponse(response, { skipPostings: true })
+    }
     const list = (response as any)?.postings
     postings.value = Array.isArray(list) ? (list as FbsPosting[]) : []
     const count = Number((response as any)?.count)
@@ -1770,12 +1783,19 @@ const loadHistory = async (options?: { showLoader?: boolean }) => {
       storeId: props.storeId,
       limit: 1000
     })
+    const counts = (response as any)?.counts
+    const historyTotalFromCounts =
+      counts && typeof counts === 'object' ? Number((counts as any).history_total) : Number.NaN
     const list = (response as any)?.results
     historyItems.value = Array.isArray(list) ? (list as FbsHistoryItem[]) : []
     const count = Number((response as any)?.count)
     historyCount.value = Number.isFinite(count) ? count : historyItems.value.length
     const total = Number((response as any)?.total)
-    historyTotal.value = Number.isFinite(total) ? total : historyCount.value
+    if (Number.isFinite(historyTotalFromCounts)) {
+      historyTotal.value = historyTotalFromCounts
+    } else {
+      historyTotal.value = Number.isFinite(total) ? total : historyCount.value
+    }
     historyLastSync.value = new Date().toISOString()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Не удалось загрузить историю'
