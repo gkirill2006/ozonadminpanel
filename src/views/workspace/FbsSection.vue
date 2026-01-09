@@ -898,15 +898,13 @@ interface FbsHistoryItem {
   cancelled?: string | null
 }
 
-const statusKeys = ['awaiting_packaging', 'awaiting_deliver', 'acceptance_in_progress', 'delivering']
+const statusKeys = ['awaiting_packaging', 'delivering']
 
 const statusTabs = [
   { key: 'awaiting_packaging', label: 'Новые' },
   { key: 'ship_batches', label: 'На сборке' },
   { key: 'carriages', label: 'В доставке' },
   { key: 'not_shipped', label: 'Не переданы в доставку' },
-  { key: 'awaiting_deliver', label: 'Ожидают отгрузки' },
-  { key: 'acceptance_in_progress', label: 'Приемка' },
   { key: 'delivering', label: 'Доставляются' },
   { key: 'history', label: 'История' }
 ]
