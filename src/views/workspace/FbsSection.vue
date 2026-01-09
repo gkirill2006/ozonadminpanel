@@ -469,6 +469,18 @@
                   </button>
                 </div>
               </div>
+              <div
+                v-if="!isBatchFinished(batch)"
+                class="fbs-batch-progress"
+                @click.stop
+              >
+                <div class="fbs-batch-progress__meta">
+                  Готово {{ batchProgressText(batch) }} · {{ batchProgressPercent(batch) }}%
+                </div>
+                <div class="fbs-batch-progress__bar">
+                  <span :style="{ width: `${batchProgressPercent(batch)}%` }"></span>
+                </div>
+              </div>
               <div v-if="isBatchExpanded(batch.batch_id)" class="fbs-batch-body" @click.stop>
                 <div v-if="batchDetailLoading[batch.batch_id]" class="fbs-loading">
                   <span class="spinner-border spinner-border-sm me-2"></span>
@@ -863,6 +875,40 @@
     </div>
   </Modal>
 
+  <Modal v-if="shipmentProgressOpen" @close="closeShipmentProgress">
+    <div class="fbs-modal">
+      <h5 class="mb-2">Создание отгрузки</h5>
+      <div v-if="shipmentProgressBatch?.name" class="text-muted small mb-2">
+        {{ shipmentProgressBatch.name }}
+      </div>
+      <div v-if="shipmentProgressBatch?.status" class="text-muted small mb-2">
+        Статус: {{ shipmentProgressBatch.status }}
+      </div>
+      <div class="fbs-progress">
+        <span
+          class="fbs-progress__bar"
+          :style="{ width: `${batchProgressPercent(shipmentProgressBatch)}%` }"
+        ></span>
+      </div>
+      <div class="d-flex justify-content-between text-muted small mt-2">
+        <span>Готово {{ batchProgressText(shipmentProgressBatch) }}</span>
+        <span>{{ batchProgressPercent(shipmentProgressBatch) }}%</span>
+      </div>
+      <div v-if="shipmentProgressLoading" class="text-muted small mt-2 d-flex align-items-center gap-2">
+        <span class="spinner-border spinner-border-sm"></span>
+        Обновляем прогресс...
+      </div>
+      <div v-if="shipmentProgressError" class="alert alert-danger py-1 px-2 mt-2">
+        {{ shipmentProgressError }}
+      </div>
+      <div class="d-flex justify-content-end mt-3">
+        <button class="btn btn-outline-secondary btn-sm" type="button" @click="closeShipmentProgress">
+          Закрыть
+        </button>
+      </div>
+    </div>
+  </Modal>
+
   <Modal v-if="carriageDialogOpen" @close="closeCarriageDialog">
     <div class="fbs-modal">
       <h5 class="mb-3">Создать отгрузку</h5>
@@ -905,7 +951,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import Modal from '@/components/Modal.vue'
 import { apiService } from '@/services/api'
 
@@ -964,6 +1010,8 @@ interface FbsShipBatch {
   total_count?: number | null
   success_count?: number | null
   failed_count?: number | null
+  processed_count?: number | null
+  progress?: number | null
   error_message?: string | null
   started_at?: string | null
   finished_at?: string | null
@@ -1061,6 +1109,11 @@ const errorMessage = ref<string | null>(null)
 const labelNotice = ref<string | null>(null)
 const shipmentDialogOpen = ref(false)
 const shipmentName = ref('')
+const shipmentProgressOpen = ref(false)
+const shipmentProgressBatch = ref<FbsShipBatch | null>(null)
+const shipmentProgressLoading = ref(false)
+const shipmentProgressError = ref<string | null>(null)
+const shipmentProgressTimer = ref<number | null>(null)
 const carriageDialogOpen = ref(false)
 const carriageSuccessOpen = ref(false)
 const carriagePlacesCount = ref('1')
@@ -1075,6 +1128,7 @@ const batchSortBy = ref<Record<string, 'offer_id' | 'weight' | 'date'>>({})
 const batchSortDirection = ref<Record<string, 1 | -1>>({})
 const newSortBy = ref<'' | 'offer_id' | 'weight' | 'date'>('')
 const newSortDirection = ref<1 | -1>(1)
+const shipBatchPollingTimer = ref<number | null>(null)
 
 const statusLabelMap: Record<string, string> = {
   awaiting_packaging: 'Ожидает сборки',
@@ -1378,6 +1432,45 @@ const postingSortDate = (posting: FbsPosting) => {
   return Number.isNaN(ts) ? Number.POSITIVE_INFINITY : ts
 }
 
+const batchProgressPercent = (batch?: FbsShipBatch | null) => {
+  if (!batch) return 0
+  const progress = Number(batch.progress)
+  if (Number.isFinite(progress)) {
+    return Math.max(0, Math.min(100, Math.round(progress * 100)))
+  }
+  const processed = Number(batch.processed_count)
+  const total = Number(batch.total_count)
+  if (Number.isFinite(processed) && Number.isFinite(total) && total > 0) {
+    return Math.max(0, Math.min(100, Math.round((processed / total) * 100)))
+  }
+  return 0
+}
+
+const batchProgressText = (batch?: FbsShipBatch | null) => {
+  if (!batch) return '—'
+  const processed = Number(batch.processed_count)
+  const total = Number(batch.total_count)
+  if (Number.isFinite(processed) && Number.isFinite(total) && total > 0) {
+    return `${processed} из ${total}`
+  }
+  return '—'
+}
+
+const isBatchFinished = (batch?: FbsShipBatch | null) => {
+  if (!batch) return true
+  if (batch.status === 'completed' || batch.status === 'partial') return true
+  const total = Number(batch.total_count)
+  const processed = Number(batch.processed_count)
+  if (Number.isFinite(total) && Number.isFinite(processed) && total > 0) {
+    return processed >= total
+  }
+  return false
+}
+
+const hasProcessingBatches = computed(() =>
+  shipBatches.value.some((batch) => !isBatchFinished(batch))
+)
+
 const batchDisplayPostings = (batchId: string) => {
   const list = batchPostings(batchId)
   const sortKey = getBatchSortKey(batchId)
@@ -1514,7 +1607,7 @@ const applyPostingsResponse = (response: unknown, options?: { skipPostings?: boo
   postings.value = []
 }
 
-const loadShipBatches = async (options?: { showLoader?: boolean }) => {
+const loadShipBatches = async (options?: { showLoader?: boolean; preserveState?: boolean }) => {
   if (!props.storeId) return
   const showLoader = Boolean(options?.showLoader || !shipBatches.value.length)
   if (showLoader) {
@@ -1526,13 +1619,40 @@ const loadShipBatches = async (options?: { showLoader?: boolean }) => {
     const total = Number((response as any)?.on_packaging_total)
     onPackagingTotal.value = Number.isFinite(total) ? total : null
     const list = (response as any)?.batches
-    shipBatches.value = Array.isArray(list) ? (list as FbsShipBatch[]) : []
-    shipBatchExpanded.value = new Set()
-    shipBatchDetails.value = {}
-    batchDetailLoading.value = {}
-    batchDetailError.value = {}
-    batchSelections.value = {}
-    batchCarriageLoading.value = {}
+    const nextBatches = Array.isArray(list) ? (list as FbsShipBatch[]) : []
+    shipBatches.value = nextBatches
+    if (!options?.preserveState) {
+      shipBatchExpanded.value = new Set()
+      shipBatchDetails.value = {}
+      batchDetailLoading.value = {}
+      batchDetailError.value = {}
+      batchSelections.value = {}
+      batchCarriageLoading.value = {}
+    } else {
+      const ids = new Set(nextBatches.map((batch) => batch.batch_id))
+      shipBatchExpanded.value = new Set([...shipBatchExpanded.value].filter((id) => ids.has(id)))
+      shipBatchDetails.value = Object.fromEntries(
+        Object.entries(shipBatchDetails.value).filter(([id]) => ids.has(id))
+      )
+      batchDetailLoading.value = Object.fromEntries(
+        Object.entries(batchDetailLoading.value).filter(([id]) => ids.has(id))
+      )
+      batchDetailError.value = Object.fromEntries(
+        Object.entries(batchDetailError.value).filter(([id]) => ids.has(id))
+      )
+      batchSelections.value = Object.fromEntries(
+        Object.entries(batchSelections.value).filter(([id]) => ids.has(id))
+      )
+      batchCarriageLoading.value = Object.fromEntries(
+        Object.entries(batchCarriageLoading.value).filter(([id]) => ids.has(id))
+      )
+      nextBatches.forEach((batch) => {
+        const detail = shipBatchDetails.value[batch.batch_id]
+        if (detail) {
+          detail.batch = { ...detail.batch, ...batch }
+        }
+      })
+    }
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Не удалось загрузить батчи'
     shipBatches.value = []
@@ -1541,6 +1661,78 @@ const loadShipBatches = async (options?: { showLoader?: boolean }) => {
     if (showLoader) {
       isBatchLoading.value = false
     }
+  }
+}
+
+const startShipBatchPolling = () => {
+  if (shipBatchPollingTimer.value) return
+  shipBatchPollingTimer.value = window.setInterval(() => {
+    if (activeStatus.value !== 'ship_batches') return
+    void loadShipBatches({ showLoader: false, preserveState: true })
+  }, 2000)
+}
+
+const stopShipBatchPolling = () => {
+  if (shipBatchPollingTimer.value) {
+    window.clearInterval(shipBatchPollingTimer.value)
+    shipBatchPollingTimer.value = null
+  }
+}
+
+const updateShipBatchPolling = () => {
+  if (activeStatus.value === 'ship_batches' && hasProcessingBatches.value) {
+    startShipBatchPolling()
+    return
+  }
+  stopShipBatchPolling()
+}
+
+const updateBatchInList = (batch: FbsShipBatch) => {
+  shipBatches.value = shipBatches.value.map((item) =>
+    item.batch_id === batch.batch_id ? { ...item, ...batch } : item
+  )
+}
+
+const fetchShipmentProgress = async (batchId: string) => {
+  if (!batchId) return
+  shipmentProgressLoading.value = true
+  shipmentProgressError.value = null
+  try {
+    const response = await apiService.getFbsShipBatchDetail(batchId)
+    const batch = ((response as any)?.batch || response) as FbsShipBatch
+    if (batch && batch.batch_id) {
+      shipmentProgressBatch.value = {
+        ...(shipmentProgressBatch.value || { batch_id: batchId }),
+        ...batch
+      }
+      updateBatchInList(batch)
+      updateShipBatchPolling()
+      if (isBatchFinished(batch)) {
+        stopShipmentProgressPolling()
+      }
+    }
+  } catch (error) {
+    shipmentProgressError.value =
+      error instanceof Error ? error.message : 'Не удалось загрузить прогресс'
+  } finally {
+    shipmentProgressLoading.value = false
+  }
+}
+
+const startShipmentProgressPolling = (batchId: string) => {
+  if (shipmentProgressTimer.value) {
+    window.clearInterval(shipmentProgressTimer.value)
+  }
+  void fetchShipmentProgress(batchId)
+  shipmentProgressTimer.value = window.setInterval(() => {
+    void fetchShipmentProgress(batchId)
+  }, 2000)
+}
+
+const stopShipmentProgressPolling = () => {
+  if (shipmentProgressTimer.value) {
+    window.clearInterval(shipmentProgressTimer.value)
+    shipmentProgressTimer.value = null
   }
 }
 
@@ -1863,6 +2055,20 @@ const closeShipmentDialog = () => {
   shipmentDialogOpen.value = false
 }
 
+const openShipmentProgress = (batch: FbsShipBatch) => {
+  shipmentProgressBatch.value = batch
+  shipmentProgressError.value = null
+  shipmentProgressOpen.value = true
+  startShipmentProgressPolling(batch.batch_id)
+}
+
+const closeShipmentProgress = () => {
+  shipmentProgressOpen.value = false
+  shipmentProgressBatch.value = null
+  shipmentProgressError.value = null
+  stopShipmentProgressPolling()
+}
+
 const openCarriageDialog = (batch: FbsShipBatch) => {
   if (!batch) return
   carriageBatch.value = batch
@@ -1898,10 +2104,14 @@ const createShipment = async () => {
     if (trimmed) {
       payload.batch_name = trimmed
     }
-    await apiService.createFbsShipment(payload)
+    const response = await apiService.createFbsShipment(payload)
     closeShipmentDialog()
     resetSelection()
     await refreshPostings()
+    const batch = response as FbsShipBatch
+    if (batch?.batch_id) {
+      openShipmentProgress(batch)
+    }
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Не удалось создать отгрузку'
   } finally {
@@ -2251,6 +2461,18 @@ watch(
     await loadPostings()
   }
 )
+
+watch(
+  [() => activeStatus.value, () => hasProcessingBatches.value],
+  () => {
+    updateShipBatchPolling()
+  }
+)
+
+onBeforeUnmount(() => {
+  stopShipBatchPolling()
+  stopShipmentProgressPolling()
+})
 </script>
 
 <style scoped>
@@ -2346,6 +2568,30 @@ watch(
   background: #fff;
   border-radius: 12px;
   padding: 0.75rem;
+}
+
+.fbs-batch-progress {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  color: rgba(248, 250, 252, 0.9);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.fbs-batch-progress__bar {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(248, 250, 252, 0.2);
+  overflow: hidden;
+}
+
+.fbs-batch-progress__bar span {
+  display: block;
+  height: 100%;
+  background: #fbbf24;
+  border-radius: 999px;
 }
 
 .fbs-batch-header .btn-outline-primary,
@@ -2654,15 +2900,36 @@ watch(
 .fbs-ship-fab {
   position: fixed;
   left: 50%;
-  bottom: 1.5rem;
+  bottom: 2.5rem;
   transform: translateX(-50%);
   z-index: 50;
+}
+
+.fbs-ship-fab .btn {
+  padding: 0.6rem 1.4rem;
+  font-size: 0.95rem;
 }
 
 .fbs-modal {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+}
+
+.fbs-progress {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+}
+
+.fbs-progress__bar {
+  display: block;
+  height: 100%;
+  background: #22c55e;
+  border-radius: 999px;
+  transition: width 0.3s ease;
 }
 
 .selection-bar {
