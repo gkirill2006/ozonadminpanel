@@ -1757,7 +1757,7 @@ const saveLabelSortSettings = async () => {
   if (!props.storeId || labelSortSaving.value) return
   labelSortSaving.value = true
   try {
-    await apiService.setStoreFilters(props.storeId, {
+    await apiService.updateUserStoreFilters(props.storeId, {
       label_sort_mode: labelSortMode.value,
       label_sort_ascending: labelSortAscending.value
     })

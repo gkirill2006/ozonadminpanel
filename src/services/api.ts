@@ -704,7 +704,7 @@ class ApiService {
 
   async setStoreFilters(storeId: string | number, payload: Record<string, unknown>) {
     const response = await fetch(`${API_BASE_URL}/auth/stores/${storeId}/filters/`, {
-      method: 'POST',
+      method: 'PATCH',
       headers: this.getHeaders(),
       body: JSON.stringify(payload)
     })
