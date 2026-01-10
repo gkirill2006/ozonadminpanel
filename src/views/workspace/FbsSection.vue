@@ -2005,7 +2005,7 @@ const loadImmediate = async () => {
     await loadNotShipped({ showLoader: true })
     return
   }
-  await refreshPostings({ showLoader: true })
+  await loadPostings()
 }
 
 const pad2 = (value: number) => String(value).padStart(2, '0')
