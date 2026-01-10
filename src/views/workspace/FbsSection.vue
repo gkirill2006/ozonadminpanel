@@ -781,6 +781,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import Modal from '@/components/Modal.vue'
 import { apiService } from '@/services/api'
+import { useAuthStore } from '@/stores/auth'
 
 const props = defineProps<{
   storeId: string
@@ -839,6 +840,22 @@ interface FbsShipBatch {
   failed_count?: number | null
   processed_count?: number | null
   progress?: number | null
+  batch_labels?: {
+    error?: number | null
+    ready?: number | null
+    total?: number | null
+    status?: string | null
+    missing?: number | null
+    pending?: number | null
+    file_url?: string | null
+    file_name?: string | null
+    file_path?: string | null
+    sort_mode?: string | null
+    label_type?: string | null
+    sort_ascending?: boolean | null
+    generated_at?: string | null
+    last_attempt_at?: string | null
+  } | null
   label_tasks?: {
     created?: number | null
     errors?: number | null
@@ -2187,11 +2204,29 @@ const setBatchLabelLoading = (batchId: string, value: boolean) => {
   batchLabelLoading.value = { ...batchLabelLoading.value, [batchId]: value }
 }
 
+const getBatchLabels = (batchId: string) => {
+  const detail = shipBatchDetails.value[batchId]
+  if (detail?.batch?.batch_labels) {
+    return detail.batch.batch_labels
+  }
+  const listBatch = shipBatches.value.find((item) => item.batch_id === batchId)
+  return listBatch?.batch_labels || null
+}
+
 const handleBatchLabels = async (batchId: string) => {
   if (batchLabelLoading.value[batchId]) return
   setBatchLabelLoading(batchId, true)
   try {
-    await ensureBatchDetail(batchId)
+    let batchLabels = getBatchLabels(batchId)
+    if (!batchLabels || batchLabels.status !== 'ready' || !batchLabels.file_url) {
+      await ensureBatchDetail(batchId)
+      batchLabels = getBatchLabels(batchId)
+    }
+    if (batchLabels?.status === 'ready' && batchLabels.file_url) {
+      const filename = batchLabels.file_name || `batch_${batchId}_labels.pdf`
+      await downloadFileUrl(batchLabels.file_url, filename)
+      return
+    }
     const numbers = batchPostings(batchId).map((posting) => posting.posting_number).filter(Boolean)
     if (!numbers.length) return
     await handleLabels(numbers, { skipGlobalLoading: true, skipReload: true })
@@ -2287,6 +2322,32 @@ const downloadBlob = (blob: Blob, filename: string) => {
   link.click()
   document.body.removeChild(link)
   URL.revokeObjectURL(url)
+}
+
+const resolveFileUrl = (path: string) => {
+  if (!path) return ''
+  if (/^https?:\/\//i.test(path)) return path
+  const base = (import.meta.env.VITE_API_BASE_URL as string | undefined) || ''
+  if (!base) return path
+  const normalizedBase = base.endsWith('/') ? base.slice(0, -1) : base
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+  return `${normalizedBase}${normalizedPath}`
+}
+
+const downloadFileUrl = async (path: string, filename: string) => {
+  const url = resolveFileUrl(path)
+  if (!url) return
+  const authStore = useAuthStore()
+  const headers: Record<string, string> = {}
+  if (authStore.accessToken) {
+    headers['Authorization'] = `Bearer ${authStore.accessToken}`
+  }
+  const response = await fetch(url, { headers })
+  if (!response.ok) {
+    throw new Error('Не удалось скачать файл')
+  }
+  const blob = await response.blob()
+  downloadBlob(blob, filename)
 }
 
 const selectMissingLabels = () => {
