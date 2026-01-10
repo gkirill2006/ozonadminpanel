@@ -1336,6 +1336,25 @@ const labelProgressText = (batch?: FbsShipBatch | null) => {
   return `${labelStatusReady(batch)} из ${total}`
 }
 
+const labelStatusPending = (batch?: FbsShipBatch | null) => {
+  const status = batch?.label_status
+  if (!status) return 0
+  const pending = Number(status.pending)
+  if (Number.isFinite(pending)) return pending
+  const total = labelStatusTotal(batch)
+  const ready = labelStatusReady(batch)
+  const error = Number(status.error) || 0
+  const missing = Number(status.missing) || 0
+  return Math.max(0, total - ready - error - missing)
+}
+
+const shouldStopShipmentProgress = (batch?: FbsShipBatch | null) => {
+  if (!batch || !isBatchFinished(batch)) return false
+  const total = labelStatusTotal(batch)
+  if (!total) return true
+  return labelStatusPending(batch) <= 0
+}
+
 const isBatchFinished = (batch?: FbsShipBatch | null) => {
   if (!batch) return true
   if (batch.status === 'completed' || batch.status === 'partial') return true
@@ -1625,15 +1644,16 @@ const fetchShipmentProgress = async (batchId: string) => {
     const labelStatus = (response as any)?.label_status ?? (batch as any)?.label_status
     const labelTasks = (response as any)?.label_tasks ?? (batch as any)?.label_tasks
     if (batch && batch.batch_id) {
-      shipmentProgressBatch.value = {
+      const mergedBatch: FbsShipBatch = {
         ...(shipmentProgressBatch.value || { batch_id: batchId }),
         ...batch,
         label_status: labelStatus ?? null,
         label_tasks: labelTasks ?? null
       }
+      shipmentProgressBatch.value = mergedBatch
       updateBatchInList(batch)
       updateShipBatchPolling()
-      if (isBatchFinished(batch)) {
+      if (shouldStopShipmentProgress(mergedBatch)) {
         stopShipmentProgressPolling()
       }
     }

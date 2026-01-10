@@ -121,9 +121,18 @@
                     :class="['text-center', getImpactHeaderClass(cluster)]"
                   >
                     <div class="cluster-header">
-                      <span v-if="selectedRowsSize" class="cluster-sum">
-                        {{ formatNumber(selectedClusterTotals[cluster]) }}
-                      </span>
+                      <div v-if="selectedRowsSize" class="cluster-sum-row">
+                        <input
+                          type="checkbox"
+                          class="form-check-input cluster-sum-checkbox"
+                          :checked="isShipmentClusterSelected(cluster)"
+                          @click.stop
+                          @change="toggleShipmentCluster(cluster, ($event.target as HTMLInputElement).checked)"
+                        />
+                        <span class="cluster-sum">
+                          {{ formatNumber(selectedClusterTotals[cluster]) }}
+                        </span>
+                      </div>
                       <span class="cluster-name">{{ cluster }}</span>
                       <span v-if="getClusterImpactShare(cluster) !== null" class="cluster-share">
                         {{ formatImpactShare(getClusterImpactShare(cluster)) }}
@@ -594,6 +603,18 @@ const supplyDialogOpen = ref(false)
 const supplyCreateLoading = ref(false)
 const supplyCreateError = ref<string | null>(null)
 
+const isShipmentClusterSelected = (cluster: string) => selectedShipmentWarehouses.value.has(cluster)
+
+const toggleShipmentCluster = (cluster: string, checked: boolean) => {
+  const next = new Set(selectedShipmentWarehouses.value)
+  if (checked) {
+    next.add(cluster)
+  } else {
+    next.delete(cluster)
+  }
+  selectedShipmentWarehouses.value = next
+}
+
 const supplyTypeOptions = [
   { value: 'CREATE_TYPE_CROSSDOCK', label: 'Кросс-докинг' },
   { value: 'CREATE_TYPE_DIRECT', label: 'Прямая' }
@@ -709,6 +730,32 @@ watch(
   }
 )
 
+watch(
+  selectedRowsSize,
+  (size, prev) => {
+    if (size > 0 && prev === 0) {
+      selectedShipmentWarehouses.value = new Set()
+    }
+    if (size === 0 && prev > 0) {
+      selectedShipmentWarehouses.value = new Set()
+    }
+  }
+)
+
+watch(
+  availableShipmentClusters,
+  (clusters) => {
+    const allowed = new Set(clusters)
+    const next = new Set(
+      Array.from(selectedShipmentWarehouses.value).filter((cluster) => allowed.has(cluster))
+    )
+    if (next.size !== selectedShipmentWarehouses.value.size) {
+      selectedShipmentWarehouses.value = next
+    }
+  },
+  { deep: true }
+)
+
 const selectRange = () => {
   const from = Number(rangeFrom.value)
   const to = Number(rangeTo.value)
@@ -755,9 +802,6 @@ const scrollToRow = async (rowNumber: number) => {
 
 const openShipmentDialog = () => {
   if (!selectedRows.value.size) return
-  if (!selectedShipmentWarehouses.value.size && availableShipmentClusters.value.length) {
-    selectedShipmentWarehouses.value = new Set(availableShipmentClusters.value)
-  }
   shipmentDialogOpen.value = true
 }
 
@@ -1253,6 +1297,18 @@ const loadAllBatches = async () => {
   line-height: 1.2;
 }
 
+.cluster-sum-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.cluster-sum-checkbox {
+  margin: 0;
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
 .cluster-sum {
   font-size: 0.7rem;
   font-weight: 700;
@@ -1260,7 +1316,10 @@ const loadAllBatches = async () => {
   background: #fff;
   border: 1px solid rgba(15, 23, 42, 0.15);
   border-radius: 4px;
-  padding: 0.05rem 0.4rem;
+  padding: 0.05rem 0.35rem;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
 }
 
 .cluster-share {
