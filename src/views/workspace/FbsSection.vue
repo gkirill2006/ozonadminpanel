@@ -56,7 +56,7 @@
 
         <div v-if="!isBatchTab && !isCarriageTab" class="fbs-toolbar">
           <div class="fbs-toolbar__row">
-            <div v-if="isStatusTab" class="fbs-filter-group fbs-filter-group--toggle">
+            <div v-if="showNeedsLabelToggle" class="fbs-filter-group fbs-filter-group--toggle">
               <label class="form-check form-switch mb-0">
                 <input class="form-check-input" type="checkbox" v-model="needsLabel">
                 <span class="form-check-label">Требуют печать</span>
@@ -82,6 +82,35 @@
                 @click="setNewSort('offer_id')"
               >
                 По артикулу
+                <span
+                  class="sort-arrow"
+                  :class="{ 'sort-arrow--hidden': newSortBy !== 'offer_id' }"
+                >
+                  <svg
+                    v-if="newSortDirection === 1"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke-width="1.5"
+                    stroke="currentColor"
+                    class="sort-arrow__icon"
+                    aria-hidden="true"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75 12 3m0 0 3.75 3.75M12 3v18" />
+                  </svg>
+                  <svg
+                    v-else
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke-width="1.5"
+                    stroke="currentColor"
+                    class="sort-arrow__icon"
+                    aria-hidden="true"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25 12 21m0 0-3.75-3.75M12 21V3" />
+                  </svg>
+                </span>
               </button>
               <button
                 class="btn btn-outline-secondary btn-sm"
@@ -90,6 +119,35 @@
                 @click="setNewSort('weight')"
               >
                 По весу
+                <span
+                  class="sort-arrow"
+                  :class="{ 'sort-arrow--hidden': newSortBy !== 'weight' }"
+                >
+                  <svg
+                    v-if="newSortDirection === 1"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke-width="1.5"
+                    stroke="currentColor"
+                    class="sort-arrow__icon"
+                    aria-hidden="true"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75 12 3m0 0 3.75 3.75M12 3v18" />
+                  </svg>
+                  <svg
+                    v-else
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke-width="1.5"
+                    stroke="currentColor"
+                    class="sort-arrow__icon"
+                    aria-hidden="true"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25 12 21m0 0-3.75-3.75M12 21V3" />
+                  </svg>
+                </span>
               </button>
               <button
                 class="btn btn-outline-secondary btn-sm"
@@ -98,6 +156,35 @@
                 @click="setNewSort('date')"
               >
                 По времени
+                <span
+                  class="sort-arrow"
+                  :class="{ 'sort-arrow--hidden': newSortBy !== 'date' }"
+                >
+                  <svg
+                    v-if="newSortDirection === 1"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke-width="1.5"
+                    stroke="currentColor"
+                    class="sort-arrow__icon"
+                    aria-hidden="true"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75 12 3m0 0 3.75 3.75M12 3v18" />
+                  </svg>
+                  <svg
+                    v-else
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke-width="1.5"
+                    stroke="currentColor"
+                    class="sort-arrow__icon"
+                    aria-hidden="true"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25 12 21m0 0-3.75-3.75M12 21V3" />
+                  </svg>
+                </span>
               </button>
             </div>
 
@@ -112,7 +199,7 @@
           </div>
         </div>
 
-        <div v-if="isStatusTab" class="d-flex flex-wrap gap-2 align-items-end mb-2 selection-bar">
+        <div v-if="showSelectionBar" class="d-flex flex-wrap gap-2 align-items-end mb-2 selection-bar">
           <div class="range-inputs d-flex gap-2 align-items-end">
             <div>
               <label class="form-label text-uppercase text-muted small fw-semibold mb-1">С строки</label>
@@ -146,7 +233,7 @@
               Сброс
             </button>
           </div>
-          <div class="ms-md-auto d-flex gap-2 align-items-end">
+          <div v-if="showSelectedCount" class="ms-md-auto d-flex gap-2 align-items-end">
             <span class="text-muted small">Выбрано строк: {{ selectedRowsSize }}</span>
           </div>
         </div>
@@ -216,7 +303,7 @@
               <table class="table fbs-table align-middle">
                 <thead>
                   <tr>
-                    <th v-if="isStatusTab" class="text-center fbs-col-check">
+                    <th v-if="showRowSelection" class="text-center fbs-col-check">
                       <input
                         type="checkbox"
                         class="form-check-input"
@@ -228,8 +315,8 @@
                     <th class="fbs-col-status">Статус</th>
                     <th class="fbs-col-date">Дата отгрузки</th>
                     <th class="fbs-col-products">Товары</th>
-                    <th class="fbs-col-warehouse">Склад</th>
-                    <th class="fbs-col-delivery">Доставка</th>
+                    <th v-if="showWarehouseDeliveryColumns" class="fbs-col-warehouse">Склад</th>
+                    <th v-if="showWarehouseDeliveryColumns" class="fbs-col-delivery">Доставка</th>
                     <th v-if="isAwaitingDeliver" class="fbs-col-label">Этикетка</th>
                   </tr>
                 </thead>
@@ -237,10 +324,10 @@
                   <tr
                     v-for="posting in displayPostings"
                     :key="posting.id"
-                    :class="{ 'row-selected': isRowSelected(posting.posting_number) }"
-                    @click="handleRowClick(posting.posting_number)"
+                    :class="{ 'row-selected': showRowSelection && isRowSelected(posting.posting_number) }"
+                    @click="showRowSelection && handleRowClick(posting.posting_number)"
                   >
-                    <td v-if="isStatusTab" class="text-center">
+                    <td v-if="showRowSelection" class="text-center">
                       <input
                         type="checkbox"
                         class="form-check-input"
@@ -297,11 +384,11 @@
                         </div>
                       </div>
                     </td>
-                    <td>
+                    <td v-if="showWarehouseDeliveryColumns">
                       <div class="fw-semibold">{{ posting.delivery_method_warehouse || '—' }}</div>
                       <div class="text-muted small">{{ posting.delivery_method_name || '—' }}</div>
                     </td>
-                    <td>
+                    <td v-if="showWarehouseDeliveryColumns">
                       <div class="fw-semibold">{{ posting.tpl_provider || '—' }}</div>
                       <div class="text-muted small">{{ posting.tpl_integration_type || '—' }}</div>
                     </td>
@@ -984,6 +1071,7 @@ const batchLabelLoading = ref<Record<string, boolean>>({})
 const batchCarriageLoading = ref<Record<string, boolean>>({})
 const batchSortBy = ref<Record<string, 'offer_id' | 'weight' | 'date'>>({})
 const newSortBy = ref<'' | 'offer_id' | 'weight' | 'date'>('')
+const newSortDirection = ref<1 | -1>(1)
 const shipBatchPollingTimer = ref<number | null>(null)
 
 const statusLabelMap: Record<string, string> = {
@@ -1032,14 +1120,15 @@ const filteredPostings = computed(() => {
 const displayPostings = computed(() => {
   const list = filteredPostings.value
   if (!isAwaitingPackaging.value || !newSortBy.value) return list
+  const direction = newSortDirection.value
   return [...list].sort((a, b) => {
     if (newSortBy.value === 'offer_id') {
-      return compareOfferIds(postingPrimaryOfferId(a), postingPrimaryOfferId(b))
+      return direction * compareOfferIds(postingPrimaryOfferId(a), postingPrimaryOfferId(b))
     }
     if (newSortBy.value === 'weight') {
-      return postingTotalWeight(a) - postingTotalWeight(b)
+      return direction * (postingTotalWeight(a) - postingTotalWeight(b))
     }
-    return postingSortDate(a) - postingSortDate(b)
+    return direction * (postingSortDate(a) - postingSortDate(b))
   })
 })
 
@@ -1050,6 +1139,12 @@ const isHistoryTab = computed(() => activeStatus.value === 'history')
 const isStatusTab = computed(() => statusKeys.includes(activeStatus.value))
 const isAwaitingDeliver = computed(() => activeStatus.value === 'awaiting_deliver')
 const isAwaitingPackaging = computed(() => activeStatus.value === 'awaiting_packaging')
+const isDeliveringTab = computed(() => activeStatus.value === 'delivering')
+const showRowSelection = computed(() => isStatusTab.value && !isDeliveringTab.value)
+const showNeedsLabelToggle = computed(() => showRowSelection.value && !isAwaitingPackaging.value)
+const showSelectionBar = computed(() => showRowSelection.value)
+const showSelectedCount = computed(() => showRowSelection.value)
+const showWarehouseDeliveryColumns = computed(() => !isDeliveringTab.value)
 
 const missingLabelPostings = computed(() =>
   filteredPostings.value.filter((posting) => !posting.label_ready)
@@ -1060,10 +1155,11 @@ const selectedRowsSize = computed(() => selectedPostings.value.size)
 const hasCounts = computed(() => totalCount.value !== null || Object.keys(statusCounts.value).length > 0)
 
 const tableColumnCount = computed(() => {
-  if (isStatusTab.value) {
-    return isAwaitingDeliver.value ? 8 : 7
-  }
-  return 6
+  const base = 4
+  const selection = showRowSelection.value ? 1 : 0
+  const warehouse = showWarehouseDeliveryColumns.value ? 2 : 0
+  const label = isAwaitingDeliver.value ? 1 : 0
+  return base + selection + warehouse + label
 })
 
 const isTableLoading = computed(() => {
@@ -1823,6 +1919,9 @@ const loadHistory = async (options?: { showLoader?: boolean }) => {
     const counts = (response as any)?.counts
     const historyTotalFromCounts =
       counts && typeof counts === 'object' ? Number((counts as any).history_total) : Number.NaN
+    if (counts && typeof counts === 'object') {
+      applyPostingsResponse(response, { skipPostings: true })
+    }
     const list = (response as any)?.results
     historyItems.value = Array.isArray(list) ? (list as FbsHistoryItem[]) : []
     const count = Number((response as any)?.count)
@@ -1936,7 +2035,7 @@ const loadPostings = async () => {
         .join(',')
       params.include_archived = '1'
     }
-    if (needsLabel.value) params.needs_label = '1'
+    if (needsLabel.value && showNeedsLabelToggle.value) params.needs_label = '1'
     const response = await apiService.getFbsPostings(params)
     applyPostingsResponse(response)
     selectedPostings.value.clear()
@@ -2136,8 +2235,12 @@ const handleRowClick = (postingNumber: string) => {
 }
 
 const setNewSort = (key: 'offer_id' | 'weight' | 'date') => {
-  if (newSortBy.value === key) return
+  if (newSortBy.value === key) {
+    newSortDirection.value = newSortDirection.value === 1 ? -1 : 1
+    return
+  }
   newSortBy.value = key
+  newSortDirection.value = 1
 }
 
 const isRowSelected = (postingNumber: string) => selectedPostings.value.has(postingNumber)
@@ -2692,6 +2795,29 @@ onBeforeUnmount(() => {
 
 .batch-selection-bar .btn-primary {
   border-color: transparent;
+}
+
+.sort-arrow {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.35rem;
+  position: relative;
+  top: 1px;
+  width: 0.9rem;
+  height: 0.9rem;
+  justify-content: center;
+  flex: 0 0 0.9rem;
+}
+
+.sort-arrow__icon {
+  width: 0.8rem;
+  height: 0.8rem;
+  display: block;
+  transform-origin: center;
+}
+
+.sort-arrow--hidden {
+  visibility: hidden;
 }
 
 .fbs-tab {
