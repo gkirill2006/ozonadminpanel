@@ -498,6 +498,14 @@
                       </div>
                       <div class="batch-selection-right">
                         <button
+                          v-if="batchSelectedCount(batch.batch_id)"
+                          class="btn btn-primary btn-sm"
+                          type="button"
+                          @click.stop="openMoveDialog(batch.batch_id)"
+                        >
+                          Переместить поставку в другое отправление
+                        </button>
+                        <button
                           class="btn btn-outline-secondary btn-sm"
                           type="button"
                           :disabled="batchCarriageLoading[batch.batch_id]"
@@ -699,6 +707,8 @@
             Создать отгрузку
           </button>
         </div>
+        <div
+        </div>
       </div>
     </section>
   </div>
@@ -815,6 +825,58 @@
       <div class="d-flex justify-content-end mt-3">
         <button class="btn btn-primary btn-sm" type="button" @click="closeCarriageSuccess">
           ОК
+        </button>
+      </div>
+    </div>
+  </Modal>
+
+  <Modal v-if="moveDialogOpen" @close="closeMoveDialog">
+    <div class="fbs-modal">
+      <h5 class="mb-3">Переместить отправления</h5>
+      <p class="text-muted small mb-3">Выбрано: {{ movePostingNumbers.length }}</p>
+      <div class="fbs-move-section">
+        <label class="form-label text-uppercase text-muted small fw-semibold">Существующие отправления</label>
+        <select class="form-select form-select-sm" v-model="moveTargetBatchId">
+          <option value="">Выберите отправление</option>
+          <option v-for="batch in moveTargetBatches" :key="batch.batch_id" :value="batch.batch_id">
+            {{ batchTitle(batch) }}
+          </option>
+        </select>
+        <button
+          class="btn btn-primary btn-sm mt-2"
+          type="button"
+          @click="submitMoveToExisting"
+          :disabled="moveLoading || !moveTargetBatchId"
+        >
+          <span v-if="moveLoading" class="spinner-border spinner-border-sm me-2"></span>
+          Переместить
+        </button>
+      </div>
+      <div class="fbs-move-divider">или</div>
+      <div class="fbs-move-section">
+        <label class="form-label text-uppercase text-muted small fw-semibold">Новое отправление</label>
+        <input
+          type="text"
+          class="form-control form-control-sm"
+          v-model="moveNewBatchName"
+          placeholder="Название отправления"
+        />
+        <button
+          class="btn btn-primary btn-sm mt-2"
+          type="button"
+          @click="submitMoveToNewBatch"
+          :disabled="moveLoading"
+        >
+          <span v-if="moveLoading" class="spinner-border spinner-border-sm me-2"></span>
+          Новое отправление
+        </button>
+      </div>
+      <div v-if="moveError" class="alert alert-danger py-1 px-2 mt-2">
+        {{ moveError }}
+      </div>
+      <div class="d-flex justify-content-end mt-3">
+        <button class="btn btn-outline-secondary btn-sm" type="button" @click="closeMoveDialog">
+          Отмена
         </button>
       </div>
     </div>
@@ -1026,11 +1088,19 @@ const rangeTo = ref('')
 const postingsWrapperRef = ref<HTMLElement | null>(null)
 const batchSelections = ref<Record<string, Set<string>>>({})
 const batchLabelLoading = ref<Record<string, boolean>>({})
+const batchLabelPolling = ref<Record<string, number>>({})
 const batchCarriageLoading = ref<Record<string, boolean>>({})
 const batchSortBy = ref<Record<string, 'offer_id' | 'weight' | 'date'>>({})
 const newSortBy = ref<'' | 'offer_id' | 'weight' | 'date'>('')
 const newSortDirection = ref<1 | -1>(1)
 const shipBatchPollingTimer = ref<number | null>(null)
+const moveDialogOpen = ref(false)
+const moveSourceBatchId = ref<string | null>(null)
+const moveTargetBatchId = ref('')
+const movePostingNumbers = ref<string[]>([])
+const moveNewBatchName = ref('')
+const moveLoading = ref(false)
+const moveError = ref<string | null>(null)
 
 const statusLabelMap: Record<string, string> = {
   awaiting_packaging: 'Ожидает сборки',
@@ -1302,6 +1372,10 @@ const batchSelectedMap = (batchId: string) => {
   return map
 }
 
+const moveTargetBatches = computed(() =>
+  shipBatches.value.filter((batch) => batch.batch_id !== moveSourceBatchId.value)
+)
+
 const isBatchRowSelected = (batchId: string, postingNumber: string) =>
   batchSelections.value[batchId]?.has(postingNumber) ?? false
 
@@ -1423,19 +1497,22 @@ const labelProgressText = (batch?: FbsShipBatch | null) => {
 const labelStatusPending = (batch?: FbsShipBatch | null) => {
   const status = batch?.label_status
   if (!status) return 0
-  const pending = Number(status.pending)
-  if (Number.isFinite(pending)) return pending
   const total = labelStatusTotal(batch)
+  if (!total) return 0
   const ready = labelStatusReady(batch)
   const error = Number(status.error) || 0
-  const missing = Number(status.missing) || 0
-  return Math.max(0, total - ready - error - missing)
+  return Math.max(0, total - ready - error)
 }
 
 const shouldStopShipmentProgress = (batch?: FbsShipBatch | null) => {
   if (!batch || !isBatchFinished(batch)) return false
   const total = labelStatusTotal(batch)
-  if (!total) return true
+  if (!total) {
+    const batchStatus = batch.batch_labels?.status
+    if (batchStatus === 'pending') return false
+    if (batchStatus === 'ready' || batchStatus === 'error') return true
+    return true
+  }
   return labelStatusPending(batch) <= 0
 }
 
@@ -1766,19 +1843,25 @@ const stopShipmentProgressPolling = () => {
   }
 }
 
+const applyShipBatchDetail = (batchId: string, response: any) => {
+  const detail: FbsShipBatchDetail = {
+    batch: response?.batch || { batch_id: batchId },
+    postings: Array.isArray(response?.postings) ? response.postings : [],
+    count: response?.count ?? null,
+    items_count: response?.items_count ?? null
+  }
+  shipBatchDetails.value = { ...shipBatchDetails.value, [batchId]: detail }
+  updateBatchInList(detail.batch)
+  return detail
+}
+
 const loadShipBatchDetail = async (batchId: string) => {
   if (!batchId) return
   batchDetailLoading.value = { ...batchDetailLoading.value, [batchId]: true }
   batchDetailError.value = { ...batchDetailError.value, [batchId]: '' }
   try {
     const response = await apiService.getFbsShipBatchDetail(batchId)
-    const detail: FbsShipBatchDetail = {
-      batch: (response as any)?.batch || { batch_id: batchId },
-      postings: Array.isArray((response as any)?.postings) ? (response as any).postings : [],
-      count: (response as any)?.count ?? null,
-      items_count: (response as any)?.items_count ?? null
-    }
-    shipBatchDetails.value = { ...shipBatchDetails.value, [batchId]: detail }
+    applyShipBatchDetail(batchId, response)
   } catch (error) {
     batchDetailError.value = {
       ...batchDetailError.value,
@@ -2141,6 +2224,110 @@ const closeCarriageSuccess = async () => {
   activeStatus.value = 'ship_batches'
 }
 
+const openMoveDialog = (batchId: string) => {
+  const numbers = batchSelectedNumbers(batchId)
+  if (!numbers.length) return
+  moveSourceBatchId.value = batchId
+  moveTargetBatchId.value = ''
+  movePostingNumbers.value = numbers
+  moveNewBatchName.value = formatBatchName(new Date())
+  moveError.value = null
+  moveLoading.value = false
+  moveDialogOpen.value = true
+}
+
+const closeMoveDialog = () => {
+  moveDialogOpen.value = false
+  moveSourceBatchId.value = null
+  moveTargetBatchId.value = ''
+  movePostingNumbers.value = []
+  moveNewBatchName.value = ''
+  moveError.value = null
+  moveLoading.value = false
+}
+
+const finalizeMove = async (response?: any) => {
+  const sourceId = moveSourceBatchId.value
+  const targetId = (response as any)?.target_batch?.batch_id || moveTargetBatchId.value
+  const affectedIds = new Set<string>()
+  if (sourceId) affectedIds.add(sourceId)
+  if (targetId) affectedIds.add(targetId)
+  const affectedList = Array.isArray((response as any)?.affected_batches)
+    ? ((response as any).affected_batches as Array<{ batch_id?: string }>)
+    : []
+  affectedList.forEach((item) => {
+    if (item?.batch_id) affectedIds.add(item.batch_id)
+  })
+  closeMoveDialog()
+  await loadShipBatches({ showLoader: false, preserveState: true })
+  if (sourceId) {
+    resetBatchSelection(sourceId)
+    if (shipBatchExpanded.value.has(sourceId)) {
+      await loadShipBatchDetail(sourceId)
+    }
+  }
+  if (targetId && shipBatchExpanded.value.has(targetId)) {
+    await loadShipBatchDetail(targetId)
+  }
+  affectedIds.forEach((batchId) => {
+    startBatchLabelPolling(batchId)
+  })
+}
+
+const submitMoveToExisting = async () => {
+  if (!props.storeId || moveLoading.value) return
+  if (!moveTargetBatchId.value) {
+    moveError.value = 'Выберите отправление для переноса.'
+    return
+  }
+  if (!movePostingNumbers.value.length) {
+    moveError.value = 'Нет выбранных отправлений.'
+    return
+  }
+  moveLoading.value = true
+  moveError.value = null
+  try {
+    const response = await apiService.moveFbsShipBatch({
+      store_id: Number(props.storeId),
+      posting_numbers: movePostingNumbers.value,
+      target_batch_id: moveTargetBatchId.value
+    })
+    await finalizeMove(response)
+  } catch (error) {
+    moveError.value = error instanceof Error ? error.message : 'Не удалось перенести отправления'
+  } finally {
+    moveLoading.value = false
+  }
+}
+
+const submitMoveToNewBatch = async () => {
+  if (!props.storeId || moveLoading.value) return
+  if (!movePostingNumbers.value.length) {
+    moveError.value = 'Нет выбранных отправлений.'
+    return
+  }
+  const name = moveNewBatchName.value.trim()
+  if (!name) {
+    moveError.value = 'Укажите название нового отправления.'
+    return
+  }
+  moveLoading.value = true
+  moveError.value = null
+  try {
+    const response = await apiService.moveFbsShipBatch({
+      store_id: Number(props.storeId),
+      posting_numbers: movePostingNumbers.value,
+      create_new_batch: true,
+      batch_name: name
+    })
+    await finalizeMove(response)
+  } catch (error) {
+    moveError.value = error instanceof Error ? error.message : 'Не удалось перенести отправления'
+  } finally {
+    moveLoading.value = false
+  }
+}
+
 const createShipment = async () => {
   if (!props.storeId || !selectedPostingNumbers.value.length || isShipping.value) return
   isShipping.value = true
@@ -2322,6 +2509,43 @@ const handleExport = async () => {
 
 const setBatchLabelLoading = (batchId: string, value: boolean) => {
   batchLabelLoading.value = { ...batchLabelLoading.value, [batchId]: value }
+}
+
+const stopBatchLabelPolling = (batchId: string) => {
+  const timer = batchLabelPolling.value[batchId]
+  if (timer) {
+    window.clearInterval(timer)
+  }
+  const next = { ...batchLabelPolling.value }
+  delete next[batchId]
+  batchLabelPolling.value = next
+  setBatchLabelLoading(batchId, false)
+}
+
+const startBatchLabelPolling = (batchId: string) => {
+  if (!batchId || batchLabelPolling.value[batchId]) return
+  setBatchLabelLoading(batchId, true)
+  const poll = async () => {
+    try {
+      const response = await apiService.getFbsShipBatchDetail(batchId)
+      const detail = applyShipBatchDetail(batchId, response)
+      const labels = detail.batch.batch_labels
+      if (labels?.file_url || labels?.status === 'error') {
+        stopBatchLabelPolling(batchId)
+      }
+    } catch (error) {
+      // keep polling
+    }
+  }
+  void poll()
+  const timer = window.setInterval(poll, 2000)
+  batchLabelPolling.value = { ...batchLabelPolling.value, [batchId]: timer }
+}
+
+const stopAllBatchLabelPolling = () => {
+  Object.values(batchLabelPolling.value).forEach((timer) => window.clearInterval(timer))
+  batchLabelPolling.value = {}
+  batchLabelLoading.value = {}
 }
 
 const getBatchLabels = (batchId: string) => {
@@ -2547,6 +2771,7 @@ watch(
     carriageDetailLoading.value = {}
     carriageDetailError.value = {}
     batchSelections.value = {}
+    stopAllBatchLabelPolling()
     selectedPostings.value.clear()
     statusCounts.value = {}
     onPackagingTotal.value = null
@@ -2567,6 +2792,13 @@ watch(
     rangeFrom.value = ''
     rangeTo.value = ''
     batchCarriageLoading.value = {}
+    moveDialogOpen.value = false
+    moveSourceBatchId.value = null
+    moveTargetBatchId.value = ''
+    movePostingNumbers.value = []
+    moveNewBatchName.value = ''
+    moveLoading.value = false
+    moveError.value = null
     await loadImmediate()
     await loadLabelSortSettings()
   },
@@ -2618,6 +2850,7 @@ watch(
 onBeforeUnmount(() => {
   stopShipBatchPolling()
   stopShipmentProgressPolling()
+  stopAllBatchLabelPolling()
 })
 </script>
 
@@ -2802,12 +3035,33 @@ onBeforeUnmount(() => {
 .batch-selection-right {
   display: flex;
   align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .fbs-batch-sort-select {
   min-width: 0;
   width: max-content;
   white-space: nowrap;
+}
+
+
+.fbs-move-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.fbs-move-section .btn {
+  width: 100%;
+}
+
+.fbs-move-divider {
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  text-align: center;
+  margin: 0.75rem 0;
 }
 
 .batch-selection-bar .btn-primary {

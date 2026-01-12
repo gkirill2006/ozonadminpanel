@@ -436,6 +436,15 @@ class ApiService {
     return this.handleResponse(response)
   }
 
+  async moveFbsShipBatch(payload: Record<string, unknown>) {
+    const response = await fetch(`${API_BASE_URL}/api/ozon/postings/ship/batches/move/`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(payload)
+    })
+    return this.handleResponse(response)
+  }
+
   async createFbsCarriage(payload: Record<string, unknown>) {
     const response = await fetch(`${API_BASE_URL}/api/ozon/postings/carriage/`, {
       method: 'POST',
