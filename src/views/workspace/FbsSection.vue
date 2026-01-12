@@ -200,41 +200,21 @@
         </div>
 
         <div v-if="showSelectionBar" class="d-flex flex-wrap gap-2 align-items-end mb-2 selection-bar">
-          <div class="range-inputs d-flex gap-2 align-items-end">
-            <div>
-              <label class="form-label text-uppercase text-muted small fw-semibold mb-1">С строки</label>
-              <input
-                type="number"
-                min="1"
-                :max="displayPostings.length || 1"
-                class="form-control form-control-sm"
-                v-model="rangeFrom"
-              />
-            </div>
-            <div>
-              <label class="form-label text-uppercase text-muted small fw-semibold mb-1">По строку</label>
-              <input
-                type="number"
-                min="1"
-                :max="displayPostings.length || 1"
-                class="form-control form-control-sm"
-                v-model="rangeTo"
-              />
-            </div>
-          </div>
           <div class="selection-actions d-flex gap-2 align-items-end">
-            <button class="btn btn-outline-secondary btn-sm" type="button" @click="selectRange">Выделить</button>
+            <button class="btn btn-outline-secondary btn-sm" type="button" @click="selectBeforeToday">
+              До сегодняшнего дня
+            </button>
+            <button class="btn btn-outline-secondary btn-sm" type="button" @click="selectAllVisible">
+              Все
+            </button>
             <button
               class="btn btn-outline-secondary btn-sm"
               type="button"
               @click="resetSelection"
               :disabled="!selectedRowsSize"
             >
-              Сброс
+              Сбросить
             </button>
-          </div>
-          <div v-if="showSelectedCount" class="ms-md-auto d-flex gap-2 align-items-end">
-            <span class="text-muted small">Выбрано строк: {{ selectedRowsSize }}</span>
           </div>
         </div>
 
@@ -299,7 +279,7 @@
                 </tbody>
               </table>
             </div>
-            <div v-else class="table-responsive fbs-table-wrapper">
+            <div v-else ref="postingsWrapperRef" class="table-responsive fbs-table-wrapper">
               <table class="table fbs-table align-middle">
                 <thead>
                   <tr>
@@ -313,19 +293,19 @@
                     </th>
                     <th class="fbs-col-number">Номер отправления</th>
                     <th class="fbs-col-status">Статус</th>
-                    <th class="fbs-col-date">Дата отгрузки</th>
+                    <th class="fbs-col-date">Принят</th>
                     <th class="fbs-col-products">Товары</th>
                     <th v-if="showWarehouseDeliveryColumns" class="fbs-col-warehouse">Склад</th>
-                    <th v-if="showWarehouseDeliveryColumns" class="fbs-col-delivery">Доставка</th>
                     <th v-if="isAwaitingDeliver" class="fbs-col-label">Этикетка</th>
                   </tr>
                 </thead>
                 <tbody v-if="displayPostings.length">
                   <tr
-                    v-for="posting in displayPostings"
+                    v-for="(posting, index) in displayPostings"
                     :key="posting.id"
                     :class="{ 'row-selected': showRowSelection && isRowSelected(posting.posting_number) }"
                     @click="showRowSelection && handleRowClick(posting.posting_number)"
+                    :data-row="index + 1"
                   >
                     <td v-if="showRowSelection" class="text-center">
                       <input
@@ -348,9 +328,6 @@
                     </td>
                     <td>
                       <div class="fw-semibold">{{ formatDateTime(primaryDate(posting)) }}</div>
-                      <div v-if="posting.status_changed_at" class="text-muted small">
-                        Обновлено: {{ formatDateTime(posting.status_changed_at) }}
-                      </div>
                     </td>
                     <td>
                       <div v-if="isNotShippedTab" class="fbs-product-list">
@@ -387,10 +364,6 @@
                     <td v-if="showWarehouseDeliveryColumns">
                       <div class="fw-semibold">{{ posting.delivery_method_warehouse || '—' }}</div>
                       <div class="text-muted small">{{ posting.delivery_method_name || '—' }}</div>
-                    </td>
-                    <td v-if="showWarehouseDeliveryColumns">
-                      <div class="fw-semibold">{{ posting.tpl_provider || '—' }}</div>
-                      <div class="text-muted small">{{ posting.tpl_integration_type || '—' }}</div>
                     </td>
                     <td v-if="isAwaitingDeliver">
                       <button
@@ -549,10 +522,9 @@
                           </th>
                           <th class="fbs-col-number">Номер отправления</th>
                           <th class="fbs-col-status">Статус</th>
-                          <th class="fbs-col-date">Дата отгрузки</th>
+                    <th class="fbs-col-date">Принят</th>
                           <th class="fbs-col-products">Товары</th>
                           <th class="fbs-col-warehouse">Склад</th>
-                          <th class="fbs-col-delivery">Доставка</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -583,9 +555,6 @@
                           </td>
                           <td>
                             <div class="fw-semibold">{{ formatDateTime(primaryDate(posting)) }}</div>
-                            <div v-if="posting.status_changed_at" class="text-muted small">
-                              Обновлено: {{ formatDateTime(posting.status_changed_at) }}
-                            </div>
                           </td>
                           <td>
                             <div class="fbs-product">
@@ -599,10 +568,6 @@
                           <td>
                             <div class="fw-semibold">{{ posting.delivery_method_warehouse || '—' }}</div>
                             <div class="text-muted small">{{ posting.delivery_method_name || '—' }}</div>
-                          </td>
-                          <td>
-                            <div class="fw-semibold">{{ posting.tpl_provider || '—' }}</div>
-                            <div class="text-muted small">{{ posting.tpl_integration_type || '—' }}</div>
                           </td>
                         </tr>
                       </tbody>
@@ -665,10 +630,9 @@
                         <tr>
                           <th class="fbs-col-number">Номер отправления</th>
                           <th class="fbs-col-status">Статус</th>
-                          <th class="fbs-col-date">Дата отгрузки</th>
+                    <th class="fbs-col-date">Принят</th>
                           <th class="fbs-col-products">Товары</th>
                           <th class="fbs-col-warehouse">Склад</th>
-                          <th class="fbs-col-delivery">Доставка</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -685,9 +649,6 @@
                           </td>
                           <td>
                             <div class="fw-semibold">{{ formatDateTime(primaryDate(posting)) }}</div>
-                            <div v-if="posting.status_changed_at" class="text-muted small">
-                              Обновлено: {{ formatDateTime(posting.status_changed_at) }}
-                            </div>
                           </td>
                           <td>
                             <div class="fbs-product">
@@ -701,10 +662,6 @@
                           <td>
                             <div class="fw-semibold">{{ posting.delivery_method_warehouse || '—' }}</div>
                             <div class="text-muted small">{{ posting.delivery_method_name || '—' }}</div>
-                          </td>
-                          <td>
-                            <div class="fw-semibold">{{ posting.tpl_provider || '—' }}</div>
-                            <div class="text-muted small">{{ posting.tpl_integration_type || '—' }}</div>
                           </td>
                         </tr>
                       </tbody>
@@ -809,7 +766,7 @@
       </div>
       <div class="d-flex justify-content-end gap-2 mt-3">
         <button
-          v-if="shipmentProgressBatch?.status === 'completed'"
+          v-if="isShipmentProgressReady"
           class="btn btn-primary btn-sm"
           type="button"
           @click="goToShipBatchesFromProgress"
@@ -865,7 +822,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import Modal from '@/components/Modal.vue'
 import { apiService } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
@@ -1066,6 +1023,7 @@ const carriageBatch = ref<FbsShipBatch | null>(null)
 const selectedPostings = ref<Set<string>>(new Set())
 const rangeFrom = ref('')
 const rangeTo = ref('')
+const postingsWrapperRef = ref<HTMLElement | null>(null)
 const batchSelections = ref<Record<string, Set<string>>>({})
 const batchLabelLoading = ref<Record<string, boolean>>({})
 const batchCarriageLoading = ref<Record<string, boolean>>({})
@@ -1143,8 +1101,8 @@ const isDeliveringTab = computed(() => activeStatus.value === 'delivering')
 const showRowSelection = computed(() => isStatusTab.value && !isDeliveringTab.value)
 const showNeedsLabelToggle = computed(() => showRowSelection.value && !isAwaitingPackaging.value)
 const showSelectionBar = computed(() => showRowSelection.value)
-const showSelectedCount = computed(() => showRowSelection.value)
 const showWarehouseDeliveryColumns = computed(() => !isDeliveringTab.value)
+const isShipmentProgressReady = computed(() => shouldStopShipmentProgress(shipmentProgressBatch.value))
 
 const missingLabelPostings = computed(() =>
   filteredPostings.value.filter((posting) => !posting.label_ready)
@@ -1157,7 +1115,7 @@ const hasCounts = computed(() => totalCount.value !== null || Object.keys(status
 const tableColumnCount = computed(() => {
   const base = 4
   const selection = showRowSelection.value ? 1 : 0
-  const warehouse = showWarehouseDeliveryColumns.value ? 2 : 0
+  const warehouse = showWarehouseDeliveryColumns.value ? 1 : 0
   const label = isAwaitingDeliver.value ? 1 : 0
   return base + selection + warehouse + label
 })
@@ -2227,6 +2185,52 @@ const toggleRow = (postingNumber: string) => {
     next.add(postingNumber)
   }
   selectedPostings.value = next
+}
+
+const selectAllVisible = () => {
+  const next = new Set<string>()
+  displayPostings.value.forEach((posting) => {
+    if (posting.posting_number) {
+      next.add(posting.posting_number)
+    }
+  })
+  selectedPostings.value = next
+}
+
+const scrollToRow = async (rowNumber: number) => {
+  await nextTick()
+  const wrapper = postingsWrapperRef.value
+  if (!wrapper) return
+  const row = wrapper.querySelector(`tr[data-row="${rowNumber}"]`) as HTMLElement | null
+  if (!row) return
+  const wrapperRect = wrapper.getBoundingClientRect()
+  const rowRect = row.getBoundingClientRect()
+  const offset = rowRect.top - wrapperRect.top + wrapper.scrollTop - 8
+  wrapper.scrollTo({ top: Math.max(offset, 0), behavior: 'smooth' })
+}
+
+const selectBeforeToday = () => {
+  const startOfToday = new Date()
+  startOfToday.setHours(0, 0, 0, 0)
+  const threshold = startOfToday.getTime()
+  const next = new Set<string>()
+  let firstIndex = -1
+  displayPostings.value.forEach((posting, index) => {
+    const value = posting.awaiting_packaging_at || posting.in_process_at || primaryDate(posting)
+    if (!value) return
+    const ts = Date.parse(String(value))
+    if (Number.isNaN(ts)) return
+    if (ts < threshold) {
+      next.add(posting.posting_number)
+      if (firstIndex === -1) {
+        firstIndex = index
+      }
+    }
+  })
+  selectedPostings.value = next
+  if (firstIndex >= 0) {
+    void scrollToRow(firstIndex + 1)
+  }
 }
 
 const handleRowClick = (postingNumber: string) => {
