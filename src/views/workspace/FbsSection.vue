@@ -8,22 +8,13 @@
               Обновлено: {{ formatDateTime(lastSyncedAt) }}
             </p>
           </div>
-          <div class="d-flex flex-wrap gap-2">
+          <div class="d-flex flex-wrap gap-2 align-items-center">
             <button class="btn btn-outline-secondary btn-sm" type="button" @click="handleRefresh" :disabled="isSyncing">
               <span v-if="isSyncing" class="spinner-border spinner-border-sm me-2"></span>
               Обновить
             </button>
-            <button
-              class="btn btn-primary btn-sm"
-              type="button"
-              @click="handleExport"
-              :disabled="isExporting"
-            >
-              <span v-if="isExporting" class="spinner-border spinner-border-sm me-2"></span>
-              Экспорт
-            </button>
+          </div>
         </div>
-      </div>
       <div class="card-body">
         <div class="fbs-tabs">
           <button
@@ -195,12 +186,38 @@
                 placeholder="Поиск по отправлению или товару"
                 v-model="searchQuery"
               />
+              <div v-if="isHistoryTab" class="fbs-export-controls">
+                <select class="form-select form-select-sm fbs-export-format" v-model="exportFormat">
+                  <option value="csv">CSV</option>
+                  <option value="xlsx">XLSX</option>
+                </select>
+                <div class="fbs-export-limit">
+                  <span class="text-muted small">Записей</span>
+                  <input
+                    type="number"
+                    min="1"
+                    class="form-control form-control-sm"
+                    v-model="exportLimit"
+                    placeholder="1000"
+                  />
+                </div>
+                <button
+                  class="btn btn-primary btn-sm"
+                  type="button"
+                  @click="handleExport"
+                  :disabled="isExporting"
+                >
+                  <span v-if="isExporting" class="spinner-border spinner-border-sm me-2"></span>
+                  Экспорт
+                </button>
+              </div>
             </div>
           </div>
         </div>
 
-        <div v-if="showSelectionBar" class="d-flex flex-wrap gap-2 align-items-end mb-2 selection-bar">
-          <div class="selection-actions d-flex gap-2 align-items-end">
+        <div v-if="showSelectionBar" class="selection-bar">
+          <span class="fbs-filter-label">Выделить:</span>
+          <div class="selection-actions">
             <button class="btn btn-outline-secondary btn-sm" type="button" @click="selectBeforeToday">
               До сегодняшнего дня
             </button>
@@ -405,7 +422,12 @@
               v-for="batch in shipBatches"
               :key="batch.batch_id"
               class="fbs-batch-card"
+              :class="{ 'fbs-batch-card--drag-target': dragOverBatchId === batch.batch_id }"
               @click="toggleBatch(batch)"
+              @dragenter.prevent="onBatchDragEnter(batch, $event)"
+              @dragover.prevent="onBatchDragOver(batch, $event)"
+              @dragleave="onBatchDragLeave(batch, $event)"
+              @drop.prevent.stop="onBatchDrop(batch, $event)"
             >
               <div class="fbs-batch-header">
                 <div class="fbs-batch-meta">
@@ -473,6 +495,7 @@
                       <div class="batch-selection-left">
                         <span class="text-muted small">Выбрано: {{ batchSelectedCount(batch.batch_id) }}</span>
                         <div class="batch-selection-controls">
+                          <span class="text-muted small">Выделить:</span>
                           <button class="btn btn-outline-secondary btn-sm" type="button" @click.stop="selectBatchAll(batch.batch_id)">
                             Выделить все
                           </button>
@@ -539,17 +562,37 @@
                         <tr
                           v-for="posting in batchDisplayPostings(batch.batch_id)"
                           :key="posting.id"
+                          :data-posting-number="posting.posting_number"
                           :class="{ 'row-selected': isBatchRowSelected(batch.batch_id, posting.posting_number) }"
                           @click.stop="toggleBatchRow(batch.batch_id, posting.posting_number)"
                         >
-                          <td class="text-center">
-                            <input
-                              type="checkbox"
-                              class="form-check-input"
-                              :checked="batchSelectedMap(batch.batch_id)[posting.posting_number]"
-                              @click.stop
-                              @change="toggleBatchRow(batch.batch_id, posting.posting_number)"
-                            />
+                          <td class="text-center fbs-col-check">
+                            <div class="fbs-check-cell">
+                              <span
+                                class="drag-handle"
+                                draggable="true"
+                                title="Перетащить"
+                                @dragstart="onBatchDragStart(batch.batch_id, posting.posting_number, $event)"
+                                @dragend="onBatchDragEnd"
+                                @click.stop
+                              >
+                                <svg viewBox="0 0 20 20" aria-hidden="true">
+                                  <circle cx="6" cy="5" r="1.5" />
+                                  <circle cx="14" cy="5" r="1.5" />
+                                  <circle cx="6" cy="10" r="1.5" />
+                                  <circle cx="14" cy="10" r="1.5" />
+                                  <circle cx="6" cy="15" r="1.5" />
+                                  <circle cx="14" cy="15" r="1.5" />
+                                </svg>
+                              </span>
+                              <input
+                                type="checkbox"
+                                class="form-check-input"
+                                :checked="batchSelectedMap(batch.batch_id)[posting.posting_number]"
+                                @click.stop
+                                @change="toggleBatchRow(batch.batch_id, posting.posting_number)"
+                              />
+                            </div>
                           </td>
                           <td>
                             <div class="fw-semibold">{{ posting.posting_number }}</div>
@@ -742,7 +785,14 @@
 
   <Modal v-if="shipmentProgressOpen" @close="closeShipmentProgress">
     <div class="fbs-modal">
-      <h5 class="mb-2">Создание отгрузки</h5>
+      <h5 class="mb-2 d-flex align-items-center gap-2">
+        Создание отгрузки
+        <span
+          v-if="!isShipmentProgressReady"
+          class="spinner-border spinner-border-sm text-primary"
+          aria-hidden="true"
+        ></span>
+      </h5>
       <div v-if="shipmentProgressBatch?.name" class="text-muted small mb-2">
         {{ shipmentProgressBatch.name }}
       </div>
@@ -877,6 +927,34 @@
       <div class="d-flex justify-content-end mt-3">
         <button class="btn btn-outline-secondary btn-sm" type="button" @click="closeMoveDialog">
           Отмена
+        </button>
+      </div>
+    </div>
+  </Modal>
+
+  <Modal v-if="dragConfirmOpen" @close="closeDragConfirm">
+    <div class="fbs-modal">
+      <h5 class="mb-2">Подтвердите перенос</h5>
+      <p class="mb-3 text-muted">
+        <span>{{ dragConfirmLead }}</span>
+        <br />
+        <span class="fw-bold">«{{ dragConfirmBatchName }}»</span>?
+      </p>
+      <div v-if="dragConfirmError" class="alert alert-danger py-1 px-2">
+        {{ dragConfirmError }}
+      </div>
+      <div class="d-flex justify-content-end gap-2 mt-3">
+        <button class="btn btn-outline-secondary btn-sm" type="button" @click="closeDragConfirm">
+          Отмена
+        </button>
+        <button
+          class="btn btn-primary btn-sm"
+          type="button"
+          @click="confirmDragMove"
+          :disabled="dragConfirmLoading"
+        >
+          <span v-if="dragConfirmLoading" class="spinner-border spinner-border-sm me-2"></span>
+          Переместить
         </button>
       </div>
     </div>
@@ -1066,6 +1144,8 @@ const isLabeling = ref(false)
 const isShipping = ref(false)
 const isCarriageSubmitting = ref(false)
 const isExporting = ref(false)
+const exportFormat = ref<'csv' | 'xlsx'>('csv')
+const exportLimit = ref('1000')
 const errorMessage = ref<string | null>(null)
 const labelNotice = ref<string | null>(null)
 const shipmentDialogOpen = ref(false)
@@ -1101,6 +1181,13 @@ const movePostingNumbers = ref<string[]>([])
 const moveNewBatchName = ref('')
 const moveLoading = ref(false)
 const moveError = ref<string | null>(null)
+const dragPayload = ref<{ sourceBatchId: string; postingNumbers: string[] } | null>(null)
+const dragOverBatchId = ref<string | null>(null)
+const dragConfirmOpen = ref(false)
+const dragConfirmBatch = ref<FbsShipBatch | null>(null)
+const dragConfirmPayload = ref<{ sourceBatchId: string; postingNumbers: string[] } | null>(null)
+const dragConfirmLoading = ref(false)
+const dragConfirmError = ref<string | null>(null)
 
 const statusLabelMap: Record<string, string> = {
   awaiting_packaging: 'Ожидает сборки',
@@ -1375,6 +1462,21 @@ const batchSelectedMap = (batchId: string) => {
 const moveTargetBatches = computed(() =>
   shipBatches.value.filter((batch) => batch.batch_id !== moveSourceBatchId.value)
 )
+
+const dragConfirmBatchName = computed(() =>
+  dragConfirmBatch.value ? batchTitle(dragConfirmBatch.value) : 'выбранный батч'
+)
+
+const dragConfirmLead = computed(() => {
+  const count = dragConfirmPayload.value?.postingNumbers.length ?? 0
+  if (count === 1) {
+    return 'Переместить отправление в'
+  }
+  if (count > 1) {
+    return `Переместить ${count} отправлений в`
+  }
+  return 'Переместить отправления в'
+})
 
 const isBatchRowSelected = (batchId: string, postingNumber: string) =>
   batchSelections.value[batchId]?.has(postingNumber) ?? false
@@ -2253,10 +2355,10 @@ const finalizeMove = async (response?: any) => {
   if (sourceId) affectedIds.add(sourceId)
   if (targetId) affectedIds.add(targetId)
   const affectedList = Array.isArray((response as any)?.affected_batches)
-    ? ((response as any).affected_batches as Array<{ batch_id?: string }>)
+    ? ((response as any).affected_batches as Array<{ batch_id?: string; deleted?: boolean }>)
     : []
   affectedList.forEach((item) => {
-    if (item?.batch_id) affectedIds.add(item.batch_id)
+    if (item?.batch_id && !item.deleted) affectedIds.add(item.batch_id)
   })
   closeMoveDialog()
   await loadShipBatches({ showLoader: false, preserveState: true })
@@ -2326,6 +2428,190 @@ const submitMoveToNewBatch = async () => {
   } finally {
     moveLoading.value = false
   }
+}
+
+const movePostingsToBatch = async (
+  sourceBatchId: string,
+  targetBatchId: string,
+  postingNumbers: string[]
+) => {
+  if (!props.storeId || !postingNumbers.length) {
+    return { ok: false, error: 'Нет отправлений для переноса.' }
+  }
+  moveSourceBatchId.value = sourceBatchId
+  moveTargetBatchId.value = targetBatchId
+  movePostingNumbers.value = postingNumbers
+  try {
+    const response = await apiService.moveFbsShipBatch({
+      store_id: Number(props.storeId),
+      posting_numbers: postingNumbers,
+      target_batch_id: targetBatchId
+    })
+    await finalizeMove(response)
+    return { ok: true }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Не удалось перенести отправления'
+    errorMessage.value = message
+    return { ok: false, error: message }
+  }
+}
+
+const onBatchDragStart = (batchId: string, postingNumber: string, event: DragEvent) => {
+  const selection = batchSelections.value[batchId]
+  const postingNumbers =
+    selection && selection.size && selection.has(postingNumber)
+      ? Array.from(selection)
+      : [postingNumber]
+  dragPayload.value = { sourceBatchId: batchId, postingNumbers }
+  dragOverBatchId.value = null
+  const row = (event.target as HTMLElement | null)?.closest('tr') as HTMLElement | null
+  const table = row?.closest('table') as HTMLTableElement | null
+  const ghost = createDragGhost(table, postingNumbers, row)
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.dropEffect = 'move'
+    event.dataTransfer.setData('text/plain', postingNumber)
+    if (ghost) {
+      event.dataTransfer.setDragImage(ghost, 24, 24)
+    }
+  }
+  if (ghost) {
+    window.setTimeout(() => {
+      ghost.remove()
+    }, 0)
+  }
+}
+
+const onBatchDragEnd = () => {
+  dragPayload.value = null
+  dragOverBatchId.value = null
+}
+
+const openDragConfirm = (
+  targetBatch: FbsShipBatch,
+  payload: { sourceBatchId: string; postingNumbers: string[] }
+) => {
+  dragConfirmBatch.value = targetBatch
+  dragConfirmPayload.value = payload
+  dragConfirmLoading.value = false
+  dragConfirmError.value = null
+  dragConfirmOpen.value = true
+}
+
+const closeDragConfirm = () => {
+  dragConfirmOpen.value = false
+  dragConfirmBatch.value = null
+  dragConfirmPayload.value = null
+  dragConfirmLoading.value = false
+  dragConfirmError.value = null
+}
+
+const confirmDragMove = async () => {
+  const payload = dragConfirmPayload.value
+  const targetBatch = dragConfirmBatch.value
+  if (!payload || !targetBatch) return
+  dragConfirmLoading.value = true
+  dragConfirmError.value = null
+  const result = await movePostingsToBatch(
+    payload.sourceBatchId,
+    targetBatch.batch_id,
+    payload.postingNumbers
+  )
+  dragConfirmLoading.value = false
+  if (result.ok) {
+    closeDragConfirm()
+    return
+  }
+  dragConfirmError.value = result.error || 'Не удалось перенести отправления'
+}
+
+const escapeSelectorValue = (value: string) => {
+  const escaper = typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape : null
+  return escaper ? escaper(value) : value.replace(/["\\]/g, '\\$&')
+}
+
+const createDragGhost = (
+  table: HTMLTableElement | null,
+  postingNumbers: string[],
+  fallbackRow: HTMLElement | null
+) => {
+  const count = postingNumbers.length
+  const ghost = document.createElement('div')
+  ghost.className = 'fbs-drag-ghost'
+  ghost.style.position = 'absolute'
+  ghost.style.top = '-9999px'
+  ghost.style.left = '-9999px'
+  ghost.style.pointerEvents = 'none'
+  if (table || fallbackRow) {
+    const tableEl = document.createElement('table')
+    tableEl.className = 'fbs-drag-ghost-table'
+    const tbody = document.createElement('tbody')
+    tableEl.appendChild(tbody)
+    const maxRows = Math.min(count, 5)
+    const rows: HTMLTableRowElement[] = []
+    for (let i = 0; i < maxRows; i += 1) {
+      const postingNumber = postingNumbers[i]
+      const selectorValue = escapeSelectorValue(postingNumber)
+      const sourceRow = table
+        ? (table.querySelector(`tr[data-posting-number="${selectorValue}"]`) as HTMLTableRowElement | null)
+        : null
+      if (sourceRow) {
+        rows.push(sourceRow)
+      }
+    }
+    if (!rows.length && fallbackRow) {
+      rows.push(fallbackRow as HTMLTableRowElement)
+    }
+    rows.forEach((row) => {
+      const clone = row.cloneNode(true) as HTMLTableRowElement
+      tbody.appendChild(clone)
+    })
+    ghost.appendChild(tableEl)
+  }
+  const label = document.createElement('div')
+  label.className = 'fbs-drag-ghost-label'
+  if (count > 1) {
+    label.textContent = `Перемещаем ${count} отправления`
+  } else {
+    label.textContent = 'Перемещаем 1 отправление'
+  }
+  ghost.appendChild(label)
+  document.body.appendChild(ghost)
+  return ghost
+}
+
+const onBatchDragEnter = (batch: FbsShipBatch, event: DragEvent) => {
+  if (!dragPayload.value) return
+  if (batch.batch_id === dragPayload.value.sourceBatchId) return
+  dragOverBatchId.value = batch.batch_id
+  event.preventDefault()
+}
+
+const onBatchDragOver = (batch: FbsShipBatch, event: DragEvent) => {
+  if (!dragPayload.value) return
+  if (batch.batch_id === dragPayload.value.sourceBatchId) return
+  dragOverBatchId.value = batch.batch_id
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move'
+  }
+  event.preventDefault()
+}
+
+const onBatchDragLeave = (batch: FbsShipBatch, event: DragEvent) => {
+  if (dragOverBatchId.value !== batch.batch_id) return
+  const current = event.currentTarget as HTMLElement | null
+  if (current && event.relatedTarget && current.contains(event.relatedTarget as Node)) return
+  dragOverBatchId.value = null
+}
+
+const onBatchDrop = async (batch: FbsShipBatch, event: DragEvent) => {
+  const payload = dragPayload.value
+  dragPayload.value = null
+  dragOverBatchId.value = null
+  event.preventDefault()
+  if (!payload) return
+  if (payload.sourceBatchId === batch.batch_id) return
+  openDragConfirm(batch, payload)
 }
 
 const createShipment = async () => {
@@ -2496,9 +2782,13 @@ const handleExport = async () => {
   isExporting.value = true
   errorMessage.value = null
   try {
-    const response = await apiService.exportFbsPostings(props.storeId)
+    const limitValue = Number(exportLimit.value)
+    const limit = Number.isFinite(limitValue) && limitValue > 0 ? Math.floor(limitValue) : undefined
+    const format = exportFormat.value
+    const response = await apiService.exportFbsHistory(props.storeId, { format, limit })
     if (response && response.blob instanceof Blob) {
-      downloadBlob(response.blob, `fbs_export_${Date.now()}.csv`)
+      const extension = format === 'xlsx' ? 'xlsx' : 'csv'
+      downloadBlob(response.blob, `fbs_history_${Date.now()}.${extension}`)
     }
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Не удалось сформировать экспорт'
@@ -2522,6 +2812,30 @@ const stopBatchLabelPolling = (batchId: string) => {
   setBatchLabelLoading(batchId, false)
 }
 
+const removeBatchFromState = (batchId: string) => {
+  shipBatches.value = shipBatches.value.filter((item) => item.batch_id !== batchId)
+  if (shipBatchExpanded.value.has(batchId)) {
+    const next = new Set(shipBatchExpanded.value)
+    next.delete(batchId)
+    shipBatchExpanded.value = next
+  }
+  if (shipBatchDetails.value[batchId]) {
+    const next = { ...shipBatchDetails.value }
+    delete next[batchId]
+    shipBatchDetails.value = next
+  }
+  if (batchDetailLoading.value[batchId]) {
+    const next = { ...batchDetailLoading.value }
+    delete next[batchId]
+    batchDetailLoading.value = next
+  }
+  if (batchDetailError.value[batchId]) {
+    const next = { ...batchDetailError.value }
+    delete next[batchId]
+    batchDetailError.value = next
+  }
+}
+
 const startBatchLabelPolling = (batchId: string) => {
   if (!batchId || batchLabelPolling.value[batchId]) return
   setBatchLabelLoading(batchId, true)
@@ -2534,7 +2848,12 @@ const startBatchLabelPolling = (batchId: string) => {
         stopBatchLabelPolling(batchId)
       }
     } catch (error) {
-      // keep polling
+      const status = (error as any)?.status
+      if (status === 404) {
+        stopBatchLabelPolling(batchId)
+        removeBatchFromState(batchId)
+        return
+      }
     }
   }
   void poll()
@@ -2799,6 +3118,13 @@ watch(
     moveNewBatchName.value = ''
     moveLoading.value = false
     moveError.value = null
+    dragPayload.value = null
+    dragOverBatchId.value = null
+    dragConfirmOpen.value = false
+    dragConfirmBatch.value = null
+    dragConfirmPayload.value = null
+    dragConfirmLoading.value = false
+    dragConfirmError.value = null
     await loadImmediate()
     await loadLabelSortSettings()
   },
@@ -2851,6 +3177,13 @@ onBeforeUnmount(() => {
   stopShipBatchPolling()
   stopShipmentProgressPolling()
   stopAllBatchLabelPolling()
+  dragPayload.value = null
+  dragOverBatchId.value = null
+  dragConfirmOpen.value = false
+  dragConfirmBatch.value = null
+  dragConfirmPayload.value = null
+  dragConfirmLoading.value = false
+  dragConfirmError.value = null
 })
 </script>
 
@@ -2912,6 +3245,12 @@ onBeforeUnmount(() => {
 .fbs-batch-card:hover {
   border-color: rgba(248, 250, 252, 0.3);
   background: #2b445d;
+}
+
+.fbs-batch-card--drag-target {
+  border-color: rgba(59, 130, 246, 0.8);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.4);
+  background: #2f4f6f;
 }
 
 .fbs-batch-header {
@@ -3159,6 +3498,15 @@ onBeforeUnmount(() => {
 
 .fbs-filter-group--search {
   flex: 1 1 220px;
+  width: 100%;
+  justify-content: space-between;
+  flex-wrap: nowrap;
+}
+
+.fbs-filter-group--search .form-control {
+  flex: 1 1 auto;
+  max-width: none;
+  min-width: 100px;
 }
 
 .fbs-filter-label {
@@ -3227,7 +3575,75 @@ onBeforeUnmount(() => {
 }
 
 .fbs-col-check {
-  width: 48px;
+  width: 68px;
+}
+
+.fbs-check-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: #94a3b8;
+  cursor: grab;
+}
+
+.drag-handle svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.drag-handle:hover {
+  color: #475569;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.fbs-drag-ghost {
+  z-index: 9999;
+}
+
+.fbs-drag-ghost-table {
+  width: 480px;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 12px;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.18);
+  overflow: hidden;
+  border-collapse: collapse;
+}
+
+.fbs-drag-ghost-table td {
+  padding: 0.45rem 0.6rem;
+  font-size: 0.78rem;
+  color: #0f172a;
+  background: #f1f5f9;
+}
+
+.fbs-drag-ghost-table tr + tr td {
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.fbs-drag-ghost-table input,
+.fbs-drag-ghost-table .drag-handle {
+  display: none;
+}
+
+.fbs-drag-ghost-label {
+  margin-top: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #475569;
+  text-align: right;
 }
 
 .fbs-col-number {
@@ -3369,6 +3785,28 @@ onBeforeUnmount(() => {
   gap: 0.75rem;
 }
 
+.fbs-export-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: nowrap;
+  margin-left: auto;
+}
+
+.fbs-export-format {
+  width: 90px;
+}
+
+.fbs-export-limit {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.fbs-export-limit input {
+  width: 60px;
+}
+
 .fbs-progress {
   width: 100%;
   height: 8px;
@@ -3387,7 +3825,22 @@ onBeforeUnmount(() => {
 
 
 .selection-bar {
-  align-items: flex-end !important;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 14px;
+  padding: 0.75rem;
+  margin-bottom: 1rem;
+  background: #fff;
+}
+
+.selection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
 }
 
 @media (max-width: 992px) {

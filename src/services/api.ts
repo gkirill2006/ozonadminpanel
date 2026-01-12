@@ -331,9 +331,41 @@ class ApiService {
     return this.handleResponse(response)
   }
 
-  async exportFbsPostings(storeId: string | number) {
+  async exportFbsPostings(
+    storeId: string | number,
+    options?: { format?: 'csv' | 'xlsx'; limit?: number }
+  ) {
     const url = new URL(`${API_BASE_URL}/api/ozon/postings/export/`, window.location.origin)
     url.searchParams.set('store_id', String(storeId))
+    if (options?.format) {
+      url.searchParams.set('format', options.format)
+    }
+    if (typeof options?.limit === 'number') {
+      url.searchParams.set('limit', String(options.limit))
+    }
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: this.getHeaders()
+    })
+    if (!response.ok) {
+      return this.handleResponse(response)
+    }
+    const blob = await response.blob()
+    return { blob }
+  }
+
+  async exportFbsHistory(
+    storeId: string | number,
+    options?: { format?: 'csv' | 'xlsx'; limit?: number }
+  ) {
+    const url = new URL(`${API_BASE_URL}/api/ozon/postings/export/history/`, window.location.origin)
+    url.searchParams.set('store_id', String(storeId))
+    if (options?.format) {
+      url.searchParams.set('format', options.format)
+    }
+    if (typeof options?.limit === 'number') {
+      url.searchParams.set('limit', String(options.limit))
+    }
     const response = await fetch(url.toString(), {
       method: 'GET',
       headers: this.getHeaders()
