@@ -245,8 +245,8 @@
                     <th class="fbs-col-date">Отменены</th>
                   </tr>
                 </thead>
-                <tbody v-if="historyItems.length">
-                  <tr v-for="(item, index) in historyItems" :key="`${item.posting_number}-${index}`">
+                <tbody v-if="filteredHistoryItems.length">
+                  <tr v-for="(item, index) in filteredHistoryItems" :key="`${item.posting_number}-${index}`">
                     <td>
                       <div class="fw-semibold">{{ item.offer_id || '—' }}</div>
                     </td>
@@ -1075,6 +1075,17 @@ const filteredPostings = computed(() => {
   })
 })
 
+const filteredHistoryItems = computed(() => {
+  if (!isHistoryTab.value) return historyItems.value
+  const query = searchQuery.value.trim().toLowerCase()
+  if (!query) return historyItems.value
+  return historyItems.value.filter((item) => {
+    if (item.posting_number?.toLowerCase().includes(query)) return true
+    if (item.offer_id?.toLowerCase().includes(query)) return true
+    return false
+  })
+})
+
 const displayPostings = computed(() => {
   const list = filteredPostings.value
   if (!isAwaitingPackaging.value || !newSortBy.value) return list
@@ -1137,6 +1148,8 @@ const tabCount = (key: string) => {
     return shipBatches.value.length
   }
   if (key === 'carriages') {
+    const inDelivery = statusCounts.value.in_delivery
+    if (typeof inDelivery === 'number') return inDelivery
     return carriages.value.length
   }
   if (key === 'not_shipped') {
