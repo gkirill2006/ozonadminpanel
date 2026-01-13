@@ -665,6 +665,20 @@
                     <span>Статус: {{ carriage.status }}</span>
                   </template>
                 </div>
+                <div class="fbs-batch-actions" @click.stop>
+                  <button
+                    class="btn btn-outline-primary btn-sm"
+                    type="button"
+                    :disabled="carriageLabelLoading[String(carriage.carriage_id)]"
+                    @click.stop="handleCarriageLabels(carriage.carriage_id)"
+                  >
+                    <span
+                      v-if="carriageLabelLoading[String(carriage.carriage_id)]"
+                      class="spinner-border spinner-border-sm me-2"
+                    ></span>
+                    Скачать этикетки
+                  </button>
+                </div>
               </div>
               <div v-if="isCarriageExpanded(carriage.carriage_id)" class="fbs-batch-body" @click.stop>
                 <div v-if="carriageDetailLoading[String(carriage.carriage_id)]" class="fbs-loading">
@@ -1080,6 +1094,13 @@ interface FbsCarriage {
   updated_at?: string | null
   postings_count?: number | null
   items_count?: number | null
+  labels?: {
+    status?: string | null
+    file_url?: string | null
+    file_name?: string | null
+    file_path?: string | null
+    error?: string | null
+  } | null
 }
 
 interface FbsCarriageDetail {
@@ -1087,6 +1108,13 @@ interface FbsCarriageDetail {
   postings: FbsPosting[]
   count?: number | null
   items_count?: number | null
+  labels?: {
+    status?: string | null
+    file_url?: string | null
+    file_name?: string | null
+    file_path?: string | null
+    error?: string | null
+  } | null
 }
 
 interface FbsHistoryItem {
@@ -1174,6 +1202,8 @@ const batchSortBy = ref<Record<string, 'offer_id' | 'weight' | 'date'>>({})
 const newSortBy = ref<'' | 'offer_id' | 'weight' | 'date'>('')
 const newSortDirection = ref<1 | -1>(1)
 const shipBatchPollingTimer = ref<number | null>(null)
+const carriageLabelLoading = ref<Record<string, boolean>>({})
+const carriageLabelPolling = ref<Record<string, number>>({})
 const moveDialogOpen = ref(false)
 const moveSourceBatchId = ref<string | null>(null)
 const moveTargetBatchId = ref('')
@@ -2099,6 +2129,25 @@ const loadHistory = async (options?: { showLoader?: boolean }) => {
   }
 }
 
+const updateCarriageInList = (carriage: FbsCarriage) => {
+  carriages.value = carriages.value.map((item) =>
+    String(item.carriage_id) === String(carriage.carriage_id) ? { ...item, ...carriage } : item
+  )
+}
+
+const applyCarriageDetail = (carriageId: string | number, response: any) => {
+  const detail: FbsCarriageDetail = {
+    carriage: (response as any)?.carriage || { carriage_id: carriageId },
+    postings: Array.isArray((response as any)?.postings) ? (response as any).postings : [],
+    count: (response as any)?.count ?? null,
+    items_count: (response as any)?.items_count ?? null,
+    labels: (response as any)?.labels ?? null
+  }
+  carriageDetails.value = { ...carriageDetails.value, [String(carriageId)]: detail }
+  updateCarriageInList(detail.carriage)
+  return detail
+}
+
 const loadCarriageDetail = async (carriageId: string | number) => {
   if (!carriageId) return
   const key = String(carriageId)
@@ -2106,13 +2155,7 @@ const loadCarriageDetail = async (carriageId: string | number) => {
   carriageDetailError.value = { ...carriageDetailError.value, [key]: '' }
   try {
     const response = await apiService.getFbsCarriageDetail(key)
-    const detail: FbsCarriageDetail = {
-      carriage: (response as any)?.carriage || { carriage_id: carriageId },
-      postings: Array.isArray((response as any)?.postings) ? (response as any).postings : [],
-      count: (response as any)?.count ?? null,
-      items_count: (response as any)?.items_count ?? null
-    }
-    carriageDetails.value = { ...carriageDetails.value, [key]: detail }
+    applyCarriageDetail(key, response)
   } catch (error) {
     carriageDetailError.value = {
       ...carriageDetailError.value,
@@ -2910,6 +2953,88 @@ const handleBatchSelectionLabels = async (batchId: string) => {
   }
 }
 
+const setCarriageLabelLoading = (carriageId: string | number, value: boolean) => {
+  carriageLabelLoading.value = { ...carriageLabelLoading.value, [String(carriageId)]: value }
+}
+
+const getCarriageLabels = (carriageId: string | number) => {
+  const key = String(carriageId)
+  const detail = carriageDetails.value[key]
+  if (detail?.labels) return detail.labels
+  const list = carriages.value.find((item) => String(item.carriage_id) === key)
+  return list?.labels || null
+}
+
+const stopCarriageLabelPolling = (carriageId: string | number) => {
+  const key = String(carriageId)
+  const timer = carriageLabelPolling.value[key]
+  if (timer) {
+    window.clearInterval(timer)
+  }
+  const next = { ...carriageLabelPolling.value }
+  delete next[key]
+  carriageLabelPolling.value = next
+  setCarriageLabelLoading(key, false)
+}
+
+const startCarriageLabelPolling = (carriageId: string | number) => {
+  const key = String(carriageId)
+  if (!key || carriageLabelPolling.value[key]) return
+  setCarriageLabelLoading(key, true)
+  const poll = async () => {
+    try {
+      const response = await apiService.getFbsCarriageDetail(key)
+      const detail = applyCarriageDetail(key, response)
+      const labels = detail.labels
+      if (labels?.status === 'ready' && labels.file_url) {
+        const filename = labels.file_name || `carriage_${key}_labels.pdf`
+        await downloadFileUrl(labels.file_url, filename)
+        stopCarriageLabelPolling(key)
+        return
+      }
+      if (labels?.status === 'failed') {
+        errorMessage.value = labels.error || 'Не удалось сформировать этикетки'
+        stopCarriageLabelPolling(key)
+      }
+    } catch (error) {
+      // keep polling
+    }
+  }
+  void poll()
+  const timer = window.setInterval(poll, 2000)
+  carriageLabelPolling.value = { ...carriageLabelPolling.value, [key]: timer }
+}
+
+const stopAllCarriageLabelPolling = () => {
+  Object.values(carriageLabelPolling.value).forEach((timer) => window.clearInterval(timer))
+  carriageLabelPolling.value = {}
+  carriageLabelLoading.value = {}
+}
+
+const handleCarriageLabels = async (carriageId: string | number) => {
+  const key = String(carriageId)
+  if (carriageLabelLoading.value[key]) return
+  try {
+    let labels = getCarriageLabels(key)
+    if (!labels) {
+      await loadCarriageDetail(key)
+      labels = getCarriageLabels(key)
+    }
+    if (labels?.status === 'ready' && labels.file_url) {
+      const filename = labels.file_name || `carriage_${key}_labels.pdf`
+      await downloadFileUrl(labels.file_url, filename)
+      return
+    }
+    if (labels?.status === 'failed') {
+      errorMessage.value = labels.error || 'Не удалось сформировать этикетки'
+      return
+    }
+    startCarriageLabelPolling(key)
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'Не удалось получить этикетки'
+  }
+}
+
 const setBatchCarriageLoading = (batchId: string, value: boolean) => {
   batchCarriageLoading.value = { ...batchCarriageLoading.value, [batchId]: value }
 }
@@ -3089,6 +3214,7 @@ watch(
     carriageExpanded.value = new Set()
     carriageDetailLoading.value = {}
     carriageDetailError.value = {}
+    stopAllCarriageLabelPolling()
     batchSelections.value = {}
     stopAllBatchLabelPolling()
     selectedPostings.value.clear()
@@ -3177,6 +3303,7 @@ onBeforeUnmount(() => {
   stopShipBatchPolling()
   stopShipmentProgressPolling()
   stopAllBatchLabelPolling()
+  stopAllCarriageLabelPolling()
   dragPayload.value = null
   dragOverBatchId.value = null
   dragConfirmOpen.value = false
