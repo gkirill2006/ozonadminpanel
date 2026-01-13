@@ -253,7 +253,7 @@
               <table class="table fbs-table align-middle">
                 <thead>
                   <tr>
-                    <th class="fbs-col-offer">Артикул</th>
+                    <th class="fbs-col-offer fbs-history-offer">Артикул</th>
                     <th class="fbs-col-number">Номер отправления</th>
                     <th class="fbs-col-date">Ожидают сборки</th>
                     <th class="fbs-col-date">Ожидают отгрузки</th>
@@ -264,26 +264,26 @@
                 </thead>
                 <tbody v-if="filteredHistoryItems.length">
                   <tr v-for="(item, index) in filteredHistoryItems" :key="`${item.posting_number}-${index}`">
-                    <td>
+                    <td class="fbs-history-offer">
                       <div class="fw-semibold">{{ item.offer_id || '—' }}</div>
                     </td>
                     <td>
                       <div class="fw-semibold">{{ item.posting_number }}</div>
                     </td>
                     <td>
-                      <div class="fw-semibold">{{ formatDateTime(item.awaiting_packaging) }}</div>
+                      <div class="fw-semibold">{{ formatHistoryDate(item.awaiting_packaging) }}</div>
                     </td>
                     <td>
-                      <div class="fw-semibold">{{ formatDateTime(item.awaiting_deliver) }}</div>
+                      <div class="fw-semibold">{{ formatHistoryDate(item.awaiting_deliver) }}</div>
                     </td>
                     <td>
-                      <div class="fw-semibold">{{ formatDateTime(item.acceptance_in_progress) }}</div>
+                      <div class="fw-semibold">{{ formatHistoryDate(item.acceptance_in_progress) }}</div>
                     </td>
                     <td>
-                      <div class="fw-semibold">{{ formatDateTime(item.delivering) }}</div>
+                      <div class="fw-semibold">{{ formatHistoryDate(item.delivering) }}</div>
                     </td>
                     <td>
-                      <div class="fw-semibold">{{ formatDateTime(item.cancelled) }}</div>
+                      <div class="fw-semibold">{{ formatHistoryDate(item.cancelled) }}</div>
                     </td>
                   </tr>
                 </tbody>
@@ -314,6 +314,7 @@
                     <th class="fbs-col-products">Товары</th>
                     <th v-if="showWarehouseDeliveryColumns" class="fbs-col-warehouse">Склад</th>
                     <th v-if="isAwaitingDeliver" class="fbs-col-label">Этикетка</th>
+                    <th v-if="showCancelPosting" class="fbs-col-action text-center"></th>
                   </tr>
                 </thead>
                 <tbody v-if="displayPostings.length">
@@ -394,6 +395,20 @@
                       <span v-else class="text-muted small">
                         {{ posting.label_status || '—' }}
                       </span>
+                    </td>
+                    <td v-if="showCancelPosting" class="text-center">
+                      <button
+                        class="btn btn-link p-0 fbs-delete-btn"
+                        type="button"
+                        title="Удалить отправление"
+                        @click.stop="openCancelPosting(posting)"
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M9 3h6l1 2h4v2H4V5h4l1-2Zm1 7h2v9h-2v-9Zm4 0h2v9h-2v-9ZM6 10h2v9H6v-9Z"
+                          />
+                        </svg>
+                      </button>
                     </td>
                   </tr>
                 </tbody>
@@ -678,6 +693,18 @@
                     ></span>
                     Скачать этикетки
                   </button>
+                  <button
+                    class="btn btn-danger btn-sm"
+                    type="button"
+                    :disabled="carriageCancelLoading[String(carriage.carriage_id)]"
+                    @click.stop="handleCarriageCancel(carriage.carriage_id)"
+                  >
+                    <span
+                      v-if="carriageCancelLoading[String(carriage.carriage_id)]"
+                      class="spinner-border spinner-border-sm me-2"
+                    ></span>
+                    Отменить доставку
+                  </button>
                 </div>
               </div>
               <div v-if="isCarriageExpanded(carriage.carriage_id)" class="fbs-batch-body" @click.stop>
@@ -843,9 +870,9 @@
           v-if="isShipmentProgressReady"
           class="btn btn-primary btn-sm"
           type="button"
-          @click="goToShipBatchesFromProgress"
+          @click="goToCarriagesFromProgress"
         >
-          Перейти в отгрузку
+          Перейти в доставку
         </button>
         <button class="btn btn-outline-secondary btn-sm" type="button" @click="closeShipmentProgress">
           Закрыть
@@ -969,6 +996,33 @@
         >
           <span v-if="dragConfirmLoading" class="spinner-border spinner-border-sm me-2"></span>
           Переместить
+        </button>
+      </div>
+    </div>
+  </Modal>
+
+  <Modal v-if="cancelPostingOpen" @close="closeCancelPosting">
+    <div class="fbs-modal">
+      <h5 class="mb-2">Удалить отправление</h5>
+      <p class="mb-3 text-muted">
+        Удаление безвозвратное. Подтвердить удаление отправления
+        <span class="fw-semibold">{{ cancelPostingTarget?.posting_number }}</span>?
+      </p>
+      <div v-if="cancelPostingError" class="alert alert-danger py-1 px-2">
+        {{ cancelPostingError }}
+      </div>
+      <div class="d-flex justify-content-end gap-2 mt-3">
+        <button class="btn btn-outline-secondary btn-sm" type="button" @click="closeCancelPosting">
+          Отмена
+        </button>
+        <button
+          class="btn btn-danger btn-sm"
+          type="button"
+          @click="confirmCancelPosting"
+          :disabled="cancelPostingLoading"
+        >
+          <span v-if="cancelPostingLoading" class="spinner-border spinner-border-sm me-2"></span>
+          Удалить
         </button>
       </div>
     </div>
@@ -1204,6 +1258,11 @@ const newSortDirection = ref<1 | -1>(1)
 const shipBatchPollingTimer = ref<number | null>(null)
 const carriageLabelLoading = ref<Record<string, boolean>>({})
 const carriageLabelPolling = ref<Record<string, number>>({})
+const carriageCancelLoading = ref<Record<string, boolean>>({})
+const cancelPostingOpen = ref(false)
+const cancelPostingTarget = ref<FbsPosting | null>(null)
+const cancelPostingLoading = ref(false)
+const cancelPostingError = ref<string | null>(null)
 const moveDialogOpen = ref(false)
 const moveSourceBatchId = ref<string | null>(null)
 const moveTargetBatchId = ref('')
@@ -1296,6 +1355,7 @@ const isStatusTab = computed(() => statusKeys.includes(activeStatus.value))
 const isAwaitingDeliver = computed(() => activeStatus.value === 'awaiting_deliver')
 const isAwaitingPackaging = computed(() => activeStatus.value === 'awaiting_packaging')
 const isDeliveringTab = computed(() => activeStatus.value === 'delivering')
+const showCancelPosting = computed(() => isAwaitingPackaging.value)
 const showRowSelection = computed(() => isStatusTab.value && !isDeliveringTab.value)
 const showNeedsLabelToggle = computed(() => showRowSelection.value && !isAwaitingPackaging.value)
 const showSelectionBar = computed(() => showRowSelection.value)
@@ -1315,7 +1375,8 @@ const tableColumnCount = computed(() => {
   const selection = showRowSelection.value ? 1 : 0
   const warehouse = showWarehouseDeliveryColumns.value ? 1 : 0
   const label = isAwaitingDeliver.value ? 1 : 0
-  return base + selection + warehouse + label
+  const cancel = showCancelPosting.value ? 1 : 0
+  return base + selection + warehouse + label + cancel
 })
 
 const isTableLoading = computed(() => {
@@ -1396,6 +1457,15 @@ const formatDateTime = (value?: string | null) => {
     minute: '2-digit'
   })
   return `${datePart} ${timePart}`
+}
+
+const formatHistoryDate = (value?: string | null) => {
+  if (!value) return '—'
+  const trimmed = value.trim()
+  if (/^\d{2}-\d{2}-\d{4}\s+\d{2}:\d{2}$/.test(trimmed)) {
+    return trimmed
+  }
+  return formatDateTime(trimmed)
 }
 
 const formatWeight = (value?: number | string | null) => {
@@ -2341,10 +2411,10 @@ const closeShipmentProgress = () => {
   stopShipmentProgressPolling()
 }
 
-const goToShipBatchesFromProgress = async () => {
+const goToCarriagesFromProgress = async () => {
   closeShipmentProgress()
-  activeStatus.value = 'ship_batches'
-  await loadShipBatches({ showLoader: true })
+  activeStatus.value = 'carriages'
+  await loadCarriages({ showLoader: true })
 }
 
 const openCarriageDialog = (batch: FbsShipBatch) => {
@@ -2840,6 +2910,39 @@ const handleExport = async () => {
   }
 }
 
+const openCancelPosting = (posting: FbsPosting) => {
+  cancelPostingTarget.value = posting
+  cancelPostingError.value = null
+  cancelPostingOpen.value = true
+}
+
+const closeCancelPosting = () => {
+  cancelPostingOpen.value = false
+  cancelPostingTarget.value = null
+  cancelPostingError.value = null
+  cancelPostingLoading.value = false
+}
+
+const confirmCancelPosting = async () => {
+  const posting = cancelPostingTarget.value
+  if (!posting || !props.storeId || cancelPostingLoading.value) return
+  cancelPostingLoading.value = true
+  cancelPostingError.value = null
+  try {
+    await apiService.cancelFbsPosting({
+      store_id: Number(props.storeId),
+      posting_number: posting.posting_number
+    })
+    closeCancelPosting()
+    await loadPostings()
+  } catch (error) {
+    cancelPostingError.value =
+      error instanceof Error ? error.message : 'Не удалось удалить отправление'
+  } finally {
+    cancelPostingLoading.value = false
+  }
+}
+
 const setBatchLabelLoading = (batchId: string, value: boolean) => {
   batchLabelLoading.value = { ...batchLabelLoading.value, [batchId]: value }
 }
@@ -3009,6 +3112,27 @@ const stopAllCarriageLabelPolling = () => {
   Object.values(carriageLabelPolling.value).forEach((timer) => window.clearInterval(timer))
   carriageLabelPolling.value = {}
   carriageLabelLoading.value = {}
+}
+
+const setCarriageCancelLoading = (carriageId: string | number, value: boolean) => {
+  carriageCancelLoading.value = { ...carriageCancelLoading.value, [String(carriageId)]: value }
+}
+
+const handleCarriageCancel = async (carriageId: string | number) => {
+  const key = String(carriageId)
+  if (carriageCancelLoading.value[key]) return
+  if (!window.confirm('Отменить доставку?')) return
+  setCarriageCancelLoading(key, true)
+  errorMessage.value = null
+  try {
+    await apiService.cancelFbsCarriage(key)
+    await loadCarriages()
+    await loadShipBatches({ showLoader: false, preserveState: true })
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'Не удалось отменить доставку'
+  } finally {
+    setCarriageCancelLoading(key, false)
+  }
 }
 
 const handleCarriageLabels = async (carriageId: string | number) => {
@@ -3215,6 +3339,7 @@ watch(
     carriageDetailLoading.value = {}
     carriageDetailError.value = {}
     stopAllCarriageLabelPolling()
+    carriageCancelLoading.value = {}
     batchSelections.value = {}
     stopAllBatchLabelPolling()
     selectedPostings.value.clear()
@@ -3251,6 +3376,10 @@ watch(
     dragConfirmPayload.value = null
     dragConfirmLoading.value = false
     dragConfirmError.value = null
+    cancelPostingOpen.value = false
+    cancelPostingTarget.value = null
+    cancelPostingLoading.value = false
+    cancelPostingError.value = null
     await loadImmediate()
     await loadLabelSortSettings()
   },
@@ -3311,6 +3440,10 @@ onBeforeUnmount(() => {
   dragConfirmPayload.value = null
   dragConfirmLoading.value = false
   dragConfirmError.value = null
+  cancelPostingOpen.value = false
+  cancelPostingTarget.value = null
+  cancelPostingLoading.value = false
+  cancelPostingError.value = null
 })
 </script>
 
@@ -3800,6 +3933,31 @@ onBeforeUnmount(() => {
 
 .fbs-col-label {
   min-width: 140px;
+}
+
+.fbs-col-action {
+  width: 56px;
+}
+
+.fbs-history-offer {
+  padding-left: 1rem !important;
+}
+
+.fbs-delete-btn {
+  color: #ef4444;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fbs-delete-btn svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
+.fbs-delete-btn:hover {
+  color: #dc2626;
 }
 
 .fbs-table tbody tr {

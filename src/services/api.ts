@@ -377,6 +377,15 @@ class ApiService {
     return { blob }
   }
 
+  async cancelFbsPosting(payload: { store_id?: string | number; posting_number: string }) {
+    const response = await fetch(`${API_BASE_URL}/api/ozon/postings/cancel/`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(payload)
+    })
+    return this.handleResponse(response)
+  }
+
   async getFbsHistory(params: {
     storeId: string | number
     includeArchived?: boolean | number
@@ -501,6 +510,17 @@ class ApiService {
       method: 'GET',
       headers: this.getHeaders()
     })
+    return this.handleResponse(response)
+  }
+
+  async cancelFbsCarriage(carriageId: string | number) {
+    const response = await fetch(
+      `${API_BASE_URL}/api/ozon/postings/carriages/${carriageId}/cancel/`,
+      {
+        method: 'POST',
+        headers: this.getHeaders()
+      }
+    )
     return this.handleResponse(response)
   }
 
