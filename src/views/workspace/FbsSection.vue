@@ -1265,7 +1265,7 @@ const filteredPostings = computed(() => {
 const filteredHistoryItems = computed(() => {
   if (!isHistoryTab.value) return historyItems.value
   const query = searchQuery.value.trim().toLowerCase()
-  if (!query) return historyItems.value
+  if (!query || query.length < 4) return historyItems.value
   return historyItems.value.filter((item) => {
     if (item.posting_number?.toLowerCase().includes(query)) return true
     if (item.offer_id?.toLowerCase().includes(query)) return true
