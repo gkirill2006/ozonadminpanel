@@ -101,7 +101,27 @@
             </div>
           </div>
 
-          <div ref="tableWrapperRef" class="table-wrapper mt-2">
+          <div class="table-tabs mt-2">
+            <button
+              type="button"
+              class="table-tab"
+              :class="{ 'table-tab--active': !isDataWorkActive }"
+              @click="setActiveTable('main')"
+            >
+              Все товары
+            </button>
+            <button
+              type="button"
+              class="table-tab"
+              :class="{ 'table-tab--active': isDataWorkActive }"
+              :disabled="!selectedRowsSize"
+              @click="setActiveTable('data')"
+            >
+              Выбранные ({{ selectedRowsSize }})
+            </button>
+          </div>
+
+          <div v-if="!isDataWorkActive" ref="tableWrapperRef" class="table-wrapper mt-2">
             <div v-if="isLoading && !products.length" class="planner-table-splash">
               <span class="spinner-border spinner-border-sm me-2"></span>
               Готовим таблицу...
@@ -122,6 +142,9 @@
                   >
                     <div class="cluster-header">
                       <div v-if="selectedRowsSize" class="cluster-sum-row">
+                        <span class="cluster-sum">
+                          {{ formatNumber(selectedClusterTotals[cluster]) }}
+                        </span>
                         <input
                           type="checkbox"
                           class="form-check-input cluster-sum-checkbox"
@@ -129,9 +152,6 @@
                           @click.stop
                           @change="toggleShipmentCluster(cluster, ($event.target as HTMLInputElement).checked)"
                         />
-                        <span class="cluster-sum">
-                          {{ formatNumber(selectedClusterTotals[cluster]) }}
-                        </span>
                       </div>
                       <span class="cluster-name">{{ cluster }}</span>
                       <span v-if="getClusterImpactShare(cluster) !== null" class="cluster-share">
@@ -174,11 +194,12 @@
                     v-for="cluster in visibleClusters"
                     :key="cluster"
                     class="text-center"
-                    @click.stop="startEditCell(row, idx, cluster)"
+                    @click.stop="startEditCell(row, idx, cluster, 'main')"
                   >
                     <input
-                      v-if="isEditingCell(idx, cluster)"
+                      v-if="isEditingCell(idx, cluster, 'main')"
                       :data-edit-key="getEditKey(idx, cluster)"
+                      data-edit-context="main"
                       type="text"
                       class="cluster-edit-input"
                       v-model="editingValue"
@@ -194,6 +215,137 @@
             </tbody>
           </table>
           <div v-else class="planner-table-empty">Нет данных для отображения</div>
+        </div>
+
+        <div v-else class="table-wrapper mt-2 data-work-wrapper">
+          <div class="data-work-body">
+            <div class="data-work-filters d-flex flex-wrap gap-2 align-items-end">
+              <div class="flex-grow-1">
+                <label class="form-label text-uppercase text-muted small fw-semibold mb-1">Поиск</label>
+                <input
+                  v-model="dataWorkSearch"
+                  type="text"
+                  class="form-control form-control-sm"
+                  placeholder="Артикул, SKU или ШК"
+                />
+              </div>
+              <div class="data-work-min">
+                <label class="form-label text-uppercase text-muted small fw-semibold mb-1">Мин. количество</label>
+                <input
+                  v-model="dataWorkMinTotal"
+                  type="number"
+                  min="0"
+                  class="form-control form-control-sm"
+                />
+              </div>
+              <button type="button" class="btn btn-outline-secondary btn-sm" @click="resetDataWorkFilters">
+                Сбросить
+              </button>
+            </div>
+            <div class="data-work-table-wrapper mt-3">
+              <table class="planner-table pivot-table data-work-table">
+                <thead>
+                  <tr>
+                    <th class="sticky-col index-col">#</th>
+                    <th class="sticky-col name-col">Артикул</th>
+                    <th class="sku-col">SKU</th>
+                    <th v-if="displaySettings.showBarcode" class="barcode-col">ШК</th>
+                    <th class="total-col">Количество, шт</th>
+                    <template v-if="displaySettings.showClusters">
+                      <th
+                        v-for="cluster in visibleClusters"
+                        :key="cluster"
+                        :class="['text-center', getImpactHeaderClass(cluster)]"
+                      >
+                        <div class="cluster-header data-work-cluster-header">
+                          <div v-if="dataWorkRows.length" class="cluster-sum-row">
+                            <span class="cluster-sum">
+                              {{ formatNumber(dataWorkClusterTotals[cluster]) }}
+                            </span>
+                            <input
+                              type="checkbox"
+                              class="form-check-input cluster-sum-checkbox"
+                              :checked="isShipmentClusterSelected(cluster)"
+                              @click.stop
+                              @change="toggleShipmentCluster(cluster, ($event.target as HTMLInputElement).checked)"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            class="cluster-sort-btn"
+                            @click.stop="setDataWorkSortCluster(cluster)"
+                          >
+                            <span class="cluster-name">{{ cluster }}</span>
+                            <span v-if="dataWorkSortCluster === cluster" class="cluster-sort-indicator">▼</span>
+                          </button>
+                          <span v-if="getClusterImpactShare(cluster) !== null" class="cluster-share">
+                            {{ formatImpactShare(getClusterImpactShare(cluster)) }}
+                          </span>
+                        </div>
+                      </th>
+                    </template>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="item in dataWorkRows"
+                    :key="item.row.id || item.rowNumber"
+                    :data-row="item.rowNumber"
+                    :class="{ 'row-selected': isRowSelected(item.rowNumber) }"
+                    @click="toggleRow(item.rowNumber)"
+                  >
+                    <td class="sticky-col index-col">{{ item.rowNumber }}</td>
+                    <td class="sticky-col name-col">
+                      <div class="d-flex align-items-center gap-2">
+                        <img
+                          v-if="displaySettings.showImage && item.row.photo"
+                          :src="item.row.photo"
+                          alt="photo"
+                          class="pivot-photo"
+                        />
+                        <div class="d-flex flex-column pivot-text">
+                          <span class="pivot-name fw-semibold">{{ item.row.offerId || '—' }}</span>
+                          <a
+                            v-if="displaySettings.showLink && item.row.link"
+                            :href="item.row.link"
+                            target="_blank"
+                            rel="noopener"
+                            class="small pivot-link"
+                          >Ссылка</a>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="sku-col">{{ item.row.sku || '—' }}</td>
+                    <td v-if="displaySettings.showBarcode" class="barcode-col">{{ item.row.barcode || '—' }}</td>
+                    <td class="total-col text-center fw-semibold">{{ formatNumber(item.row.totalForDelivery) }}</td>
+                    <template v-if="displaySettings.showClusters">
+                      <td
+                        v-for="cluster in visibleClusters"
+                        :key="cluster"
+                        class="text-center"
+                        @click.stop="startEditCell(item.row, item.rowIndex, cluster, 'modal')"
+                      >
+                        <input
+                          v-if="isEditingCell(item.rowIndex, cluster, 'modal')"
+                          :data-edit-key="getEditKey(item.rowIndex, cluster)"
+                          data-edit-context="modal"
+                          type="text"
+                          class="cluster-edit-input"
+                          v-model="editingValue"
+                          @click.stop
+                          @keydown.enter.prevent="commitEdit"
+                          @keydown.escape.prevent="cancelEdit"
+                          @blur="commitEdit"
+                        />
+                        <span v-else>{{ formatNumber(getClusterValue(item.row, item.rowIndex, cluster)) }}</span>
+                      </td>
+                    </template>
+                  </tr>
+                </tbody>
+              </table>
+              <div v-if="!dataWorkRows.length" class="planner-table-empty">Нет данных по выбранным строкам</div>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -467,6 +619,19 @@ const visibleClusters = computed(() =>
 const editedClusterValues = ref<Record<string, Record<string, number>>>({})
 const editingCell = ref<{ rowIndex: number; rowKey: string; cluster: string } | null>(null)
 const editingValue = ref('')
+const editingContext = ref<'main' | 'modal'>('main')
+
+type DataWorkRow = {
+  rowNumber: number
+  rowIndex: number
+  row: PivotProduct
+}
+
+const activeTable = ref<'main' | 'data'>('main')
+const isDataWorkActive = computed(() => activeTable.value === 'data')
+const dataWorkSearch = ref('')
+const dataWorkMinTotal = ref('')
+const dataWorkSortCluster = ref<string | null>(null)
 
 const selectedClusterTotals = computed(() => {
   const totals: Record<string, number> = {}
@@ -480,6 +645,70 @@ const selectedClusterTotals = computed(() => {
     if (!row) return
     clusters.forEach((cluster) => {
       const value = getClusterValue(row, rowNumber - 1, cluster)
+      const num = Number(value)
+      if (Number.isFinite(num)) {
+        totals[cluster] += num
+      }
+    })
+  })
+  return totals
+})
+
+const selectedRowItems = computed<DataWorkRow[]>(() =>
+  Array.from(selectedRows.value)
+    .sort((a, b) => a - b)
+    .map((rowNumber) => {
+      const rowIndex = rowNumber - 1
+      const row = products.value[rowIndex]
+      if (!row) return null
+      return { rowNumber, rowIndex, row }
+    })
+    .filter((item): item is DataWorkRow => item !== null)
+)
+
+const dataWorkRows = computed<DataWorkRow[]>(() => {
+  const query = dataWorkSearch.value.trim().toLowerCase()
+  const minTotal = Number(dataWorkMinTotal.value)
+  let rows = selectedRowItems.value
+
+  if (query) {
+    rows = rows.filter(({ row }) => {
+      const parts = [row.offerId, row.sku, row.barcode, row.name]
+        .filter((value) => value !== undefined && value !== null)
+        .map((value) => String(value).toLowerCase())
+      return parts.some((value) => value.includes(query))
+    })
+  }
+
+  if (Number.isFinite(minTotal)) {
+    rows = rows.filter(({ row }) => Number(row.totalForDelivery ?? 0) >= minTotal)
+  }
+
+  if (dataWorkSortCluster.value) {
+    const cluster = dataWorkSortCluster.value
+    rows = rows.slice().sort((a, b) => {
+      const aValue = Number(getClusterValue(a.row, a.rowIndex, cluster))
+      const bValue = Number(getClusterValue(b.row, b.rowIndex, cluster))
+      const aNum = Number.isFinite(aValue) ? aValue : Number.NEGATIVE_INFINITY
+      const bNum = Number.isFinite(bValue) ? bValue : Number.NEGATIVE_INFINITY
+      if (aNum !== bNum) return bNum - aNum
+      return a.rowNumber - b.rowNumber
+    })
+  }
+
+  return rows
+})
+
+const dataWorkClusterTotals = computed(() => {
+  const totals: Record<string, number> = {}
+  if (!dataWorkRows.value.length) return totals
+  const clusters = visibleClusters.value
+  clusters.forEach((cluster) => {
+    totals[cluster] = 0
+  })
+  dataWorkRows.value.forEach(({ row, rowIndex }) => {
+    clusters.forEach((cluster) => {
+      const value = getClusterValue(row, rowIndex, cluster)
       const num = Number(value)
       if (Number.isFinite(num)) {
         totals[cluster] += num
@@ -510,22 +739,30 @@ const getClusterValue = (row: PivotProduct, rowIndex: number, cluster: string) =
 
 const getEditKey = (rowIndex: number, cluster: string) => `${rowIndex}:${cluster}`
 
-const isEditingCell = (rowIndex: number, cluster: string) => {
+const isEditingCell = (rowIndex: number, cluster: string, context: 'main' | 'modal' = 'main') => {
   const current = editingCell.value
-  return Boolean(current && current.rowIndex === rowIndex && current.cluster === cluster)
+  return Boolean(
+    current && current.rowIndex === rowIndex && current.cluster === cluster && editingContext.value === context
+  )
 }
 
-const startEditCell = (row: PivotProduct, rowIndex: number, cluster: string) => {
-  if (editingCell.value && !isEditingCell(rowIndex, cluster)) {
+const startEditCell = (
+  row: PivotProduct,
+  rowIndex: number,
+  cluster: string,
+  context: 'main' | 'modal' = 'main'
+) => {
+  if (editingCell.value && !isEditingCell(rowIndex, cluster, context)) {
     commitEdit()
   }
   const rowKey = getRowKey(row, rowIndex)
   const value = getClusterValue(row, rowIndex, cluster)
+  editingContext.value = context
   editingCell.value = { rowIndex, rowKey, cluster }
   editingValue.value = value !== null && value !== undefined ? String(value) : ''
   nextTick(() => {
     const input = document.querySelector<HTMLInputElement>(
-      `.cluster-edit-input[data-edit-key="${getEditKey(rowIndex, cluster)}"]`
+      `.cluster-edit-input[data-edit-key="${getEditKey(rowIndex, cluster)}"][data-edit-context="${context}"]`
     )
     if (input) {
       input.focus()
@@ -739,6 +976,9 @@ watch(
     if (size === 0 && prev > 0) {
       selectedShipmentWarehouses.value = new Set()
     }
+    if (size === 0 && isDataWorkActive.value) {
+      activeTable.value = 'main'
+    }
   }
 )
 
@@ -807,6 +1047,21 @@ const openShipmentDialog = () => {
 
 const closeShipmentDialog = () => {
   shipmentDialogOpen.value = false
+}
+
+const resetDataWorkFilters = () => {
+  dataWorkSearch.value = ''
+  dataWorkMinTotal.value = ''
+  dataWorkSortCluster.value = null
+}
+
+const setDataWorkSortCluster = (cluster: string) => {
+  dataWorkSortCluster.value = cluster
+}
+
+const setActiveTable = (table: 'main' | 'data') => {
+  if (table === 'data' && !selectedRows.value.size) return
+  activeTable.value = table
 }
 
 const selectAllShipmentWarehouses = () => {
@@ -1290,17 +1545,63 @@ const loadAllBatches = async () => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.15rem;
+  gap: 0.3rem;
+  text-transform: none;
+  letter-spacing: normal;
+  white-space: normal;
+}
+
+.data-work-cluster-header {
+  gap: 0.2rem;
+}
+
+.cluster-sort-btn {
+  border: none;
+  background: transparent;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-transform: none;
+}
+
+.cluster-sort-btn:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.45);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.cluster-sort-indicator {
+  font-size: 0.65rem;
+  line-height: 1;
 }
 
 .cluster-name {
   line-height: 1.2;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.5rem;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(15, 23, 42, 0.15);
+  color: #0f172a;
+  font-weight: 600;
+  font-size: 0.72rem;
+  text-align: center;
+  white-space: normal;
 }
 
 .cluster-sum-row {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(15, 23, 42, 0.15);
+  border-radius: 6px;
+  padding: 0.1rem 0.4rem;
 }
 
 .cluster-sum-checkbox {
@@ -1313,10 +1614,9 @@ const loadAllBatches = async () => {
   font-size: 0.7rem;
   font-weight: 700;
   color: #0f172a;
-  background: #fff;
-  border: 1px solid rgba(15, 23, 42, 0.15);
-  border-radius: 4px;
-  padding: 0.05rem 0.35rem;
+  background: transparent;
+  border: none;
+  padding: 0;
   display: inline-flex;
   align-items: center;
   line-height: 1;
@@ -1324,7 +1624,7 @@ const loadAllBatches = async () => {
 
 .cluster-share {
   font-size: 0.62rem;
-  color: #000;
+  color: #0f172a;
   font-weight: 600;
   text-transform: none;
 }
@@ -1494,6 +1794,56 @@ const loadAllBatches = async () => {
   bottom: 0;
   background: #fff;
   z-index: 10;
+}
+
+.table-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.table-tab {
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: #fff;
+  color: #0f172a;
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.table-tab--active {
+  background: #2563eb;
+  color: #fff;
+  border-color: #2563eb;
+}
+
+.table-tab:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.data-work-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.data-work-filters .form-control {
+  min-width: 180px;
+}
+
+.data-work-min {
+  width: 170px;
+}
+
+.data-work-table-wrapper {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 10px;
+  overflow: auto;
+  max-height: 60vh;
 }
 
 .draft-status-card .table th,

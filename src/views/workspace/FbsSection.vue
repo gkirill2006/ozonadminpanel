@@ -313,7 +313,7 @@
                     <th class="fbs-col-date">Принят</th>
                     <th class="fbs-col-products">Товары</th>
                     <th v-if="showWarehouseDeliveryColumns" class="fbs-col-warehouse">Склад</th>
-                    <th v-if="isAwaitingDeliver" class="fbs-col-label">Этикетка</th>
+                    <th v-if="showLabelColumn" class="fbs-col-label">Этикетка</th>
                     <th v-if="showCancelPosting" class="fbs-col-action text-center"></th>
                   </tr>
                 </thead>
@@ -383,18 +383,14 @@
                       <div class="fw-semibold">{{ posting.delivery_method_warehouse || '—' }}</div>
                       <div class="text-muted small">{{ posting.delivery_method_name || '—' }}</div>
                     </td>
-                    <td v-if="isAwaitingDeliver">
+                    <td v-if="showLabelColumn">
                       <button
-                        v-if="posting.label_ready && posting.label_file_url"
                         class="btn btn-outline-primary btn-sm"
                         type="button"
                         @click.stop="downloadLabel(posting)"
                       >
                         Этикетка
                       </button>
-                      <span v-else class="text-muted small">
-                        {{ posting.label_status || '—' }}
-                      </span>
                     </td>
                     <td v-if="showCancelPosting" class="text-center">
                       <button
@@ -571,6 +567,8 @@
                     <th class="fbs-col-date">Принят</th>
                           <th class="fbs-col-products">Товары</th>
                           <th class="fbs-col-warehouse">Склад</th>
+                          <th class="fbs-col-label">Этикетка</th>
+                          <th class="fbs-col-action text-center"></th>
                         </tr>
                       </thead>
                       <tbody>
@@ -634,6 +632,29 @@
                           <td>
                             <div class="fw-semibold">{{ posting.delivery_method_warehouse || '—' }}</div>
                             <div class="text-muted small">{{ posting.delivery_method_name || '—' }}</div>
+                          </td>
+                          <td>
+                            <button
+                              class="btn btn-outline-primary btn-sm"
+                              type="button"
+                              @click.stop="downloadLabel(posting)"
+                            >
+                              Этикетка
+                            </button>
+                          </td>
+                          <td class="text-center">
+                            <button
+                              class="btn btn-link p-0 fbs-delete-btn"
+                              type="button"
+                              title="Удалить отправление"
+                              @click.stop="openCancelPosting(posting)"
+                            >
+                              <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path
+                                  d="M9 3h6l1 2h4v2H4V5h4l1-2Zm1 7h2v9h-2v-9Zm4 0h2v9h-2v-9ZM6 10h2v9H6v-9Z"
+                                />
+                              </svg>
+                            </button>
                           </td>
                         </tr>
                       </tbody>
@@ -722,9 +743,11 @@
                         <tr>
                           <th class="fbs-col-number">Номер отправления</th>
                           <th class="fbs-col-status">Статус</th>
-                    <th class="fbs-col-date">Принят</th>
+                          <th class="fbs-col-date">Принят</th>
                           <th class="fbs-col-products">Товары</th>
                           <th class="fbs-col-warehouse">Склад</th>
+                          <th class="fbs-col-label">Этикетка</th>
+                          <th class="fbs-col-action text-center"></th>
                         </tr>
                       </thead>
                       <tbody>
@@ -754,6 +777,29 @@
                           <td>
                             <div class="fw-semibold">{{ posting.delivery_method_warehouse || '—' }}</div>
                             <div class="text-muted small">{{ posting.delivery_method_name || '—' }}</div>
+                          </td>
+                          <td>
+                            <button
+                              class="btn btn-outline-primary btn-sm"
+                              type="button"
+                              @click.stop="downloadLabel(posting)"
+                            >
+                              Этикетка
+                            </button>
+                          </td>
+                          <td class="text-center">
+                            <button
+                              class="btn btn-link p-0 fbs-delete-btn"
+                              type="button"
+                              title="Удалить отправление"
+                              @click.stop="openCancelPosting(posting)"
+                            >
+                              <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path
+                                  d="M9 3h6l1 2h4v2H4V5h4l1-2Zm1 7h2v9h-2v-9Zm4 0h2v9h-2v-9ZM6 10h2v9H6v-9Z"
+                                />
+                              </svg>
+                            </button>
                           </td>
                         </tr>
                       </tbody>
@@ -1355,7 +1401,8 @@ const isStatusTab = computed(() => statusKeys.includes(activeStatus.value))
 const isAwaitingDeliver = computed(() => activeStatus.value === 'awaiting_deliver')
 const isAwaitingPackaging = computed(() => activeStatus.value === 'awaiting_packaging')
 const isDeliveringTab = computed(() => activeStatus.value === 'delivering')
-const showCancelPosting = computed(() => isAwaitingPackaging.value)
+const showCancelPosting = computed(() => isAwaitingPackaging.value || isNotShippedTab.value)
+const showLabelColumn = computed(() => isAwaitingDeliver.value || isNotShippedTab.value)
 const showRowSelection = computed(() => isStatusTab.value && !isDeliveringTab.value)
 const showNeedsLabelToggle = computed(() => showRowSelection.value && !isAwaitingPackaging.value)
 const showSelectionBar = computed(() => showRowSelection.value)
@@ -1374,7 +1421,7 @@ const tableColumnCount = computed(() => {
   const base = 4
   const selection = showRowSelection.value ? 1 : 0
   const warehouse = showWarehouseDeliveryColumns.value ? 1 : 0
-  const label = isAwaitingDeliver.value ? 1 : 0
+  const label = showLabelColumn.value ? 1 : 0
   const cancel = showCancelPosting.value ? 1 : 0
   return base + selection + warehouse + label + cancel
 })
