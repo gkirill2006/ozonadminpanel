@@ -1,12 +1,12 @@
 <template>
   <div class="fbs">
     <section class="card shadow-sm fbs-card">
-        <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2 fbs-card-header">
           <div>
             <h5 class="mb-1">FBS заказы</h5>
-            <p class="text-muted small mb-0" v-if="lastSyncedAt">
+            <!-- <p class="text-muted small mb-0" v-if="lastSyncedAt">
               Обновлено: {{ formatDateTime(lastSyncedAt) }}
-            </p>
+            </p> -->
           </div>
           <div class="d-flex flex-wrap gap-2 align-items-center">
             <button class="btn btn-outline-secondary btn-sm" type="button" @click="handleRefresh" :disabled="isSyncing">
@@ -428,9 +428,21 @@
           <div v-else-if="!shipBatches.length" class="text-center text-muted py-4">
             Батчи пока не созданы
           </div>
-          <div v-else class="fbs-batch-list">
+          <div v-else>
+            <div class="fbs-batch-search">
+              <input
+                type="text"
+                class="form-control form-control-sm"
+                placeholder="Поиск по батчам"
+                v-model="batchListSearchQuery"
+              />
+            </div>
+            <div v-if="!filteredShipBatches.length" class="text-center text-muted py-4">
+              Ничего не найдено
+            </div>
+            <div v-else class="fbs-batch-list">
             <div
-              v-for="batch in shipBatches"
+              v-for="batch in filteredShipBatches"
               :key="batch.batch_id"
               class="fbs-batch-card"
               :class="{ 'fbs-batch-card--drag-target': dragOverBatchId === batch.batch_id }"
@@ -672,6 +684,7 @@
                   <div v-else class="text-muted py-3 text-center">Нет отправлений</div>
                 </div>
               </div>
+            </div>
             </div>
           </div>
         </div>
@@ -1304,6 +1317,7 @@ const rangeFrom = ref('')
 const rangeTo = ref('')
 const postingsWrapperRef = ref<HTMLElement | null>(null)
 const batchSelections = ref<Record<string, Set<string>>>({})
+const batchListSearchQuery = ref('')
 const batchLabelLoading = ref<Record<string, boolean>>({})
 const batchLabelPolling = ref<Record<string, number>>({})
 const batchCarriageLoading = ref<Record<string, boolean>>({})
@@ -1580,6 +1594,19 @@ const batchTitle = (batch: FbsShipBatch) => {
   if (batch.batch_seq) return `Поставка #${batch.batch_seq}`
   return 'Поставка без названия'
 }
+
+const filteredShipBatches = computed(() => {
+  const query = batchListSearchQuery.value.trim().toLowerCase()
+  if (!query) return shipBatches.value
+  return shipBatches.value.filter((batch) => {
+    const title = batchTitle(batch).toLowerCase()
+    if (title.includes(query)) return true
+    const status = batch.status ? String(batch.status).toLowerCase() : ''
+    if (status.includes(query)) return true
+    const seq = batch.batch_seq ?? ''
+    return String(seq).toLowerCase().includes(query)
+  })
+})
 
 const carriageTitle = (carriage: FbsCarriage) => {
   if (carriage.batch_name) return carriage.batch_name
@@ -3533,6 +3560,11 @@ onBeforeUnmount(() => {
   box-shadow: none;
 }
 
+.fbs-card-header {
+  padding-top: 0.25rem;
+  padding-bottom: 0.5rem;
+}
+
 .fbs-tabs {
   display: flex;
   flex-wrap: wrap;
@@ -3553,6 +3585,15 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+}
+
+.fbs-batch-search {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.fbs-batch-search .form-control {
+  max-width: 280px;
 }
 
 .fbs-batch-list {
