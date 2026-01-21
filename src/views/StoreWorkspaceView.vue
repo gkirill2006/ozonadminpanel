@@ -13,7 +13,27 @@
         </div>
 
         <template v-else>
-          <PlannerSection v-if="activeSection === 'planner'" :store-id="storeId" />
+          <div v-if="isHomeSection" class="section-body workspace-home">
+            <div class="workspace-home__intro">
+              <h3 class="mb-2">Выберите раздел</h3>
+              <p class="text-body-secondary mb-0">
+                Откройте нужный модуль, чтобы продолжить работу с магазином.
+              </p>
+            </div>
+            <div class="workspace-tiles">
+              <button
+                v-for="section in sectionTiles"
+                :key="section.key"
+                type="button"
+                class="workspace-tile"
+                @click="router.push({ name: 'store-workspace', params: { id: storeId, section: section.key } })"
+              >
+                <span class="workspace-tile__icon" :data-feather="section.icon"></span>
+                <span class="workspace-tile__label">{{ section.label }}</span>
+              </button>
+            </div>
+          </div>
+          <PlannerSection v-else-if="activeSection === 'planner'" :store-id="storeId" />
           <SupplySection v-else-if="activeSection === 'supply'" :store-id="storeId" />
           <SupplyDraftsSection v-else-if="activeSection === 'drafts'" :store-id="storeId" />
           <FbsSection v-else-if="activeSection === 'fbs'" :store-id="storeId" />
@@ -81,6 +101,8 @@ const storeId = computed(() => (route.params.id ? String(route.params.id) : ''))
 
 const activeSection = ref<WorkspaceSectionKey>(DEFAULT_WORKSPACE_SECTION)
 const currentSectionLabel = computed(() => sections.find((section) => section.key === activeSection.value)?.label || '')
+const sectionTiles = computed(() => sections.filter((section) => section.key !== 'home' && section.key !== 'settings'))
+const isHomeSection = computed(() => activeSection.value === 'home')
 
 const maskSensitiveValue = (value?: string | null, visible = 4): string => {
   if (!value) return '—'
@@ -159,6 +181,7 @@ watch(
 .workspace-card {
   border: none;
   border-radius: 24px;
+  margin-top: 3.5rem;
 }
 
 .state {
@@ -175,6 +198,64 @@ watch(
   border-radius: 20px;
   padding: 2rem;
   background: rgba(15, 23, 42, 0.015);
+}
+
+.section-body.workspace-home {
+  border-radius: 24px;
+  overflow: hidden;
+}
+
+.workspace-home {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  align-items: center;
+  margin: 2rem auto 0;
+  max-width: 960px;
+  text-align: center;
+}
+
+.workspace-home__intro {
+  max-width: 620px;
+}
+
+.workspace-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  width: 100%;
+}
+
+.workspace-tile {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 18px;
+  background: #fff;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: flex-start;
+  text-align: left;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  cursor: pointer;
+}
+
+.workspace-tile:hover {
+  border-color: rgba(59, 130, 246, 0.4);
+  box-shadow: 0 16px 30px rgba(15, 23, 42, 0.12);
+  transform: translateY(-2px);
+}
+
+.workspace-tile__icon {
+  width: 28px;
+  height: 28px;
+  color: #2563eb;
+}
+
+.workspace-tile__label {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #111827;
 }
 
 .section-placeholder {

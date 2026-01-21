@@ -135,7 +135,7 @@ const generalNavItems: GeneralNavItem[] = [
   // { key: 'settings', label: 'Настройки', icon: 'sliders', to: '/settings', matchPrefix: '/settings' }
 ] as const
 
-const workspaceSections = WORKSPACE_SECTIONS
+const workspaceSections = WORKSPACE_SECTIONS.filter((section) => section.key !== 'home')
 
 const route = useRoute()
 const router = useRouter()

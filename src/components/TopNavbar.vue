@@ -76,7 +76,9 @@ const { stores } = storeToRefs(storesStore)
 const navbarEl = ref<HTMLElement | null>(null)
 
 const workspaceSections = WORKSPACE_SECTIONS
-const workspaceTabs = computed(() => workspaceSections.filter((section) => section.key !== 'settings'))
+const workspaceTabs = computed(() =>
+  workspaceSections.filter((section) => section.key !== 'home' && section.key !== 'settings')
+)
 
 const user = computed(() => authStore.user)
 

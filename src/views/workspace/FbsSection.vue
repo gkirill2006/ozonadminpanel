@@ -528,6 +528,14 @@
                             <option value="weight">По весу</option>
                             <option value="date">По времени</option>
                           </select>
+                          <input
+                            type="text"
+                            class="form-control form-control-sm batch-search-input"
+                            placeholder="Поиск по отправлению"
+                            :value="getBatchSearchQuery(batch.batch_id)"
+                            @input="setBatchSearchQuery(batch.batch_id, ($event.target as HTMLInputElement).value)"
+                            @click.stop
+                          />
                         </div>
                       </div>
                       <div class="batch-selection-right">
@@ -1247,6 +1255,7 @@ const shipBatchDetails = ref<Record<string, FbsShipBatchDetail>>({})
 const shipBatchExpanded = ref<Set<string>>(new Set())
 const batchDetailLoading = ref<Record<string, boolean>>({})
 const batchDetailError = ref<Record<string, string>>({})
+const batchSearchQuery = ref<Record<string, string>>({})
 const carriages = ref<FbsCarriage[]>([])
 const carriageDetails = ref<Record<string, FbsCarriageDetail>>({})
 const carriageExpanded = ref<Set<string>>(new Set())
@@ -1635,6 +1644,12 @@ const setBatchSort = (batchId: string, key: 'offer_id' | 'weight' | 'date') => {
   batchSortBy.value = { ...batchSortBy.value, [batchId]: key }
 }
 
+const getBatchSearchQuery = (batchId: string) => batchSearchQuery.value[batchId] || ''
+
+const setBatchSearchQuery = (batchId: string, value: string) => {
+  batchSearchQuery.value = { ...batchSearchQuery.value, [batchId]: value }
+}
+
 const postingTotalWeight = (posting: FbsPosting) => {
   const products = Array.isArray(posting.products) ? posting.products : []
   return products.reduce((sum, product) => {
@@ -1782,9 +1797,15 @@ const hasProcessingBatches = computed(() =>
 
 const batchDisplayPostings = (batchId: string) => {
   const list = batchPostings(batchId)
+  const query = getBatchSearchQuery(batchId).trim().toLowerCase()
+  const filtered = query
+    ? list.filter((posting) =>
+        String(posting.posting_number || '').toLowerCase().includes(query)
+      )
+    : list
   const sortKey = getBatchSortKey(batchId)
-  if (!sortKey) return list
-  return [...list].sort((a, b) => {
+  if (!sortKey) return filtered
+  return [...filtered].sort((a, b) => {
     if (sortKey === 'offer_id') {
       return compareOfferIds(postingPrimaryOfferId(a), postingPrimaryOfferId(b))
     }
@@ -1942,6 +1963,7 @@ const loadShipBatches = async (options?: { showLoader?: boolean; preserveState?:
       batchDetailError.value = {}
       batchSelections.value = {}
       batchCarriageLoading.value = {}
+      batchSearchQuery.value = {}
     } else {
       const ids = new Set(nextBatches.map((batch) => batch.batch_id))
       shipBatchExpanded.value = new Set([...shipBatchExpanded.value].filter((id) => ids.has(id)))
@@ -1959,6 +1981,9 @@ const loadShipBatches = async (options?: { showLoader?: boolean; preserveState?:
       )
       batchCarriageLoading.value = Object.fromEntries(
         Object.entries(batchCarriageLoading.value).filter(([id]) => ids.has(id))
+      )
+      batchSearchQuery.value = Object.fromEntries(
+        Object.entries(batchSearchQuery.value).filter(([id]) => ids.has(id))
       )
       nextBatches.forEach((batch) => {
         const detail = shipBatchDetails.value[batch.batch_id]
@@ -3676,6 +3701,10 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
+}
+
+.batch-search-input {
+  min-width: 220px;
 }
 
 .batch-selection-right {
