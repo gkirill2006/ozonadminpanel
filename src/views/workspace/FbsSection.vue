@@ -458,7 +458,12 @@
                   <span class="fbs-batch-meta__sep">|</span>
                   <span>
                     Отправлений:
-                    <span class="fbs-batch-meta__strong">{{ batch.postings_count ?? '—' }}</span>
+                    <span
+                      class="fbs-batch-meta__strong"
+                      :class="{ 'fbs-batch-meta__strong--alert': isBatchCountMismatch(batch) }"
+                    >
+                      {{ batch.postings_count ?? '—' }}
+                    </span>
                     <span v-if="typeof batch.expected_postings_count === 'number'">
                       из {{ batch.expected_postings_count }}
                     </span>
@@ -1642,6 +1647,13 @@ const batchTitle = (batch: FbsShipBatch) => {
   if (batch.name) return batch.name
   if (batch.batch_seq) return `Поставка #${batch.batch_seq}`
   return 'Поставка без названия'
+}
+
+const isBatchCountMismatch = (batch: FbsShipBatch) => {
+  const expected = batch.expected_postings_count
+  const actual = batch.postings_count
+  if (typeof expected !== 'number' || typeof actual !== 'number') return false
+  return expected !== actual
 }
 
 const filteredShipBatches = computed(() => {
@@ -3762,6 +3774,10 @@ onBeforeUnmount(() => {
 
 .fbs-batch-meta__strong {
   font-weight: 700;
+}
+
+.fbs-batch-meta__strong--alert {
+  color: #f87171;
 }
 
 .fbs-batch-meta__sep,
