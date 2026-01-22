@@ -459,20 +459,19 @@
                   <span>
                     Отправлений:
                     <span class="fbs-batch-meta__strong">{{ batch.postings_count ?? '—' }}</span>
+                    <span v-if="typeof batch.expected_postings_count === 'number'">
+                      из {{ batch.expected_postings_count }}
+                    </span>
                   </span>
                   <span class="fbs-batch-meta__dot">·</span>
                   <span>
                     Товаров:
                     <span class="fbs-batch-meta__strong">{{ batch.items_count ?? '—' }}</span>
                   </span>
-                  <template v-if="batch.status">
-                    <span class="fbs-batch-meta__dot">·</span>
-                    <span>Статус: {{ batch.status }}</span>
-                  </template>
-                  <template v-if="batch.sent_to_delivery">
-                    <span class="fbs-batch-meta__dot">·</span>
-                    <span class="fbs-batch-status-tag">Передан в доставку</span>
-                  </template>
+                  <span class="fbs-batch-meta__dot">·</span>
+                  <span class="fbs-batch-status-tag">
+                    {{ batch.sent_to_delivery ? 'Передан в доставку' : 'Ожидает сборку' }}
+                  </span>
                 </div>
                 <div class="fbs-batch-actions" @click.stop>
                   <select
@@ -488,7 +487,7 @@
                   <button
                     class="btn btn-outline-primary btn-sm"
                     type="button"
-                    :disabled="!batchHasPostings(batch) || batchLabelLoading[batch.batch_id]"
+                    :disabled="!batchHasPostings(batch) || batchLabelLoading[batch.batch_id] || !isBatchLabelActionAllowed(batch)"
                     @click.stop="handleBatchLabels(batch.batch_id)"
                   >
                     <span v-if="batchLabelLoading[batch.batch_id]" class="spinner-border spinner-border-sm me-2"></span>
@@ -544,6 +543,42 @@
                             <option value="weight">По весу</option>
                             <option value="date">По времени</option>
                           </select>
+                          <div class="batch-status-filters">
+                            <span class="text-muted small">Статус:</span>
+                            <button
+                              class="btn btn-outline-secondary btn-sm"
+                              type="button"
+                              :class="{ 'btn-primary text-white': isBatchStatusFilterActive(batch.batch_id, 'acceptance_in_progress') }"
+                              @click.stop="toggleBatchStatusFilter(batch.batch_id, 'acceptance_in_progress')"
+                            >
+                              Приемка
+                            </button>
+                            <button
+                              class="btn btn-outline-secondary btn-sm"
+                              type="button"
+                              :class="{ 'btn-primary text-white': isBatchStatusFilterActive(batch.batch_id, 'cancelled') }"
+                              @click.stop="toggleBatchStatusFilter(batch.batch_id, 'cancelled')"
+                            >
+                              Отменен
+                            </button>
+                            <button
+                              class="btn btn-outline-secondary btn-sm"
+                              type="button"
+                              :class="{ 'btn-primary text-white': isBatchStatusFilterActive(batch.batch_id, 'delivering') }"
+                              @click.stop="toggleBatchStatusFilter(batch.batch_id, 'delivering')"
+                            >
+                              Доставляется
+                            </button>
+                          </div>
+                          <label class="form-check form-switch mb-0 batch-split-filter">
+                            <input
+                              class="form-check-input"
+                              type="checkbox"
+                              :checked="isBatchSplitParentOnly(batch.batch_id)"
+                              @change="toggleBatchSplitParentOnly(batch.batch_id, ($event.target as HTMLInputElement).checked)"
+                            />
+                            <span class="form-check-label">Отобразить разделенные товары</span>
+                          </label>
                           <input
                             type="text"
                             class="form-control form-control-sm batch-search-input"
@@ -664,6 +699,7 @@
                             <button
                               class="btn btn-outline-primary btn-sm"
                               type="button"
+                              :disabled="!isBatchLabelActionAllowed(batch)"
                               @click.stop="downloadLabel(posting)"
                             >
                               Этикетка
@@ -1131,6 +1167,7 @@ interface FbsPosting {
   status: string
   substatus?: string
   in_delivery?: boolean | null
+  is_split_parent?: boolean | null
   delivery_method_name?: string
   delivery_method_warehouse?: string
   tpl_provider?: string
@@ -1163,6 +1200,7 @@ interface FbsShipBatch {
   name?: string | null
   status?: string | null
   sent_to_delivery?: boolean | null
+  expected_postings_count?: number | null
   total_count?: number | null
   success_count?: number | null
   failed_count?: number | null
@@ -1331,6 +1369,8 @@ const batchLabelLoading = ref<Record<string, boolean>>({})
 const batchLabelPolling = ref<Record<string, number>>({})
 const batchCarriageLoading = ref<Record<string, boolean>>({})
 const batchSortBy = ref<Record<string, 'offer_id' | 'weight' | 'date'>>({})
+const batchStatusFilters = ref<Record<string, Set<string>>>({})
+const batchSplitParentOnly = ref<Record<string, boolean>>({})
 const newSortBy = ref<'' | 'offer_id' | 'weight' | 'date'>('')
 const newSortDirection = ref<1 | -1>(1)
 const shipBatchPollingTimer = ref<number | null>(null)
@@ -1623,6 +1663,11 @@ const carriageTitle = (carriage: FbsCarriage) => {
   return `Отгрузка ${carriage.carriage_id}`
 }
 
+const isBatchLabelActionAllowed = (batch?: FbsShipBatch | null) => {
+  const status = batch?.status
+  return status === 'completed' || status === 'failed' || status === 'partial'
+}
+
 const isBatchExpanded = (batchId: string) => shipBatchExpanded.value.has(batchId)
 
 const batchPostings = (batchId: string) => {
@@ -1672,6 +1717,33 @@ const dragConfirmLead = computed(() => {
 
 const isBatchRowSelected = (batchId: string, postingNumber: string) =>
   batchSelections.value[batchId]?.has(postingNumber) ?? false
+
+const getBatchStatusFilter = (batchId: string) => batchStatusFilters.value[batchId] || new Set<string>()
+
+const isBatchStatusFilterActive = (batchId: string, status: string) =>
+  getBatchStatusFilter(batchId).has(status)
+
+const toggleBatchStatusFilter = (batchId: string, status: string) => {
+  const next = new Set(getBatchStatusFilter(batchId))
+  if (next.has(status)) {
+    next.delete(status)
+  } else {
+    next.add(status)
+  }
+  const updated = { ...batchStatusFilters.value }
+  if (next.size) {
+    updated[batchId] = next
+  } else {
+    delete updated[batchId]
+  }
+  batchStatusFilters.value = updated
+}
+
+const isBatchSplitParentOnly = (batchId: string) => Boolean(batchSplitParentOnly.value[batchId])
+
+const toggleBatchSplitParentOnly = (batchId: string, checked: boolean) => {
+  batchSplitParentOnly.value = { ...batchSplitParentOnly.value, [batchId]: checked }
+}
 
 const isBatchDeliveryLagging = (batch: FbsShipBatch, posting: FbsPosting) => {
   if (!batch.sent_to_delivery) return false
@@ -1837,16 +1909,23 @@ const hasProcessingBatches = computed(() =>
 )
 
 const batchDisplayPostings = (batchId: string) => {
-  const list = batchPostings(batchId)
+  let list = batchPostings(batchId)
   const query = getBatchSearchQuery(batchId).trim().toLowerCase()
-  const filtered = query
-    ? list.filter((posting) =>
-        String(posting.posting_number || '').toLowerCase().includes(query)
-      )
-    : list
+  if (query) {
+    list = list.filter((posting) =>
+      String(posting.posting_number || '').toLowerCase().includes(query)
+    )
+  }
+  const statusFilters = getBatchStatusFilter(batchId)
+  if (statusFilters.size) {
+    list = list.filter((posting) => statusFilters.has(posting.status))
+  }
+  if (isBatchSplitParentOnly(batchId)) {
+    list = list.filter((posting) => Boolean(posting.is_split_parent))
+  }
   const sortKey = getBatchSortKey(batchId)
-  if (!sortKey) return filtered
-  return [...filtered].sort((a, b) => {
+  if (!sortKey) return list
+  return [...list].sort((a, b) => {
     if (sortKey === 'offer_id') {
       return compareOfferIds(postingPrimaryOfferId(a), postingPrimaryOfferId(b))
     }
@@ -2005,6 +2084,8 @@ const loadShipBatches = async (options?: { showLoader?: boolean; preserveState?:
       batchSelections.value = {}
       batchCarriageLoading.value = {}
       batchSearchQuery.value = {}
+      batchStatusFilters.value = {}
+      batchSplitParentOnly.value = {}
     } else {
       const ids = new Set(nextBatches.map((batch) => batch.batch_id))
       shipBatchExpanded.value = new Set([...shipBatchExpanded.value].filter((id) => ids.has(id)))
@@ -2025,6 +2106,12 @@ const loadShipBatches = async (options?: { showLoader?: boolean; preserveState?:
       )
       batchSearchQuery.value = Object.fromEntries(
         Object.entries(batchSearchQuery.value).filter(([id]) => ids.has(id))
+      )
+      batchStatusFilters.value = Object.fromEntries(
+        Object.entries(batchStatusFilters.value).filter(([id]) => ids.has(id))
+      )
+      batchSplitParentOnly.value = Object.fromEntries(
+        Object.entries(batchSplitParentOnly.value).filter(([id]) => ids.has(id))
       )
       nextBatches.forEach((batch) => {
         const detail = shipBatchDetails.value[batch.batch_id]
@@ -3137,6 +3224,8 @@ const getBatchLabels = (batchId: string) => {
 
 const handleBatchLabels = async (batchId: string) => {
   if (batchLabelLoading.value[batchId]) return
+  const batch = shipBatches.value.find((item) => item.batch_id === batchId)
+  if (!isBatchLabelActionAllowed(batch)) return
   setBatchLabelLoading(batchId, true)
   try {
     let batchLabels = getBatchLabels(batchId)
@@ -3159,6 +3248,8 @@ const handleBatchLabels = async (batchId: string) => {
 
 const handleBatchSelectionLabels = async (batchId: string) => {
   if (batchLabelLoading.value[batchId]) return
+  const batch = shipBatches.value.find((item) => item.batch_id === batchId)
+  if (!isBatchLabelActionAllowed(batch)) return
   setBatchLabelLoading(batchId, true)
   try {
     const numbers = batchSelectedNumbers(batchId)
@@ -3770,6 +3861,28 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
+}
+
+.batch-status-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.batch-split-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.batch-split-filter .form-check-input {
+  cursor: pointer;
+}
+
+.batch-split-filter .form-check-label {
+  font-size: 0.8rem;
+  color: #64748b;
 }
 
 .batch-search-input {
