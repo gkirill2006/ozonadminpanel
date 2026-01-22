@@ -1347,6 +1347,7 @@ const postingsWrapperRef = ref<HTMLElement | null>(null)
 const batchSelections = ref<Record<string, Set<string>>>({})
 const batchLabelLoading = ref<Record<string, boolean>>({})
 const batchLabelPolling = ref<Record<string, number>>({})
+const batchLabelPollingInFlight = ref<Record<string, boolean>>({})
 const batchCarriageLoading = ref<Record<string, boolean>>({})
 const batchSortBy = ref<Record<string, 'offer_id' | 'weight' | 'date'>>({})
 const batchStatusFilters = ref<Record<string, Set<string> | null>>({})
@@ -1354,8 +1355,10 @@ const batchSplitParentOnly = ref<Record<string, boolean>>({})
 const newSortBy = ref<'' | 'offer_id' | 'weight' | 'date'>('')
 const newSortDirection = ref<1 | -1>(1)
 const shipBatchPollingTimer = ref<number | null>(null)
+const shipBatchPollingInFlight = ref(false)
 const carriageLabelLoading = ref<Record<string, boolean>>({})
 const carriageLabelPolling = ref<Record<string, number>>({})
+const carriageLabelPollingInFlight = ref<Record<string, boolean>>({})
 const carriageCancelLoading = ref<Record<string, boolean>>({})
 const cancelPostingOpen = ref(false)
 const cancelPostingTarget = ref<FbsPosting | null>(null)
@@ -2119,9 +2122,15 @@ const loadShipBatches = async (options?: { showLoader?: boolean; preserveState?:
 
 const startShipBatchPolling = () => {
   if (shipBatchPollingTimer.value) return
-  shipBatchPollingTimer.value = window.setInterval(() => {
+  shipBatchPollingTimer.value = window.setInterval(async () => {
     if (activeStatus.value !== 'ship_batches') return
-    void loadShipBatches({ showLoader: false, preserveState: true })
+    if (shipBatchPollingInFlight.value) return
+    shipBatchPollingInFlight.value = true
+    try {
+      await loadShipBatches({ showLoader: false, preserveState: true })
+    } finally {
+      shipBatchPollingInFlight.value = false
+    }
   }, 2000)
 }
 
@@ -2130,6 +2139,7 @@ const stopShipBatchPolling = () => {
     window.clearInterval(shipBatchPollingTimer.value)
     shipBatchPollingTimer.value = null
   }
+  shipBatchPollingInFlight.value = false
 }
 
 const updateShipBatchPolling = () => {
@@ -2184,7 +2194,7 @@ const saveLabelSortSettings = async () => {
 }
 
 const fetchShipmentProgress = async (batchId: string) => {
-  if (!batchId) return
+  if (!batchId || shipmentProgressLoading.value) return
   shipmentProgressLoading.value = true
   shipmentProgressError.value = null
   try {
@@ -3141,6 +3151,11 @@ const stopBatchLabelPolling = (batchId: string) => {
   const next = { ...batchLabelPolling.value }
   delete next[batchId]
   batchLabelPolling.value = next
+  if (batchLabelPollingInFlight.value[batchId]) {
+    const nextInFlight = { ...batchLabelPollingInFlight.value }
+    delete nextInFlight[batchId]
+    batchLabelPollingInFlight.value = nextInFlight
+  }
   setBatchLabelLoading(batchId, false)
 }
 
@@ -3172,6 +3187,8 @@ const startBatchLabelPolling = (batchId: string) => {
   if (!batchId || batchLabelPolling.value[batchId]) return
   setBatchLabelLoading(batchId, true)
   const poll = async () => {
+    if (batchLabelPollingInFlight.value[batchId]) return
+    batchLabelPollingInFlight.value = { ...batchLabelPollingInFlight.value, [batchId]: true }
     try {
       const response = await apiService.getFbsShipBatchDetail(batchId)
       const detail = applyShipBatchDetail(batchId, response)
@@ -3186,6 +3203,9 @@ const startBatchLabelPolling = (batchId: string) => {
         removeBatchFromState(batchId)
         return
       }
+    } finally {
+      const nextInFlight = { ...batchLabelPollingInFlight.value, [batchId]: false }
+      batchLabelPollingInFlight.value = nextInFlight
     }
   }
   void poll()
@@ -3196,6 +3216,7 @@ const startBatchLabelPolling = (batchId: string) => {
 const stopAllBatchLabelPolling = () => {
   Object.values(batchLabelPolling.value).forEach((timer) => window.clearInterval(timer))
   batchLabelPolling.value = {}
+  batchLabelPollingInFlight.value = {}
   batchLabelLoading.value = {}
 }
 
@@ -3267,6 +3288,11 @@ const stopCarriageLabelPolling = (carriageId: string | number) => {
   const next = { ...carriageLabelPolling.value }
   delete next[key]
   carriageLabelPolling.value = next
+  if (carriageLabelPollingInFlight.value[key]) {
+    const nextInFlight = { ...carriageLabelPollingInFlight.value }
+    delete nextInFlight[key]
+    carriageLabelPollingInFlight.value = nextInFlight
+  }
   setCarriageLabelLoading(key, false)
 }
 
@@ -3275,6 +3301,8 @@ const startCarriageLabelPolling = (carriageId: string | number) => {
   if (!key || carriageLabelPolling.value[key]) return
   setCarriageLabelLoading(key, true)
   const poll = async () => {
+    if (carriageLabelPollingInFlight.value[key]) return
+    carriageLabelPollingInFlight.value = { ...carriageLabelPollingInFlight.value, [key]: true }
     try {
       const response = await apiService.getFbsCarriageDetail(key)
       const detail = applyCarriageDetail(key, response)
@@ -3291,6 +3319,9 @@ const startCarriageLabelPolling = (carriageId: string | number) => {
       }
     } catch (error) {
       // keep polling
+    } finally {
+      const nextInFlight = { ...carriageLabelPollingInFlight.value, [key]: false }
+      carriageLabelPollingInFlight.value = nextInFlight
     }
   }
   void poll()
@@ -3301,6 +3332,7 @@ const startCarriageLabelPolling = (carriageId: string | number) => {
 const stopAllCarriageLabelPolling = () => {
   Object.values(carriageLabelPolling.value).forEach((timer) => window.clearInterval(timer))
   carriageLabelPolling.value = {}
+  carriageLabelPollingInFlight.value = {}
   carriageLabelLoading.value = {}
 }
 
@@ -3328,6 +3360,7 @@ const handleCarriageCancel = async (carriageId: string | number) => {
 const handleCarriageLabels = async (carriageId: string | number) => {
   const key = String(carriageId)
   if (carriageLabelLoading.value[key]) return
+  setCarriageLabelLoading(key, true)
   try {
     let labels = getCarriageLabels(key)
     if (!labels) {
@@ -3343,9 +3376,11 @@ const handleCarriageLabels = async (carriageId: string | number) => {
       errorMessage.value = labels.error || 'Не удалось сформировать этикетки'
       return
     }
-    startCarriageLabelPolling(key)
+    labelNotice.value = 'Этикетки готовятся'
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Не удалось получить этикетки'
+  } finally {
+    setCarriageLabelLoading(key, false)
   }
 }
 

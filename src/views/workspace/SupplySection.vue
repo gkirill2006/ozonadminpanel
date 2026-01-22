@@ -869,6 +869,7 @@ const draftBatchId = ref<string | null>(null)
 const draftBatchStatusText = ref<string>('—')
 const draftBatchError = ref<string | null>(null)
 let draftBatchTimer: ReturnType<typeof setInterval> | null = null
+let draftBatchPollingInFlight = false
 const draftItems = ref<any[]>([])
 const batchStatusValue = computed(() => String(draftBatchStatusText.value || '').toLowerCase())
 const isBatchFinal = computed(() => batchStatusValue.value === 'completed' || batchStatusValue.value === 'partial')
@@ -1353,7 +1354,8 @@ const submitSupplyCreation = () => {
 }
 
 const fetchDraftBatch = async (batchId: string) => {
-  if (!batchId) return
+  if (!batchId || draftBatchPollingInFlight) return
+  draftBatchPollingInFlight = true
   draftBatchError.value = null
   try {
     const response = await apiService.getSupplyDraftBatch(batchId)
@@ -1365,6 +1367,8 @@ const fetchDraftBatch = async (batchId: string) => {
     }
   } catch (error) {
     draftBatchError.value = error instanceof Error ? error.message : 'Не удалось получить статус черновиков'
+  } finally {
+    draftBatchPollingInFlight = false
   }
 }
 
