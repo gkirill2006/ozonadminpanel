@@ -583,7 +583,7 @@
                         <button
                           class="btn btn-outline-secondary btn-sm"
                           type="button"
-                          :disabled="batchCarriageLoading[batch.batch_id]"
+                          :disabled="batchCarriageLoading[batch.batch_id] || isSystemBatch(batch)"
                           @click.stop="openCarriageDialog(batch)"
                         >
                           <span v-if="batchCarriageLoading[batch.batch_id]" class="spinner-border spinner-border-sm me-2"></span>
@@ -1181,6 +1181,8 @@ interface FbsShipBatch {
   name?: string | null
   status?: string | null
   sent_to_delivery?: boolean | null
+  is_system?: boolean | null
+  system_code?: string | null
   expected_postings_count?: number | null
   total_count?: number | null
   success_count?: number | null
@@ -1644,6 +1646,13 @@ const carriageTitle = (carriage: FbsCarriage) => {
 const isBatchLabelActionAllowed = (batch?: FbsShipBatch | null) => {
   const status = batch?.status
   return status === 'completed' || status === 'failed' || status === 'partial'
+}
+
+const isSystemBatch = (batch?: FbsShipBatch | null) => {
+  if (!batch) return false
+  if (batch.is_system) return true
+  if (batch.system_code) return batch.system_code === 'unrecognized_postings'
+  return false
 }
 
 const isBatchExpanded = (batchId: string) => shipBatchExpanded.value.has(batchId)
