@@ -469,6 +469,10 @@
                     <span class="fbs-batch-meta__dot">·</span>
                     <span>Статус: {{ batch.status }}</span>
                   </template>
+                  <template v-if="batch.sent_to_delivery">
+                    <span class="fbs-batch-meta__dot">·</span>
+                    <span class="fbs-batch-status-tag">Передан в доставку</span>
+                  </template>
                 </div>
                 <div class="fbs-batch-actions" @click.stop>
                   <select
@@ -596,7 +600,10 @@
                           v-for="posting in batchDisplayPostings(batch.batch_id)"
                           :key="posting.id"
                           :data-posting-number="posting.posting_number"
-                          :class="{ 'row-selected': isBatchRowSelected(batch.batch_id, posting.posting_number) }"
+                          :class="{
+                            'row-selected': isBatchRowSelected(batch.batch_id, posting.posting_number),
+                            'row-delivery-warning': isBatchDeliveryLagging(batch, posting)
+                          }"
                           @click.stop="toggleBatchRow(batch.batch_id, posting.posting_number)"
                         >
                           <td class="text-center fbs-col-check">
@@ -1123,6 +1130,7 @@ interface FbsPosting {
   order_id?: number | string
   status: string
   substatus?: string
+  in_delivery?: boolean | null
   delivery_method_name?: string
   delivery_method_warehouse?: string
   tpl_provider?: string
@@ -1154,6 +1162,7 @@ interface FbsShipBatch {
   batch_seq?: number | null
   name?: string | null
   status?: string | null
+  sent_to_delivery?: boolean | null
   total_count?: number | null
   success_count?: number | null
   failed_count?: number | null
@@ -1663,6 +1672,11 @@ const dragConfirmLead = computed(() => {
 
 const isBatchRowSelected = (batchId: string, postingNumber: string) =>
   batchSelections.value[batchId]?.has(postingNumber) ?? false
+
+const isBatchDeliveryLagging = (batch: FbsShipBatch, posting: FbsPosting) => {
+  if (!batch.sent_to_delivery) return false
+  return posting.status === 'awaiting_packaging' || posting.status === 'awaiting_deliver'
+}
 
 const getBatchSortKey = (batchId: string) => batchSortBy.value[batchId] || ''
 
@@ -3561,8 +3575,12 @@ onBeforeUnmount(() => {
 }
 
 .fbs-card-header {
-  padding-top: 0.25rem;
+  padding-top: 0 !important;
   padding-bottom: 0.5rem;
+}
+
+.fbs-card-header h5 {
+  margin-top: 0;
 }
 
 .fbs-tabs {
@@ -3659,6 +3677,16 @@ onBeforeUnmount(() => {
 .fbs-batch-meta__dot {
   font-weight: 500;
   color: rgba(248, 250, 252, 0.75);
+}
+
+.fbs-batch-status-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(248, 250, 252, 0.16);
+  font-size: 0.78rem;
+  font-weight: 600;
 }
 
 .fbs-batch-body {
@@ -4091,6 +4119,18 @@ onBeforeUnmount(() => {
 
 .fbs-table tbody tr.row-selected td {
   box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.2);
+}
+
+.fbs-table tbody tr.row-delivery-warning {
+  background: rgba(251, 191, 36, 0.12);
+}
+
+.fbs-table tbody tr.row-delivery-warning td {
+  box-shadow: inset 0 0 0 1px rgba(251, 191, 36, 0.2);
+}
+
+.fbs-table tbody tr.row-selected.row-delivery-warning {
+  background: rgba(34, 197, 94, 0.15);
 }
 
 .status-pill {
