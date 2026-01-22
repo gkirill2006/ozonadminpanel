@@ -433,7 +433,10 @@
               v-for="batch in shipBatches"
               :key="batch.batch_id"
               class="fbs-batch-card"
-              :class="{ 'fbs-batch-card--drag-target': dragOverBatchId === batch.batch_id }"
+              :class="{
+                'fbs-batch-card--drag-target': dragOverBatchId === batch.batch_id,
+                'fbs-batch-card--system': isSystemBatch(batch)
+              }"
               @click="toggleBatch(batch)"
               @dragenter.prevent="onBatchDragEnter(batch, $event)"
               @dragover.prevent="onBatchDragOver(batch, $event)"
@@ -3754,6 +3757,14 @@ onBeforeUnmount(() => {
   background: #23364d;
   cursor: pointer;
   transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.fbs-batch-card--system {
+  background: #2a405a;
+}
+
+.fbs-batch-card--system:hover {
+  background: #34506f;
 }
 
 .fbs-batch-card * {
