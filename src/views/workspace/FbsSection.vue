@@ -428,21 +428,9 @@
           <div v-else-if="!shipBatches.length" class="text-center text-muted py-4">
             Батчи пока не созданы
           </div>
-          <div v-else>
-            <div class="fbs-batch-search">
-              <input
-                type="text"
-                class="form-control form-control-sm"
-                placeholder="Поиск по батчам"
-                v-model="batchListSearchQuery"
-              />
-            </div>
-            <div v-if="!filteredShipBatches.length" class="text-center text-muted py-4">
-              Ничего не найдено
-            </div>
-            <div v-else class="fbs-batch-list">
+          <div v-else class="fbs-batch-list">
             <div
-              v-for="batch in filteredShipBatches"
+              v-for="batch in shipBatches"
               :key="batch.batch_id"
               class="fbs-batch-card"
               :class="{ 'fbs-batch-card--drag-target': dragOverBatchId === batch.batch_id }"
@@ -550,30 +538,19 @@
                           </select>
                           <div class="batch-status-filters">
                             <span class="text-muted small">Статус:</span>
-                            <button
-                              class="btn btn-outline-secondary btn-sm"
-                              type="button"
-                              :class="{ 'btn-primary text-white': isBatchStatusFilterActive(batch.batch_id, 'acceptance_in_progress') }"
-                              @click.stop="toggleBatchStatusFilter(batch.batch_id, 'acceptance_in_progress')"
+                            <label
+                              v-for="status in BATCH_STATUS_FILTERS"
+                              :key="status.key"
+                              class="form-check form-check-inline mb-0 batch-status-check"
                             >
-                              Приемка
-                            </button>
-                            <button
-                              class="btn btn-outline-secondary btn-sm"
-                              type="button"
-                              :class="{ 'btn-primary text-white': isBatchStatusFilterActive(batch.batch_id, 'cancelled') }"
-                              @click.stop="toggleBatchStatusFilter(batch.batch_id, 'cancelled')"
-                            >
-                              Отменен
-                            </button>
-                            <button
-                              class="btn btn-outline-secondary btn-sm"
-                              type="button"
-                              :class="{ 'btn-primary text-white': isBatchStatusFilterActive(batch.batch_id, 'delivering') }"
-                              @click.stop="toggleBatchStatusFilter(batch.batch_id, 'delivering')"
-                            >
-                              Доставляется
-                            </button>
+                              <input
+                                class="form-check-input"
+                                type="checkbox"
+                                :checked="isBatchStatusFilterActive(batch.batch_id, status.key)"
+                                @change="setBatchStatusFilter(batch.batch_id, status.key, ($event.target as HTMLInputElement).checked)"
+                              />
+                              <span class="form-check-label">{{ status.label }}</span>
+                            </label>
                           </div>
                           <label class="form-check form-switch mb-0 batch-split-filter">
                             <input
@@ -732,7 +709,6 @@
                   <div v-else class="text-muted py-3 text-center">Нет отправлений</div>
                 </div>
               </div>
-            </div>
             </div>
           </div>
         </div>
@@ -1369,12 +1345,11 @@ const rangeFrom = ref('')
 const rangeTo = ref('')
 const postingsWrapperRef = ref<HTMLElement | null>(null)
 const batchSelections = ref<Record<string, Set<string>>>({})
-const batchListSearchQuery = ref('')
 const batchLabelLoading = ref<Record<string, boolean>>({})
 const batchLabelPolling = ref<Record<string, number>>({})
 const batchCarriageLoading = ref<Record<string, boolean>>({})
 const batchSortBy = ref<Record<string, 'offer_id' | 'weight' | 'date'>>({})
-const batchStatusFilters = ref<Record<string, Set<string>>>({})
+const batchStatusFilters = ref<Record<string, Set<string> | null>>({})
 const batchSplitParentOnly = ref<Record<string, boolean>>({})
 const newSortBy = ref<'' | 'offer_id' | 'weight' | 'date'>('')
 const newSortDirection = ref<1 | -1>(1)
@@ -1656,18 +1631,6 @@ const isBatchCountMismatch = (batch: FbsShipBatch) => {
   return expected !== actual
 }
 
-const filteredShipBatches = computed(() => {
-  const query = batchListSearchQuery.value.trim().toLowerCase()
-  if (!query) return shipBatches.value
-  return shipBatches.value.filter((batch) => {
-    const title = batchTitle(batch).toLowerCase()
-    if (title.includes(query)) return true
-    const status = batch.status ? String(batch.status).toLowerCase() : ''
-    if (status.includes(query)) return true
-    const seq = batch.batch_seq ?? ''
-    return String(seq).toLowerCase().includes(query)
-  })
-})
 
 const carriageTitle = (carriage: FbsCarriage) => {
   if (carriage.batch_name) return carriage.batch_name
@@ -1730,25 +1693,36 @@ const dragConfirmLead = computed(() => {
 const isBatchRowSelected = (batchId: string, postingNumber: string) =>
   batchSelections.value[batchId]?.has(postingNumber) ?? false
 
-const getBatchStatusFilter = (batchId: string) => batchStatusFilters.value[batchId] || new Set<string>()
+const BATCH_STATUS_FILTERS = [
+  { key: 'awaiting_deliver', label: 'Ожидает отгрузки' },
+  { key: 'acceptance_in_progress', label: 'Приемка' },
+  { key: 'cancelled', label: 'Отменен' },
+  { key: 'delivering', label: 'Доставляется' }
+]
 
-const isBatchStatusFilterActive = (batchId: string, status: string) =>
-  getBatchStatusFilter(batchId).has(status)
+const getBatchStatusFilter = (batchId: string) => batchStatusFilters.value[batchId] ?? null
 
-const toggleBatchStatusFilter = (batchId: string, status: string) => {
-  const next = new Set(getBatchStatusFilter(batchId))
-  if (next.has(status)) {
-    next.delete(status)
-  } else {
+const isBatchStatusFilterActive = (batchId: string, status: string) => {
+  const filter = getBatchStatusFilter(batchId)
+  if (!filter) return true
+  return filter.has(status)
+}
+
+const setBatchStatusFilter = (batchId: string, status: string, checked: boolean) => {
+  const current = getBatchStatusFilter(batchId)
+  if (!current) {
+    if (checked) return
+    const next = new Set(BATCH_STATUS_FILTERS.map((item) => item.key).filter((key) => key !== status))
+    batchStatusFilters.value = { ...batchStatusFilters.value, [batchId]: next }
+    return
+  }
+  const next = new Set(current)
+  if (checked) {
     next.add(status)
-  }
-  const updated = { ...batchStatusFilters.value }
-  if (next.size) {
-    updated[batchId] = next
   } else {
-    delete updated[batchId]
+    next.delete(status)
   }
-  batchStatusFilters.value = updated
+  batchStatusFilters.value = { ...batchStatusFilters.value, [batchId]: next }
 }
 
 const isBatchSplitParentOnly = (batchId: string) => Boolean(batchSplitParentOnly.value[batchId])
@@ -1929,7 +1903,7 @@ const batchDisplayPostings = (batchId: string) => {
     )
   }
   const statusFilters = getBatchStatusFilter(batchId)
-  if (statusFilters.size) {
+  if (statusFilters) {
     list = list.filter((posting) => statusFilters.has(posting.status))
   }
   if (isBatchSplitParentOnly(batchId)) {
@@ -3708,15 +3682,6 @@ onBeforeUnmount(() => {
   gap: 1rem;
 }
 
-.fbs-batch-search {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.fbs-batch-search .form-control {
-  max-width: 280px;
-}
-
 .fbs-batch-list {
   display: flex;
   flex-direction: column;
@@ -3884,6 +3849,22 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
+}
+
+.batch-status-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-right: 0.25rem;
+}
+
+.batch-status-check .form-check-input {
+  cursor: pointer;
+}
+
+.batch-status-check .form-check-label {
+  font-size: 0.8rem;
+  color: #64748b;
 }
 
 .batch-split-filter {
