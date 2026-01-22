@@ -442,7 +442,7 @@
             >
               <div class="fbs-batch-header">
                 <div class="fbs-batch-meta">
-                  <span class="fbs-batch-meta__strong">{{ batchTitle(batch) }}</span>
+                  <span class="fbs-batch-meta__strong">{{ batchHeaderTitle(batch) }}</span>
                   <span class="fbs-batch-meta__sep">|</span>
                   <span>
                     Отправлений:
@@ -452,7 +452,7 @@
                     >
                       {{ batch.postings_count ?? '—' }}
                     </span>
-                    <span v-if="typeof batch.expected_postings_count === 'number'">
+                    <span v-if="showExpectedCount(batch)">
                       из {{ batch.expected_postings_count }}
                     </span>
                   </span>
@@ -461,10 +461,12 @@
                     Товаров:
                     <span class="fbs-batch-meta__strong">{{ batch.items_count ?? '—' }}</span>
                   </span>
-                  <span class="fbs-batch-meta__dot">·</span>
-                  <span class="fbs-batch-status-tag">
-                    {{ batch.sent_to_delivery ? 'Передан в доставку' : 'Ожидает сборку' }}
-                  </span>
+                  <template v-if="!isSystemBatch(batch)">
+                    <span class="fbs-batch-meta__dot">·</span>
+                    <span class="fbs-batch-status-tag">
+                      {{ batch.sent_to_delivery ? 'Передан в доставку' : 'Ожидает сборку' }}
+                    </span>
+                  </template>
                 </div>
                 <div class="fbs-batch-actions" @click.stop>
                   <select
@@ -1627,6 +1629,19 @@ const batchTitle = (batch: FbsShipBatch) => {
   if (batch.name) return batch.name
   if (batch.batch_seq) return `Поставка #${batch.batch_seq}`
   return 'Поставка без названия'
+}
+
+const batchHeaderTitle = (batch: FbsShipBatch) => {
+  if (batch.system_code === 'unrecognized_postings' || batch.is_system) {
+    return 'Неопознанные поставки'
+  }
+  return batchTitle(batch)
+}
+
+const showExpectedCount = (batch: FbsShipBatch) => {
+  if (isSystemBatch(batch)) return false
+  const expected = batch.expected_postings_count
+  return typeof expected === 'number' && expected > 0
 }
 
 const isBatchCountMismatch = (batch: FbsShipBatch) => {
