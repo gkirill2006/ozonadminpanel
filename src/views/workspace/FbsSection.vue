@@ -3760,11 +3760,11 @@ onBeforeUnmount(() => {
 }
 
 .fbs-batch-card--system {
-  background: #2a405a;
+  background: #8a94ad;
 }
 
 .fbs-batch-card--system:hover {
-  background: #34506f;
+  background: #47688b;
 }
 
 .fbs-batch-card * {
