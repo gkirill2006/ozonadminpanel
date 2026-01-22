@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-backdrop" @click.self="$emit('close')">
+  <div class="modal-backdrop">
     <div class="modal-content">
       <button class="modal-close" @click="$emit('close')">&times;</button>
       <slot />
