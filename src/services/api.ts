@@ -477,6 +477,22 @@ class ApiService {
     return this.handleResponse(response)
   }
 
+  async downloadFbsShipBatchLabels(batchId: string) {
+    const response = await fetch(
+      `${API_BASE_URL}/api/ozon/postings/ship/batches/${batchId}/labels/download/`,
+      {
+        method: 'GET',
+        headers: this.getHeaders()
+      }
+    )
+    const contentType = response.headers.get('content-type') || ''
+    if (response.ok && contentType.includes('application/pdf')) {
+      const blob = await response.blob()
+      return { blob }
+    }
+    return this.handleResponse(response)
+  }
+
   async moveFbsShipBatch(payload: Record<string, unknown>) {
     const response = await fetch(`${API_BASE_URL}/api/ozon/postings/ship/batches/move/`, {
       method: 'POST',

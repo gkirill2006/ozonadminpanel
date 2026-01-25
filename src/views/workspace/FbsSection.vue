@@ -3263,18 +3263,24 @@ const handleBatchLabels = async (batchId: string) => {
   setBatchLabelLoading(batchId, true)
   try {
     let batchLabels = getBatchLabels(batchId)
-    if (!batchLabels || batchLabels.status !== 'ready' || !batchLabels.file_url) {
+    if (!batchLabels || batchLabels.status !== 'ready') {
       await ensureBatchDetail(batchId)
       batchLabels = getBatchLabels(batchId)
     }
-    if (batchLabels?.status === 'ready' && batchLabels.file_url) {
-      const filename = batchLabels.file_name || `batch_${batchId}_labels.pdf`
-      await downloadFileUrl(batchLabels.file_url, filename)
+    if (batchLabels?.status === 'ready') {
+      const response = await apiService.downloadFbsShipBatchLabels(batchId)
+      if (response && response.blob instanceof Blob) {
+        const filename = batchLabels.file_name || `batch_${batchId}_labels.pdf`
+        downloadBlob(response.blob, filename)
+      }
       return
     }
-    const numbers = batchPostings(batchId).map((posting) => posting.posting_number).filter(Boolean)
-    if (!numbers.length) return
-    await handleLabels(numbers, { skipGlobalLoading: true, skipReload: true })
+    if (batchLabels?.status === 'error') {
+      errorMessage.value = batchLabels.error || 'Не удалось сформировать этикетки'
+      return
+    }
+    labelNotice.value = 'Этикетки готовятся'
+    startBatchLabelPolling(batchId)
   } finally {
     setBatchLabelLoading(batchId, false)
   }
