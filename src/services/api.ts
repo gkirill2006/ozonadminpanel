@@ -426,6 +426,19 @@ class ApiService {
     return this.handleResponse(response)
   }
 
+  async getFbsHistoryDetail(params: { storeId: string | number; postingNumber: string }) {
+    const url = new URL(
+      `${API_BASE_URL}/api/ozon/postings/history/${params.postingNumber}/`,
+      window.location.origin
+    )
+    url.searchParams.set('store_id', String(params.storeId))
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: this.getHeaders()
+    })
+    return this.handleResponse(response)
+  }
+
   async createFbsLabels(payload: Record<string, unknown>) {
     const response = await fetch(`${API_BASE_URL}/api/ozon/postings/labels/`, {
       method: 'POST',
@@ -447,6 +460,15 @@ class ApiService {
       return { blob }
     }
 
+    return this.handleResponse(response)
+  }
+
+  async getFbsUnprintedLabels(payload: Record<string, unknown>) {
+    const response = await fetch(`${API_BASE_URL}/api/ozon/postings/labels/unprinted/`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(payload)
+    })
     return this.handleResponse(response)
   }
 

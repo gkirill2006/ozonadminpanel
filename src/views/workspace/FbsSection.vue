@@ -263,29 +263,134 @@
                   </tr>
                 </thead>
                 <tbody v-if="filteredHistoryItems.length">
-                  <tr v-for="(item, index) in filteredHistoryItems" :key="`${item.posting_number}-${index}`">
-                    <td class="fbs-history-offer">
-                      <div class="fw-semibold">{{ item.offer_id || '—' }}</div>
-                    </td>
-                    <td>
-                      <div class="fw-semibold">{{ item.posting_number }}</div>
-                    </td>
-                    <td>
-                      <div class="fw-semibold">{{ formatHistoryDate(item.awaiting_packaging) }}</div>
-                    </td>
-                    <td>
-                      <div class="fw-semibold">{{ formatHistoryDate(item.awaiting_deliver) }}</div>
-                    </td>
-                    <td>
-                      <div class="fw-semibold">{{ formatHistoryDate(item.acceptance_in_progress) }}</div>
-                    </td>
-                    <td>
-                      <div class="fw-semibold">{{ formatHistoryDate(item.delivering) }}</div>
-                    </td>
-                    <td>
-                      <div class="fw-semibold">{{ formatHistoryDate(item.cancelled) }}</div>
-                    </td>
-                  </tr>
+                  <template v-for="(item, index) in filteredHistoryItems" :key="`${item.posting_number}-${index}`">
+                    <tr class="fbs-history-row" @click="openHistoryDetail(item)">
+                      <td class="fbs-history-offer">
+                        <div class="fw-semibold">{{ item.offer_id || '—' }}</div>
+                      </td>
+                      <td>
+                        <div class="fw-semibold">{{ item.posting_number }}</div>
+                      </td>
+                      <td>
+                        <div class="fw-semibold">{{ formatHistoryDate(item.awaiting_packaging) }}</div>
+                      </td>
+                      <td>
+                        <div class="fw-semibold">{{ formatHistoryDate(item.awaiting_deliver) }}</div>
+                      </td>
+                      <td>
+                        <div class="fw-semibold">{{ formatHistoryDate(item.acceptance_in_progress) }}</div>
+                      </td>
+                      <td>
+                        <div class="fw-semibold">{{ formatHistoryDate(item.delivering) }}</div>
+                      </td>
+                      <td>
+                        <div class="fw-semibold">{{ formatHistoryDate(item.cancelled) }}</div>
+                      </td>
+                    </tr>
+                    <tr v-if="historyDetailOpen === item.posting_number">
+                      <td colspan="7">
+                        <div class="history-inline">
+                          <div v-if="historyDetailLoading" class="fbs-loading">
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                            Загружаем детали...
+                          </div>
+                          <div v-else-if="historyDetailError" class="alert alert-danger py-1 px-2">
+                            {{ historyDetailError }}
+                          </div>
+                          <div v-else-if="historyDetail">
+                            <div class="history-detail-section">
+                              <div class="history-detail-title">Батчи</div>
+                              <div class="history-chain">
+                                <div class="history-batch-card">
+                                  <div class="history-batch-line">
+                                    <span class="history-batch-index">1</span>
+                                    <span class="history-batch-sep">|</span>
+                                    <span class="history-batch-name">{{ formatBatchLabel(historyDetail.initial_batch) }}</span>
+                                    <span class="history-batch-sep">|</span>
+                                    <span class="history-batch-meta">Создан: {{ formatDateTime(historyDetail.initial_batch?.created_at || '') }}</span>
+                                    <span class="history-batch-sep">|</span>
+                                    <span class="history-batch-user">{{ formatHistoryUser(null) }}</span>
+                                  </div>
+                                </div>
+                                <template v-for="(move, idx) in historyDetail.batch_moves" :key="`move-${idx}`">
+                                  <div class="history-move">
+                                    <span class="history-move-label">Перемещение:</span>
+                                    <span class="history-move-date">{{ formatDateTime(move.moved_at || '') }}</span>
+                                    <span class="history-batch-sep">|</span>
+                                    <span class="history-move-path">
+                                      {{ formatBatchLabel(move.source_batch) }} → {{ formatBatchLabel(move.target_batch) }}
+                                    </span>
+                                    <span class="history-batch-sep">|</span>
+                                    <span class="history-batch-meta">Создан: {{ formatDateTime(move.target_batch?.created_at || '') }}</span>
+                                    <span class="history-batch-sep">|</span>
+                                    <span class="history-batch-user">{{ formatHistoryUser(move.user) }}</span>
+                                  </div>
+                                  <div class="history-batch-card">
+                                    <div class="history-batch-line">
+                                      <span class="history-batch-index">{{ idx + 2 }}</span>
+                                      <span class="history-batch-sep">|</span>
+                                      <span class="history-batch-name">{{ formatBatchLabel(move.target_batch) }}</span>
+                                      <span class="history-batch-sep">|</span>
+                                      <span class="history-batch-meta">Создан: {{ formatDateTime(move.target_batch?.created_at || '') }}</span>
+                                      <span class="history-batch-sep">|</span>
+                                      <span class="history-batch-user">{{ formatHistoryUser(move.user) }}</span>
+                                    </div>
+                                  </div>
+                                </template>
+                                <div
+                                  v-if="historyDetail.current_batch && shouldShowCurrentBatch(historyDetail)"
+                                  class="history-batch-card"
+                                >
+                                  <div class="history-batch-line">
+                                    <span class="history-batch-index">{{ (historyDetail.batch_moves?.length || 0) + 2 }}</span>
+                                    <span class="history-batch-sep">|</span>
+                                    <span class="history-batch-name">{{ formatBatchLabel(historyDetail.current_batch) }}</span>
+                                    <span class="history-batch-sep">|</span>
+                                    <span class="history-batch-meta">Создан: {{ formatDateTime(historyDetail.current_batch?.created_at || '') }}</span>
+                                    <span class="history-batch-sep">|</span>
+                                    <span class="history-batch-user">{{ formatHistoryUser(null) }}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div class="history-detail-section">
+                              <div class="history-detail-title">Скачивания этикеток</div>
+                              <div v-if="historyDetail.label_downloads?.length" class="history-detail-list">
+                                <div
+                                  v-for="(download, idx) in historyDetail.label_downloads"
+                                  :key="`download-${idx}`"
+                                  class="history-detail-item"
+                                >
+                                  <div class="history-detail-line">
+                                    <span class="history-detail-label">Скачивание #{{ idx + 1 }}</span>
+                                    <span class="history-batch-sep">|</span>
+                                    <span>{{ formatDateTime(download.created_at || '') }}</span>
+                                    <span class="history-batch-sep">|</span>
+                                    <span>{{ formatHistoryUser(download.user) }}</span>
+                                    <span class="history-batch-sep">|</span>
+                                    <span>Отправление: {{ resolveDownloadBatchLabel(download, historyDetail) }}</span>
+                                    <span class="history-batch-sep">|</span>
+                                    <a
+                                      v-if="download.file_url"
+                                      :href="download.file_url"
+                                      target="_blank"
+                                      rel="noopener"
+                                      class="history-detail-link"
+                                    >
+                                      Скачать файл
+                                    </a>
+                                    <span v-else class="text-muted">Файл недоступен</span>
+                                  </div>
+                                </div>
+                              </div>
+                              <div v-else class="text-muted small">Нет скачиваний</div>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  </template>
                 </tbody>
                 <tbody v-else>
                   <tr>
@@ -318,13 +423,12 @@
                   </tr>
                 </thead>
                 <tbody v-if="displayPostings.length">
-                  <tr
-                    v-for="(posting, index) in displayPostings"
-                    :key="posting.id"
-                    :class="{ 'row-selected': showRowSelection && isRowSelected(posting.posting_number) }"
-                    @click="showRowSelection && handleRowClick(posting.posting_number)"
-                    :data-row="index + 1"
-                  >
+                  <template v-for="(posting, index) in displayPostings" :key="posting.id">
+                    <tr
+                      :class="{ 'row-selected': showRowSelection && isRowSelected(posting.posting_number) }"
+                      @click="handlePostingRowClick(posting)"
+                      :data-row="index + 1"
+                    >
                     <td v-if="showRowSelection" class="text-center">
                       <input
                         type="checkbox"
@@ -337,6 +441,9 @@
                     <td>
                       <div class="fw-semibold">{{ posting.posting_number }}</div>
                       <div v-if="posting.order_number" class="text-muted small">{{ posting.order_number }}</div>
+                      <div v-if="isNotShippedTab" class="text-muted small">
+                        Отправление: {{ formatPostingBatchLabel(posting) }}
+                      </div>
                     </td>
                     <td>
                       <span class="status-pill" :class="statusClass(posting.status)">
@@ -406,7 +513,111 @@
                         </svg>
                       </button>
                     </td>
-                  </tr>
+                    </tr>
+                    <tr v-if="isNotShippedTab && historyDetailOpen === posting.posting_number" :key="`${posting.id}-detail`">
+                      <td :colspan="tableColumnCount">
+                        <div class="history-inline">
+                          <div v-if="historyDetailLoading" class="fbs-loading">
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                            Загружаем детали...
+                          </div>
+                          <div v-else-if="historyDetailError" class="alert alert-danger py-1 px-2">
+                            {{ historyDetailError }}
+                          </div>
+                          <div v-else-if="historyDetail">
+                            <div class="history-detail-section">
+                              <div class="history-detail-title">Батчи</div>
+                              <div class="history-chain">
+                                <div class="history-batch-card">
+                                  <div class="history-batch-line">
+                                    <span class="history-batch-index">1</span>
+                                    <span class="history-batch-sep">|</span>
+                                    <span class="history-batch-name">{{ formatBatchLabel(historyDetail.initial_batch) }}</span>
+                                    <span class="history-batch-sep">|</span>
+                                    <span class="history-batch-meta">Создан: {{ formatDateTime(historyDetail.initial_batch?.created_at || '') }}</span>
+                                    <span class="history-batch-sep">|</span>
+                                    <span class="history-batch-user">{{ formatHistoryUser(null) }}</span>
+                                  </div>
+                                </div>
+                                <template v-for="(move, idx) in historyDetail.batch_moves" :key="`move-notshipped-${idx}`">
+                                  <div class="history-move">
+                                    <span class="history-move-label">Перемещение:</span>
+                                    <span class="history-move-date">{{ formatDateTime(move.moved_at || '') }}</span>
+                                    <span class="history-batch-sep">|</span>
+                                    <span class="history-move-path">
+                                      {{ formatBatchLabel(move.source_batch) }} → {{ formatBatchLabel(move.target_batch) }}
+                                    </span>
+                                    <span class="history-batch-sep">|</span>
+                                    <span class="history-batch-meta">Создан: {{ formatDateTime(move.target_batch?.created_at || '') }}</span>
+                                    <span class="history-batch-sep">|</span>
+                                    <span class="history-batch-user">{{ formatHistoryUser(move.user) }}</span>
+                                  </div>
+                                  <div class="history-batch-card">
+                                    <div class="history-batch-line">
+                                      <span class="history-batch-index">{{ idx + 2 }}</span>
+                                      <span class="history-batch-sep">|</span>
+                                      <span class="history-batch-name">{{ formatBatchLabel(move.target_batch) }}</span>
+                                      <span class="history-batch-sep">|</span>
+                                      <span class="history-batch-meta">Создан: {{ formatDateTime(move.target_batch?.created_at || '') }}</span>
+                                      <span class="history-batch-sep">|</span>
+                                      <span class="history-batch-user">{{ formatHistoryUser(move.user) }}</span>
+                                    </div>
+                                  </div>
+                                </template>
+                                <div
+                                  v-if="historyDetail.current_batch && shouldShowCurrentBatch(historyDetail)"
+                                  class="history-batch-card"
+                                >
+                                  <div class="history-batch-line">
+                                    <span class="history-batch-index">{{ (historyDetail.batch_moves?.length || 0) + 2 }}</span>
+                                    <span class="history-batch-sep">|</span>
+                                    <span class="history-batch-name">{{ formatBatchLabel(historyDetail.current_batch) }}</span>
+                                    <span class="history-batch-sep">|</span>
+                                    <span class="history-batch-meta">Создан: {{ formatDateTime(historyDetail.current_batch?.created_at || '') }}</span>
+                                    <span class="history-batch-sep">|</span>
+                                    <span class="history-batch-user">{{ formatHistoryUser(null) }}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div class="history-detail-section">
+                              <div class="history-detail-title">Скачивания этикеток</div>
+                              <div v-if="historyDetail.label_downloads?.length" class="history-detail-list">
+                                <div
+                                  v-for="(download, idx) in historyDetail.label_downloads"
+                                  :key="`download-notshipped-${idx}`"
+                                  class="history-detail-item"
+                                >
+                                  <div class="history-detail-line">
+                                    <span class="history-detail-label">Скачивание #{{ idx + 1 }}</span>
+                                    <span class="history-batch-sep">|</span>
+                                    <span>{{ formatDateTime(download.created_at || '') }}</span>
+                                    <span class="history-batch-sep">|</span>
+                                    <span>{{ formatHistoryUser(download.user) }}</span>
+                                    <span class="history-batch-sep">|</span>
+                                    <span>Отправление: {{ resolveDownloadBatchLabel(download, historyDetail) }}</span>
+                                    <span class="history-batch-sep">|</span>
+                                    <a
+                                      v-if="download.file_url"
+                                      :href="download.file_url"
+                                      target="_blank"
+                                      rel="noopener"
+                                      class="history-detail-link"
+                                    >
+                                      Скачать файл
+                                    </a>
+                                    <span v-else class="text-muted">Файл недоступен</span>
+                                  </div>
+                                </div>
+                              </div>
+                              <div v-else class="text-muted small">Нет скачиваний</div>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  </template>
                 </tbody>
                 <tbody v-else>
                   <tr>
@@ -565,6 +776,15 @@
                               @change="toggleBatchSplitParentOnly(batch.batch_id, ($event.target as HTMLInputElement).checked)"
                             />
                             <span class="form-check-label">Отобразить разделенные товары</span>
+                          </label>
+                          <label class="form-check form-switch mb-0 batch-unprinted-filter">
+                            <input
+                              class="form-check-input"
+                              type="checkbox"
+                              :checked="isBatchUnprintedOnly(batch.batch_id)"
+                              @change="toggleBatchUnprintedOnly(batch.batch_id, ($event.target as HTMLInputElement).checked)"
+                            />
+                            <span class="form-check-label">Отобразить непечатанные этикетки</span>
                           </label>
                           <input
                             type="text"
@@ -980,6 +1200,17 @@
   <Modal v-if="carriageDialogOpen" @close="closeCarriageDialog">
     <div class="fbs-modal">
       <h5 class="mb-3">Создать отгрузку</h5>
+      <div v-if="carriageLabelCheckLoading" class="fbs-label-check fbs-label-check--loading">
+        <span class="spinner-border spinner-border-sm me-2"></span>
+        Проверяем этикетки...
+      </div>
+      <div
+        v-else-if="carriageLabelCheckMessage"
+        class="fbs-label-check"
+        :class="carriageLabelCheckOk ? 'fbs-label-check--ok' : 'fbs-label-check--warn'"
+      >
+        {{ carriageLabelCheckMessage }}
+      </div>
       <label class="form-label text-uppercase text-muted small fw-semibold">Количество мест</label>
       <input
         type="number"
@@ -996,7 +1227,7 @@
           class="btn btn-primary btn-sm"
           type="button"
           @click="submitBatchCarriage"
-          :disabled="isCarriageSubmitting"
+          :disabled="isCarriageSubmitting || carriageLabelCheckLoading"
         >
           <span v-if="isCarriageSubmitting" class="spinner-border spinner-border-sm me-2"></span>
           Создать
@@ -1123,6 +1354,7 @@
       </div>
     </div>
   </Modal>
+
 </template>
 
 <script setup lang="ts">
@@ -1150,6 +1382,9 @@ interface FbsPosting {
   posting_number: string
   order_number?: string
   order_id?: number | string
+  batch_id?: string | null
+  batch_seq?: number | null
+  batch_name?: string | null
   status: string
   substatus?: string
   in_delivery?: boolean | null
@@ -1175,6 +1410,7 @@ interface FbsPosting {
   label_status?: string | null
   label_file_url?: string | null
   label_file_path?: string | null
+  label_printed?: boolean | null
   total_weight_g?: number | string | null
   products?: FbsPostingProduct[]
   last_synced_at?: string | null
@@ -1283,6 +1519,58 @@ interface FbsHistoryItem {
   cancelled?: string | null
 }
 
+interface FbsHistoryBatchPayload {
+  batch_id?: string | null
+  batch_seq?: number | null
+  name?: string | null
+  status?: string | null
+  created_at?: string | null
+  is_system?: boolean | null
+  system_code?: string | null
+}
+
+interface FbsHistoryUserPayload {
+  telegram_id?: number | string | null
+  username?: string | null
+}
+
+interface FbsHistoryLabelDownload {
+  id?: number | string | null
+  source?: string | null
+  label_type?: string | null
+  file_name?: string | null
+  file_url?: string | null
+  batch_name?: string | null
+  postings_count?: number | null
+  items_count?: number | null
+  batch_id?: string | null
+  carriage_id?: string | number | null
+  created_at?: string | null
+  user?: FbsHistoryUserPayload | null
+}
+
+interface FbsHistoryBatchMove {
+  moved_at?: string | null
+  source_batch?: FbsHistoryBatchPayload | null
+  target_batch?: FbsHistoryBatchPayload | null
+  detached_from_carriage?: boolean | null
+  created_new_batch?: boolean | null
+  user?: FbsHistoryUserPayload | null
+}
+
+interface FbsHistoryDetail {
+  store_id?: number | string | null
+  posting_number?: string | null
+  order_number?: string | null
+  status?: string | null
+  substatus?: string | null
+  shipment_date?: string | null
+  current_batch?: FbsHistoryBatchPayload | null
+  initial_batch?: FbsHistoryBatchPayload | null
+  batch_moves?: FbsHistoryBatchMove[]
+  label_downloads?: FbsHistoryLabelDownload[]
+}
+
 const statusKeys = ['awaiting_packaging', 'delivering']
 
 const statusTabs = [
@@ -1313,6 +1601,10 @@ const historyItems = ref<FbsHistoryItem[]>([])
 const historyCount = ref<number | null>(null)
 const historyTotal = ref<number | null>(null)
 const historyLastSync = ref<string | null>(null)
+const historyDetailOpen = ref<string | null>(null)
+const historyDetailLoading = ref(false)
+const historyDetailError = ref<string | null>(null)
+const historyDetail = ref<FbsHistoryDetail | null>(null)
 const statusCounts = ref<Record<string, number>>({})
 const onPackagingTotal = ref<number | null>(null)
 const notShippedCount = ref<number | null>(null)
@@ -1347,6 +1639,9 @@ const carriageDialogOpen = ref(false)
 const carriageSuccessOpen = ref(false)
 const carriagePlacesCount = ref('1')
 const carriageBatch = ref<FbsShipBatch | null>(null)
+const carriageLabelCheckLoading = ref(false)
+const carriageLabelCheckOk = ref<boolean | null>(null)
+const carriageLabelCheckMessage = ref<string | null>(null)
 const selectedPostings = ref<Set<string>>(new Set())
 const rangeFrom = ref('')
 const rangeTo = ref('')
@@ -1359,6 +1654,7 @@ const batchCarriageLoading = ref<Record<string, boolean>>({})
 const batchSortBy = ref<Record<string, 'offer_id' | 'weight' | 'date'>>({})
 const batchStatusFilters = ref<Record<string, Set<string> | null>>({})
 const batchSplitParentOnly = ref<Record<string, boolean>>({})
+const batchUnprintedOnly = ref<Record<string, boolean>>({})
 const newSortBy = ref<'' | 'offer_id' | 'weight' | 'date'>('')
 const newSortDirection = ref<1 | -1>(1)
 const shipBatchPollingTimer = ref<number | null>(null)
@@ -1489,7 +1785,7 @@ const tableColumnCount = computed(() => {
 })
 
 const isTableLoading = computed(() => {
-  if (isNotShippedTab.value) return isNotShippedLoading.value
+  if (isNotShippedTab.value) return isNotShippedLoading.value && postings.value.length === 0
   if (isHistoryTab.value) return isHistoryLoading.value
   return isLoading.value
 })
@@ -1575,6 +1871,74 @@ const formatHistoryDate = (value?: string | null) => {
     return trimmed
   }
   return formatDateTime(trimmed)
+}
+
+const formatBatchLabel = (batch?: FbsHistoryBatchPayload | null) => {
+  if (!batch) return '—'
+  if (batch.name) return batch.name
+  if (batch.batch_seq) return `Поставка #${batch.batch_seq}`
+  if (batch.batch_id) return String(batch.batch_id)
+  return '—'
+}
+
+const formatHistoryUser = (user?: FbsHistoryUserPayload | null) => {
+  if (!user) return '—'
+  const name = user.username ? String(user.username) : ''
+  if (name) return name
+  if (user.telegram_id) return String(user.telegram_id)
+  return '—'
+}
+
+const resolveDownloadBatchLabel = (download: FbsHistoryLabelDownload, detail: FbsHistoryDetail) => {
+  if (download.batch_name) {
+    return String(download.batch_name)
+  }
+  const batchId = download.batch_id ? String(download.batch_id) : ''
+  if (batchId) {
+    const candidates: Array<FbsHistoryBatchPayload | null | undefined> = [
+      detail.initial_batch,
+      detail.current_batch,
+      ...(detail.batch_moves?.flatMap((move) => [move.source_batch, move.target_batch]) || [])
+    ]
+    const match = candidates.find((batch) => batch?.batch_id && String(batch.batch_id) === batchId)
+    return match ? formatBatchLabel(match) : batchId
+  }
+  if (download.carriage_id) {
+    return `Отгрузка ${download.carriage_id}`
+  }
+  return '—'
+}
+
+const formatPostingBatchLabel = (posting: FbsPosting) => {
+  if (posting.batch_name) return String(posting.batch_name)
+  if (posting.shipment_batch_name) return String(posting.shipment_batch_name)
+  if (posting.batch_seq) return `Поставка #${posting.batch_seq}`
+  if (posting.shipment_batch_seq) return `Поставка #${posting.shipment_batch_seq}`
+  if (posting.batch_id) return String(posting.batch_id)
+  if (posting.shipment_batch_id) return String(posting.shipment_batch_id)
+  return '—'
+}
+
+const isSameBatch = (left?: FbsHistoryBatchPayload | null, right?: FbsHistoryBatchPayload | null) => {
+  if (!left || !right) return false
+  if (left.batch_id && right.batch_id) {
+    return left.batch_id === right.batch_id
+  }
+  if (left.name && right.name) {
+    return left.name === right.name
+  }
+  return false
+}
+
+const shouldShowCurrentBatch = (detail: FbsHistoryDetail) => {
+  const current = detail.current_batch
+  if (!current) return false
+  const moves = detail.batch_moves || []
+  const last = moves.length
+    ? (moves[moves.length - 1].target_batch || moves[moves.length - 1].source_batch)
+    : detail.initial_batch
+  if (!last) return true
+  return !isSameBatch(current, last)
 }
 
 const formatWeight = (value?: number | string | null) => {
@@ -1692,6 +2056,15 @@ const batchSelectedNumbers = (batchId: string) => Array.from(batchSelections.val
 
 const batchSelectedCount = (batchId: string) => batchSelections.value[batchId]?.size ?? 0
 
+const resolveBatchPostingNumbers = async (batchId: string) => {
+  await ensureBatchDetail(batchId)
+  const selected = batchSelectedNumbers(batchId)
+  const numbers = selected.length
+    ? selected
+    : batchPostings(batchId).map((posting) => posting.posting_number).filter(Boolean)
+  return numbers
+}
+
 const batchSelectedMap = (batchId: string) => {
   const selection = batchSelections.value[batchId] || new Set()
   const map: Record<string, boolean> = {}
@@ -1759,6 +2132,12 @@ const isBatchSplitParentOnly = (batchId: string) => Boolean(batchSplitParentOnly
 
 const toggleBatchSplitParentOnly = (batchId: string, checked: boolean) => {
   batchSplitParentOnly.value = { ...batchSplitParentOnly.value, [batchId]: checked }
+}
+
+const isBatchUnprintedOnly = (batchId: string) => Boolean(batchUnprintedOnly.value[batchId])
+
+const toggleBatchUnprintedOnly = (batchId: string, checked: boolean) => {
+  batchUnprintedOnly.value = { ...batchUnprintedOnly.value, [batchId]: checked }
 }
 
 const isBatchDeliveryLagging = (batch: FbsShipBatch, posting: FbsPosting) => {
@@ -1939,6 +2318,9 @@ const batchDisplayPostings = (batchId: string) => {
   if (isBatchSplitParentOnly(batchId)) {
     list = list.filter((posting) => Boolean(posting.is_split_parent))
   }
+  if (isBatchUnprintedOnly(batchId)) {
+    list = list.filter((posting) => posting.label_printed === false)
+  }
   const sortKey = getBatchSortKey(batchId)
   if (!sortKey) return list
   return [...list].sort((a, b) => {
@@ -2102,6 +2484,7 @@ const loadShipBatches = async (options?: { showLoader?: boolean; preserveState?:
       batchSearchQuery.value = {}
       batchStatusFilters.value = {}
       batchSplitParentOnly.value = {}
+      batchUnprintedOnly.value = {}
     } else {
       const ids = new Set(nextBatches.map((batch) => batch.batch_id))
       shipBatchExpanded.value = new Set([...shipBatchExpanded.value].filter((id) => ids.has(id)))
@@ -2128,6 +2511,9 @@ const loadShipBatches = async (options?: { showLoader?: boolean; preserveState?:
       )
       batchSplitParentOnly.value = Object.fromEntries(
         Object.entries(batchSplitParentOnly.value).filter(([id]) => ids.has(id))
+      )
+      batchUnprintedOnly.value = Object.fromEntries(
+        Object.entries(batchUnprintedOnly.value).filter(([id]) => ids.has(id))
       )
       nextBatches.forEach((batch) => {
         const detail = shipBatchDetails.value[batch.batch_id]
@@ -2377,9 +2763,7 @@ const loadNotShipped = async (options?: { showLoader?: boolean; refresh?: boolea
     errorMessage.value = error instanceof Error ? error.message : 'Не удалось загрузить отправления'
     postings.value = []
   } finally {
-    if (showLoader) {
-      isNotShippedLoading.value = false
-    }
+    isNotShippedLoading.value = false
   }
 }
 
@@ -2640,16 +3024,49 @@ const goToCarriagesFromProgress = async () => {
   await loadCarriages({ showLoader: true })
 }
 
-const openCarriageDialog = (batch: FbsShipBatch) => {
-  if (!batch) return
+const openCarriageDialog = async (batch: FbsShipBatch) => {
+  if (!batch || !props.storeId) return
   carriageBatch.value = batch
   carriagePlacesCount.value = '1'
+  carriageLabelCheckOk.value = null
+  carriageLabelCheckMessage.value = null
+  carriageLabelCheckLoading.value = true
   carriageDialogOpen.value = true
+  try {
+    const numbers = await resolveBatchPostingNumbers(batch.batch_id)
+    if (!numbers.length) {
+      carriageLabelCheckOk.value = false
+      carriageLabelCheckMessage.value = 'Нет отправлений для отгрузки.'
+      return
+    }
+    const response = await apiService.getFbsUnprintedLabels({
+      store_id: Number(props.storeId),
+      posting_numbers: numbers
+    })
+    const unprinted = Array.isArray((response as any)?.unprinted) ? (response as any).unprinted : []
+    const missing = Array.isArray((response as any)?.missing) ? (response as any).missing : []
+    if (unprinted.length || missing.length) {
+      carriageLabelCheckOk.value = false
+      carriageLabelCheckMessage.value = 'Внимание, на некоторые поставки не были напечатаны этикетки'
+    } else {
+      carriageLabelCheckOk.value = true
+      carriageLabelCheckMessage.value = `Все в порядке ${numbers.length} отправления готовы к отгрузке`
+    }
+  } catch (error) {
+    carriageLabelCheckOk.value = false
+    carriageLabelCheckMessage.value =
+      error instanceof Error ? error.message : 'Не удалось проверить этикетки'
+  } finally {
+    carriageLabelCheckLoading.value = false
+  }
 }
 
 const closeCarriageDialog = () => {
   carriageDialogOpen.value = false
   carriageBatch.value = null
+  carriageLabelCheckLoading.value = false
+  carriageLabelCheckOk.value = null
+  carriageLabelCheckMessage.value = null
 }
 
 const closeCarriageSuccess = async () => {
@@ -3583,6 +4000,57 @@ const downloadLabel = (posting: FbsPosting) => {
   handleLabels([posting.posting_number])
 }
 
+const openHistoryDetailByPostingNumber = async (postingNumber: string) => {
+  if (!props.storeId || !postingNumber) return
+  if (historyDetailOpen.value === postingNumber) {
+    closeHistoryDetail()
+    return
+  }
+  historyDetailOpen.value = postingNumber
+  historyDetailLoading.value = true
+  historyDetailError.value = null
+  historyDetail.value = null
+  try {
+    const response = await apiService.getFbsHistoryDetail({
+      storeId: props.storeId,
+      postingNumber
+    })
+    if (historyDetailOpen.value === postingNumber) {
+      historyDetail.value = response as FbsHistoryDetail
+    }
+  } catch (error) {
+    if (historyDetailOpen.value === postingNumber) {
+      historyDetailError.value = error instanceof Error ? error.message : 'Не удалось загрузить историю'
+    }
+  } finally {
+    if (historyDetailOpen.value === postingNumber) {
+      historyDetailLoading.value = false
+    }
+  }
+}
+
+const openHistoryDetail = async (item: FbsHistoryItem) => {
+  if (!item.posting_number) return
+  await openHistoryDetailByPostingNumber(item.posting_number)
+}
+
+const handlePostingRowClick = (posting: FbsPosting) => {
+  if (showRowSelection.value) {
+    handleRowClick(posting.posting_number)
+    return
+  }
+  if (isNotShippedTab.value) {
+    openHistoryDetailByPostingNumber(posting.posting_number)
+  }
+}
+
+const closeHistoryDetail = () => {
+  historyDetailOpen.value = null
+  historyDetailLoading.value = false
+  historyDetailError.value = null
+  historyDetail.value = null
+}
+
 watch(
   () => props.storeId,
   async () => {
@@ -3639,6 +4107,13 @@ watch(
     cancelPostingTarget.value = null
     cancelPostingLoading.value = false
     cancelPostingError.value = null
+    carriageLabelCheckLoading.value = false
+    carriageLabelCheckOk.value = null
+    carriageLabelCheckMessage.value = null
+    historyDetailOpen.value = null
+    historyDetailLoading.value = false
+    historyDetailError.value = null
+    historyDetail.value = null
     await loadImmediate()
     await loadLabelSortSettings()
   },
@@ -3959,6 +4434,21 @@ onBeforeUnmount(() => {
   color: #64748b;
 }
 
+.batch-unprinted-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.batch-unprinted-filter .form-check-input {
+  cursor: pointer;
+}
+
+.batch-unprinted-filter .form-check-label {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
 .batch-search-input {
   min-width: 220px;
 }
@@ -4272,7 +4762,11 @@ onBeforeUnmount(() => {
 }
 
 .fbs-history-offer {
-  padding-left: 1rem !important;
+  padding-left: 1.25rem !important;
+}
+
+.fbs-table td.fbs-history-offer {
+  padding-left: 1.25rem !important;
 }
 
 .fbs-delete-btn {
@@ -4318,6 +4812,147 @@ onBeforeUnmount(() => {
 
 .fbs-table tbody tr.row-selected.row-delivery-warning {
   background: rgba(34, 197, 94, 0.15);
+}
+
+.fbs-history-row {
+  cursor: pointer;
+}
+
+.fbs-history-row:hover {
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.history-inline {
+  padding: 0.85rem 0.5rem 0.4rem;
+}
+
+.history-chain {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.history-batch-card {
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 12px;
+  padding: 0.65rem 0.75rem;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.history-batch-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.92rem;
+  color: #1f2937;
+}
+
+.history-batch-index {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.history-batch-name {
+  font-weight: 600;
+}
+
+.history-batch-meta {
+  color: #475569;
+  font-weight: 500;
+}
+
+.history-batch-user {
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.history-batch-sep {
+  color: #94a3b8;
+}
+
+.history-move {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 10px;
+  border: 1px dashed rgba(15, 23, 42, 0.15);
+  background: rgba(15, 23, 42, 0.03);
+  font-size: 0.9rem;
+  color: #1f2937;
+}
+
+.history-move-label {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.history-move-path {
+  font-weight: 500;
+}
+
+.history-move-date {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.history-detail-card {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 12px;
+  padding: 0.75rem;
+  background: #fff;
+}
+
+.history-detail-title {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #94a3b8;
+  margin-bottom: 0.35rem;
+}
+
+.history-detail-section {
+  margin-top: 1rem;
+}
+
+.history-detail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.history-detail-item {
+  padding: 0.65rem 0.75rem;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.03);
+}
+
+.history-detail-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+  color: #1f2937;
+}
+
+.history-detail-label {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.history-detail-link {
+  display: inline-flex;
+  color: #2563eb;
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+
+.history-detail-link:hover {
+  text-decoration: underline;
 }
 
 .status-pill {
@@ -4412,6 +5047,34 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+}
+
+.fbs-label-check {
+  padding: 0.6rem 0.75rem;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 1rem;
+  text-align: center;
+}
+
+.fbs-label-check--ok {
+  background: rgba(34, 197, 94, 0.12);
+  color: #15803d;
+}
+
+.fbs-label-check--warn {
+  background: rgba(239, 68, 68, 0.12);
+  color: #b91c1c;
+}
+
+.fbs-label-check--loading {
+  background: rgba(59, 130, 246, 0.08);
+  color: #1d4ed8;
+  font-weight: 600;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .fbs-export-controls {
