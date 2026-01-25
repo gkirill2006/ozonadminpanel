@@ -3276,7 +3276,8 @@ const handleBatchLabels = async (batchId: string) => {
       return
     }
     if (batchLabels?.status === 'error') {
-      errorMessage.value = batchLabels.error || 'Не удалось сформировать этикетки'
+      const err = batchLabels.error
+      errorMessage.value = err ? String(err) : 'Не удалось сформировать этикетки'
       return
     }
     labelNotice.value = 'Этикетки готовятся'
