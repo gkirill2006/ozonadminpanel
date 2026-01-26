@@ -121,7 +121,12 @@
             </button>
           </div>
 
-          <div v-if="!isDataWorkActive" ref="tableWrapperRef" class="table-wrapper mt-2">
+        <div
+          v-if="!isDataWorkActive"
+          ref="tableWrapperRef"
+          class="table-wrapper mt-2"
+          :class="{ 'table-wrapper--selecting': isCellDragging }"
+        >
             <div v-if="isLoading && !products.length" class="planner-table-splash">
               <span class="spinner-border spinner-border-sm me-2"></span>
               Готовим таблицу...
@@ -135,11 +140,11 @@
                 <th v-if="displaySettings.showBarcode" class="barcode-col">ШК</th>
                 <th class="total-col">Количество, шт</th>
                 <template v-if="displaySettings.showClusters">
-                  <th
-                    v-for="cluster in visibleClusters"
-                    :key="cluster"
-                    :class="['text-center', getImpactHeaderClass(cluster)]"
-                  >
+                    <th
+                      v-for="(cluster, colPos) in visibleClusters"
+                      :key="cluster"
+                      :class="['text-center', getImpactHeaderClass(cluster)]"
+                    >
                     <div class="cluster-header">
                       <div v-if="selectedRowsSize" class="cluster-sum-row">
                         <span class="cluster-sum">
@@ -167,8 +172,9 @@
                 v-for="(row, idx) in products"
                 :key="row.id"
                 :data-row="idx + 1"
+                :data-row-pos="idx"
                 :class="{ 'row-selected': isRowSelected(idx + 1) }"
-                @click="toggleRow(idx + 1)"
+                @click="handleRowClick($event, idx + 1)"
               >
                 <td class="sticky-col index-col">{{ idx + 1 }}</td>
                 <td class="sticky-col name-col">
@@ -191,10 +197,14 @@
                 <td class="total-col text-center fw-semibold">{{ formatNumber(row.totalForDelivery) }}</td>
                 <template v-if="displaySettings.showClusters">
                   <td
-                    v-for="cluster in visibleClusters"
+                    v-for="(cluster, colPos) in visibleClusters"
                     :key="cluster"
-                    class="text-center"
-                    @click.stop="startEditCell(row, idx, cluster, 'main')"
+                    class="text-center cluster-cell"
+                    :class="{ 'cluster-cell--selected': isCellSelected(idx, colPos, 'main') }"
+                    :data-col-pos="colPos"
+                    @mousedown.stop.prevent="startCellSelection(idx, colPos, 'main', $event)"
+                    @mouseenter="updateCellSelection(idx, colPos, 'main')"
+                    @click.stop="handleClusterCellClick(row, idx, idx, colPos, cluster, 'main')"
                   >
                     <input
                       v-if="isEditingCell(idx, cluster, 'main')"
@@ -242,7 +252,11 @@
                 Сбросить
               </button>
             </div>
-            <div class="data-work-table-wrapper mt-3">
+            <div
+              ref="dataWorkWrapperRef"
+              class="data-work-table-wrapper mt-3"
+              :class="{ 'table-wrapper--selecting': isCellDragging }"
+            >
               <table class="planner-table pivot-table data-work-table">
                 <thead>
                   <tr>
@@ -253,7 +267,7 @@
                     <th class="total-col">Количество, шт</th>
                     <template v-if="displaySettings.showClusters">
                       <th
-                        v-for="cluster in visibleClusters"
+                        v-for="(cluster, colPos) in visibleClusters"
                         :key="cluster"
                         :class="['text-center', getImpactHeaderClass(cluster)]"
                       >
@@ -288,11 +302,12 @@
                 </thead>
                 <tbody>
                   <tr
-                    v-for="item in dataWorkRows"
+                    v-for="(item, rowPos) in dataWorkRows"
                     :key="item.row.id || item.rowNumber"
                     :data-row="item.rowNumber"
+                    :data-row-pos="rowPos"
                     :class="{ 'row-selected': isRowSelected(item.rowNumber) }"
-                    @click="toggleRow(item.rowNumber)"
+                    @click="handleRowClick($event, item.rowNumber)"
                   >
                     <td class="sticky-col index-col">{{ item.rowNumber }}</td>
                     <td class="sticky-col name-col">
@@ -320,10 +335,14 @@
                     <td class="total-col text-center fw-semibold">{{ formatNumber(item.row.totalForDelivery) }}</td>
                     <template v-if="displaySettings.showClusters">
                       <td
-                        v-for="cluster in visibleClusters"
+                        v-for="(cluster, colPos) in visibleClusters"
                         :key="cluster"
-                        class="text-center"
-                        @click.stop="startEditCell(item.row, item.rowIndex, cluster, 'modal')"
+                        class="text-center cluster-cell"
+                        :class="{ 'cluster-cell--selected': isCellSelected(rowPos, colPos, 'modal') }"
+                        :data-col-pos="colPos"
+                        @mousedown.stop.prevent="startCellSelection(rowPos, colPos, 'modal', $event)"
+                        @mouseenter="updateCellSelection(rowPos, colPos, 'modal')"
+                        @click.stop="handleClusterCellClick(item.row, item.rowIndex, rowPos, colPos, cluster, 'modal')"
                       >
                         <input
                           v-if="isEditingCell(item.rowIndex, cluster, 'modal')"
@@ -617,9 +636,18 @@ const visibleClusters = computed(() =>
 )
 
 const editedClusterValues = ref<Record<string, Record<string, number>>>({})
-const editingCell = ref<{ rowIndex: number; rowKey: string; cluster: string } | null>(null)
+const editingCell = ref<{ rowIndex: number; rowKey: string; cluster: string; rowPos: number } | null>(null)
 const editingValue = ref('')
 const editingContext = ref<'main' | 'modal'>('main')
+const cellSelection = ref<{
+  startRowPos: number
+  endRowPos: number
+  startColPos: number
+  endColPos: number
+  context: 'main' | 'modal'
+} | null>(null)
+const isCellDragging = ref(false)
+const cellDragMoved = ref(false)
 
 type DataWorkRow = {
   rowNumber: number
@@ -746,11 +774,200 @@ const isEditingCell = (rowIndex: number, cluster: string, context: 'main' | 'mod
   )
 }
 
+const getCellSelectionRange = (selection: {
+  startRowPos: number
+  endRowPos: number
+  startColPos: number
+  endColPos: number
+}) => {
+  const rowStart = Math.min(selection.startRowPos, selection.endRowPos)
+  const rowEnd = Math.max(selection.startRowPos, selection.endRowPos)
+  const colStart = Math.min(selection.startColPos, selection.endColPos)
+  const colEnd = Math.max(selection.startColPos, selection.endColPos)
+  return { rowStart, rowEnd, colStart, colEnd }
+}
+
+const isCellSelected = (rowPos: number, colPos: number, context: 'main' | 'modal') => {
+  const selection = cellSelection.value
+  if (!selection) return false
+  if (selection.context !== context) return false
+  const { rowStart, rowEnd, colStart, colEnd } = getCellSelectionRange(selection)
+  return rowPos >= rowStart && rowPos <= rowEnd && colPos >= colStart && colPos <= colEnd
+}
+
+const startCellSelection = (
+  rowPos: number,
+  colPos: number,
+  context: 'main' | 'modal',
+  event: MouseEvent
+) => {
+  if (event.button !== 0) return
+  event.preventDefault()
+  if (editingCell.value) {
+    commitEdit()
+  }
+  const currentSelection = cellSelection.value
+  if (
+    currentSelection &&
+    currentSelection.context === context
+  ) {
+    const { rowStart, rowEnd, colStart, colEnd } = getCellSelectionRange(currentSelection)
+    if (rowPos >= rowStart && rowPos <= rowEnd && colPos >= colStart && colPos <= colEnd) {
+      isCellDragging.value = false
+      cellDragMoved.value = false
+      return
+    }
+  }
+  isCellDragging.value = true
+  cellDragMoved.value = false
+  cellSelection.value = {
+    startRowPos: rowPos,
+    endRowPos: rowPos,
+    startColPos: colPos,
+    endColPos: colPos,
+    context
+  }
+}
+
+const updateCellSelection = (rowPos: number, colPos: number, context: 'main' | 'modal') => {
+  if (!isCellDragging.value) return
+  const selection = cellSelection.value
+  if (!selection) return
+  if (selection.context !== context) return
+  if (selection.endRowPos === rowPos && selection.endColPos === colPos) return
+  cellSelection.value = { ...selection, endRowPos: rowPos, endColPos: colPos }
+  cellDragMoved.value = true
+}
+
+const stopCellSelection = () => {
+  if (!isCellDragging.value) return
+  isCellDragging.value = false
+}
+
+const handleCellSelectionKeydown = (event: KeyboardEvent) => {
+  if (event.key !== 'Backspace') return
+  const target = event.target as HTMLElement | null
+  if (
+    target &&
+    (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+  ) {
+    return
+  }
+  if (!cellSelection.value) return
+  if (applySelectionValue(0)) {
+    event.preventDefault()
+  }
+}
+
+const handleCellDragMove = (event: MouseEvent) => {
+  if (!isCellDragging.value) return
+  const selection = cellSelection.value
+  if (!selection) return
+  const wrapper =
+    selection.context === 'main' ? tableWrapperRef.value : dataWorkWrapperRef.value
+  if (!wrapper) return
+
+  const rect = wrapper.getBoundingClientRect()
+  const threshold = 40
+  let scrollDelta = 0
+  if (event.clientY < rect.top + threshold) {
+    scrollDelta = -Math.min(24, rect.top + threshold - event.clientY)
+  } else if (event.clientY > rect.bottom - threshold) {
+    scrollDelta = Math.min(24, event.clientY - (rect.bottom - threshold))
+  }
+  if (scrollDelta !== 0) {
+    wrapper.scrollTop += scrollDelta
+  }
+
+  let scrollXDelta = 0
+  if (event.clientX < rect.left + threshold) {
+    scrollXDelta = -Math.min(24, rect.left + threshold - event.clientX)
+  } else if (event.clientX > rect.right - threshold) {
+    scrollXDelta = Math.min(24, event.clientX - (rect.right - threshold))
+  }
+  if (scrollXDelta !== 0) {
+    wrapper.scrollLeft += scrollXDelta
+  }
+
+  const target = document.elementFromPoint(event.clientX, event.clientY) as HTMLElement | null
+  const rowEl = target?.closest('tr[data-row-pos]') as HTMLElement | null
+  const cellEl = target?.closest('td[data-col-pos]') as HTMLElement | null
+  const rowPosRaw = rowEl?.dataset.rowPos
+  const colPosRaw = cellEl?.dataset.colPos ?? String(selection.endColPos)
+  if (!rowPosRaw) return
+  const rowPos = Number(rowPosRaw)
+  const colPos = Number(colPosRaw)
+  if (!Number.isFinite(rowPos) || !Number.isFinite(colPos)) return
+  updateCellSelection(rowPos, colPos, selection.context)
+}
+
+const handleClusterCellClick = (
+  row: PivotProduct,
+  rowIndex: number,
+  rowPos: number,
+  colPos: number,
+  cluster: string,
+  context: 'main' | 'modal'
+) => {
+  if (cellDragMoved.value) {
+    cellDragMoved.value = false
+    return
+  }
+  const selection = cellSelection.value
+  if (!selection || !isCellSelected(rowPos, colPos, context)) {
+    cellSelection.value = {
+      startRowPos: rowPos,
+      endRowPos: rowPos,
+      startColPos: colPos,
+      endColPos: colPos,
+      context
+    }
+  }
+  startEditCell(row, rowIndex, cluster, context, rowPos)
+}
+
+const getSelectionRows = (selection: {
+  startRowPos: number
+  endRowPos: number
+  startColPos: number
+  endColPos: number
+  context: 'main' | 'modal'
+}) => {
+  const { rowStart, rowEnd } = getCellSelectionRange(selection)
+  const rows: Array<{ row: PivotProduct; rowIndex: number }> = []
+  if (selection.context === 'main') {
+    for (let pos = rowStart; pos <= rowEnd; pos += 1) {
+      const row = products.value[pos]
+      if (!row) continue
+      rows.push({ row, rowIndex: pos })
+    }
+    return rows
+  }
+  const list = dataWorkRows.value
+  for (let pos = rowStart; pos <= rowEnd; pos += 1) {
+    const item = list[pos]
+    if (!item) continue
+    rows.push({ row: item.row, rowIndex: item.rowIndex })
+  }
+  return rows
+}
+
+const getSelectionClusters = (selection: {
+  startRowPos: number
+  endRowPos: number
+  startColPos: number
+  endColPos: number
+}) => {
+  const { colStart, colEnd } = getCellSelectionRange(selection)
+  return visibleClusters.value.slice(colStart, colEnd + 1)
+}
+
 const startEditCell = (
   row: PivotProduct,
   rowIndex: number,
   cluster: string,
-  context: 'main' | 'modal' = 'main'
+  context: 'main' | 'modal' = 'main',
+  rowPos: number = rowIndex
 ) => {
   if (editingCell.value && !isEditingCell(rowIndex, cluster, context)) {
     commitEdit()
@@ -758,7 +975,7 @@ const startEditCell = (
   const rowKey = getRowKey(row, rowIndex)
   const value = getClusterValue(row, rowIndex, cluster)
   editingContext.value = context
-  editingCell.value = { rowIndex, rowKey, cluster }
+  editingCell.value = { rowIndex, rowKey, cluster, rowPos }
   editingValue.value = value !== null && value !== undefined ? String(value) : ''
   nextTick(() => {
     const input = document.querySelector<HTMLInputElement>(
@@ -792,8 +1009,27 @@ const commitEdit = () => {
   const current = editingCell.value
   if (!current) return
   const raw = editingValue.value.trim()
+  const selection =
+    cellSelection.value && cellSelection.value.context === editingContext.value ? cellSelection.value : null
+  const selectionRows = selection ? getSelectionRows(selection) : null
+  const selectionClusters = selection ? getSelectionClusters(selection) : null
+  const applyToSelection =
+    selectionRows &&
+    selectionClusters &&
+    selectionRows.some((rowItem) => rowItem.rowIndex === current.rowIndex) &&
+    selectionClusters.includes(current.cluster)
+
   if (!raw) {
-    applyEditValue(current.rowKey, current.cluster, null)
+    if (applyToSelection && selectionRows && selectionClusters) {
+      selectionRows.forEach((rowItem) => {
+        const rowKey = getRowKey(rowItem.row, rowItem.rowIndex)
+        selectionClusters.forEach((cluster) => {
+          applyEditValue(rowKey, cluster, null)
+        })
+      })
+    } else {
+      applyEditValue(current.rowKey, current.cluster, null)
+    }
     editingCell.value = null
     return
   }
@@ -803,12 +1039,36 @@ const commitEdit = () => {
     editingCell.value = null
     return
   }
-  applyEditValue(current.rowKey, current.cluster, num)
+  if (applyToSelection && selectionRows && selectionClusters) {
+    selectionRows.forEach((rowItem) => {
+      const rowKey = getRowKey(rowItem.row, rowItem.rowIndex)
+      selectionClusters.forEach((cluster) => {
+        applyEditValue(rowKey, cluster, num)
+      })
+    })
+  } else {
+    applyEditValue(current.rowKey, current.cluster, num)
+  }
   editingCell.value = null
 }
 
 const cancelEdit = () => {
   editingCell.value = null
+}
+
+const applySelectionValue = (value: number | null) => {
+  const selection = cellSelection.value
+  if (!selection) return false
+  const rows = getSelectionRows(selection)
+  const clusters = getSelectionClusters(selection)
+  if (!rows.length || !clusters.length) return false
+  rows.forEach((rowItem) => {
+    const rowKey = getRowKey(rowItem.row, rowItem.rowIndex)
+    clusters.forEach((cluster) => {
+      applyEditValue(rowKey, cluster, value)
+    })
+  })
+  return true
 }
 
 const getClusterImpactShare = (cluster: string) => {
@@ -839,6 +1099,7 @@ const selectedShipmentWarehouses = ref<Set<string>>(new Set())
 const supplyDialogOpen = ref(false)
 const supplyCreateLoading = ref(false)
 const supplyCreateError = ref<string | null>(null)
+const dataWorkWrapperRef = ref<HTMLElement | null>(null)
 
 const isShipmentClusterSelected = (cluster: string) => selectedShipmentWarehouses.value.has(cluster)
 
@@ -1027,6 +1288,13 @@ const toggleRow = (rowNumber: number) => {
 
 const isRowSelected = (rowNumber: number) => selectedRows.value.has(rowNumber)
 
+const handleRowClick = (event: MouseEvent, rowNumber: number) => {
+  if (isCellDragging.value || cellDragMoved.value) return
+  const target = event.target as HTMLElement | null
+  if (target?.closest('td.cluster-cell')) return
+  toggleRow(rowNumber)
+}
+
 const scrollToRow = async (rowNumber: number) => {
   await nextTick()
   const wrapper = tableWrapperRef.value
@@ -1063,6 +1331,9 @@ const setDataWorkSortCluster = (cluster: string) => {
 const setActiveTable = (table: 'main' | 'data') => {
   if (table === 'data' && !selectedRows.value.size) return
   activeTable.value = table
+  cellSelection.value = null
+  isCellDragging.value = false
+  cellDragMoved.value = false
 }
 
 const selectAllShipmentWarehouses = () => {
@@ -1385,9 +1656,20 @@ const stopDraftBatchPolling = () => {
   }
 }
 
+onMounted(() => {
+  window.addEventListener('mouseup', stopCellSelection)
+  window.addEventListener('mouseleave', stopCellSelection)
+  window.addEventListener('mousemove', handleCellDragMove)
+  window.addEventListener('keydown', handleCellSelectionKeydown)
+})
+
 onBeforeUnmount(() => {
   stopDraftBatchPolling()
   if (searchDebounce) clearTimeout(searchDebounce)
+  window.removeEventListener('mouseup', stopCellSelection)
+  window.removeEventListener('mouseleave', stopCellSelection)
+  window.removeEventListener('mousemove', handleCellDragMove)
+  window.removeEventListener('keydown', handleCellSelectionKeydown)
 })
 
 const openBatchesDialog = () => {
@@ -1443,6 +1725,11 @@ const loadAllBatches = async () => {
   border: 1px solid rgba(15, 23, 42, 0.05);
   border-radius: 10px;
   position: relative;
+}
+
+.table-wrapper--selecting {
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .planner-table {
@@ -1524,6 +1811,15 @@ const loadAllBatches = async () => {
 .planner-table tbody tr.row-selected .sticky-col {
   background: #d9fbe7;
   box-shadow: inset -1px 0 rgba(15, 23, 42, 0.08);
+}
+
+.planner-table tbody td.cluster-cell {
+  cursor: cell;
+}
+
+.planner-table tbody td.cluster-cell--selected {
+  background: rgba(59, 130, 246, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.2);
 }
 
 .cluster-edit-input {

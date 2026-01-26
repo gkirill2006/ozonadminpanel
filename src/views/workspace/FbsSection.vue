@@ -704,11 +704,18 @@
                   </button>
                 </div>
               </div>
-              <div
-                v-if="!isBatchFinished(batch)"
-                class="fbs-batch-progress"
-                @click.stop
-              >
+              <div v-if="batchLabelsTotal(batch)" class="fbs-batch-labels">
+                <div class="fbs-batch-labels__meta">
+                  Этикетки: {{ batchLabelsReady(batch) }} из {{ batchLabelsTotal(batch) }}
+                </div>
+                <div
+                  class="fbs-batch-labels__bar"
+                  :class="{ 'fbs-batch-labels__bar--ok': batchLabelsReady(batch) >= batchLabelsTotal(batch) }"
+                >
+                  <span :style="{ width: `${batchLabelsPercent(batch)}%` }"></span>
+                </div>
+              </div>
+              <div v-if="!isBatchFinished(batch)" class="fbs-batch-progress">
                 <div class="fbs-batch-progress__meta">
                   Готово {{ batchProgressText(batch) }} · {{ batchProgressPercent(batch) }}%
                 </div>
@@ -1632,6 +1639,7 @@ const shipmentProgressBatch = ref<FbsShipBatch | null>(null)
 const shipmentProgressLoading = ref(false)
 const shipmentProgressError = ref<string | null>(null)
 const shipmentProgressTimer = ref<number | null>(null)
+const shipmentProgressPollingInFlight = ref(false)
 const labelSortMode = ref<'offer_id' | 'weight' | 'created_at'>('offer_id')
 const labelSortAscending = ref(true)
 const labelSortSaving = ref(false)
@@ -2266,6 +2274,26 @@ const labelProgressText = (batch?: FbsShipBatch | null) => {
   return `${labelStatusReady(batch)} из ${total}`
 }
 
+const batchLabelsTotal = (batch?: FbsShipBatch | null) => {
+  const labels = batch?.batch_labels
+  if (!labels) return 0
+  const total = Number(labels.total)
+  return Number.isFinite(total) ? total : 0
+}
+
+const batchLabelsReady = (batch?: FbsShipBatch | null) => {
+  const labels = batch?.batch_labels
+  if (!labels) return 0
+  const ready = Number(labels.ready)
+  return Number.isFinite(ready) ? ready : 0
+}
+
+const batchLabelsPercent = (batch?: FbsShipBatch | null) => {
+  const total = batchLabelsTotal(batch)
+  if (!total) return 0
+  return Math.max(0, Math.min(100, Math.round((batchLabelsReady(batch) / total) * 100)))
+}
+
 const labelStatusPending = (batch?: FbsShipBatch | null) => {
   const status = batch?.label_status
   if (!status) return 0
@@ -2564,8 +2592,15 @@ const updateShipBatchPolling = () => {
 }
 
 const updateBatchInList = (batch: FbsShipBatch) => {
+  const nextBatchLabels = batch.batch_labels
   shipBatches.value = shipBatches.value.map((item) =>
-    item.batch_id === batch.batch_id ? { ...item, ...batch } : item
+    item.batch_id === batch.batch_id
+      ? {
+          ...item,
+          ...batch,
+          batch_labels: nextBatchLabels ?? item.batch_labels
+        }
+      : item
   )
 }
 
@@ -2607,7 +2642,8 @@ const saveLabelSortSettings = async () => {
 }
 
 const fetchShipmentProgress = async (batchId: string) => {
-  if (!batchId || shipmentProgressLoading.value) return
+  if (!batchId || shipmentProgressPollingInFlight.value) return
+  shipmentProgressPollingInFlight.value = true
   shipmentProgressLoading.value = true
   shipmentProgressError.value = null
   try {
@@ -2634,35 +2670,46 @@ const fetchShipmentProgress = async (batchId: string) => {
       error instanceof Error ? error.message : 'Не удалось загрузить прогресс'
   } finally {
     shipmentProgressLoading.value = false
+    shipmentProgressPollingInFlight.value = false
   }
 }
 
 const startShipmentProgressPolling = (batchId: string) => {
-  if (shipmentProgressTimer.value) {
-    window.clearInterval(shipmentProgressTimer.value)
+  stopShipmentProgressPolling()
+  const poll = async () => {
+    if (!shipmentProgressOpen.value) return
+    await fetchShipmentProgress(batchId)
+    if (!shipmentProgressOpen.value) return
+    if (shouldStopShipmentProgress(shipmentProgressBatch.value)) return
+    shipmentProgressTimer.value = window.setTimeout(poll, 5000)
   }
-  void fetchShipmentProgress(batchId)
-  shipmentProgressTimer.value = window.setInterval(() => {
-    void fetchShipmentProgress(batchId)
-  }, 2000)
+  void poll()
 }
 
 const stopShipmentProgressPolling = () => {
   if (shipmentProgressTimer.value) {
-    window.clearInterval(shipmentProgressTimer.value)
+    window.clearTimeout(shipmentProgressTimer.value)
     shipmentProgressTimer.value = null
   }
+  shipmentProgressPollingInFlight.value = false
 }
 
 const applyShipBatchDetail = (batchId: string, response: any) => {
+  const existing = shipBatchDetails.value[batchId]?.batch
+  const incoming = response?.batch || { batch_id: batchId }
+  const mergedBatch: FbsShipBatch = {
+    ...(existing || {}),
+    ...(incoming || {}),
+    batch_labels: incoming?.batch_labels ?? existing?.batch_labels ?? null
+  }
   const detail: FbsShipBatchDetail = {
-    batch: response?.batch || { batch_id: batchId },
+    batch: mergedBatch,
     postings: Array.isArray(response?.postings) ? response.postings : [],
     count: response?.count ?? null,
     items_count: response?.items_count ?? null
   }
   shipBatchDetails.value = { ...shipBatchDetails.value, [batchId]: detail }
-  updateBatchInList(detail.batch)
+  updateBatchInList(mergedBatch)
   return detail
 }
 
@@ -2700,6 +2747,15 @@ const toggleBatch = async (batch: FbsShipBatch) => {
   next.add(batchId)
   shipBatchExpanded.value = next
   await ensureBatchDetail(batchId)
+  const labels = getBatchLabels(batchId)
+  const ready = Number(labels?.ready)
+  const total = Number(labels?.total)
+  const needsLabelPolling =
+    labels?.status === 'pending' ||
+    (Number.isFinite(ready) && Number.isFinite(total) && total > 0 && ready < total)
+  if (needsLabelPolling) {
+    startBatchLabelPolling(batchId)
+  }
   selectBatchAll(batchId)
 }
 
@@ -3637,7 +3693,16 @@ const startBatchLabelPolling = (batchId: string) => {
       const response = await apiService.getFbsShipBatchDetail(batchId)
       const detail = applyShipBatchDetail(batchId, response)
       const labels = detail.batch.batch_labels
-      if (labels?.file_url || labels?.status === 'error') {
+      const ready = Number(labels?.ready)
+      const total = Number(labels?.total)
+      const hasCounts = Number.isFinite(ready) && Number.isFinite(total) && total > 0
+      if (
+        labels?.status === 'ready' ||
+        labels?.status === 'error' ||
+        labels?.status === 'failed' ||
+        labels?.file_url ||
+        (hasCounts && ready >= total)
+      ) {
         stopBatchLabelPolling(batchId)
       }
     } catch (error) {
@@ -3653,7 +3718,7 @@ const startBatchLabelPolling = (batchId: string) => {
     }
   }
   void poll()
-  const timer = window.setInterval(poll, 2000)
+  const timer = window.setInterval(poll, 5000)
   batchLabelPolling.value = { ...batchLabelPolling.value, [batchId]: timer }
 }
 
@@ -4123,25 +4188,35 @@ watch(
 watch(
   () => activeStatus.value,
   async () => {
+    searchQuery.value = ''
     selectedPostings.value.clear()
     rangeFrom.value = ''
     rangeTo.value = ''
+    historyDetailOpen.value = null
+    historyDetailLoading.value = false
+    historyDetailError.value = null
+    historyDetail.value = null
     if (isBatchTab.value) {
-      await loadShipBatches()
+      shipBatches.value = []
+      await loadShipBatches({ showLoader: true })
       return
     }
     if (isCarriageTab.value) {
-      await loadCarriages()
+      carriages.value = []
+      await loadCarriages({ showLoader: true })
       return
     }
     if (isHistoryTab.value) {
-      await loadHistory()
+      historyItems.value = []
+      await loadHistory({ showLoader: true })
       return
     }
     if (isNotShippedTab.value) {
-      await loadNotShipped()
+      postings.value = []
+      await loadNotShipped({ showLoader: true })
       return
     }
+    postings.value = []
     await loadPostings()
   }
 )
@@ -4342,6 +4417,43 @@ onBeforeUnmount(() => {
   height: 100%;
   background: #fbbf24;
   border-radius: 999px;
+}
+
+.fbs-batch-labels {
+  margin-top: 0.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  color: rgba(248, 250, 252, 0.9);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.fbs-batch-labels__meta {
+  font-weight: 600;
+}
+
+.fbs-batch-labels__bar {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(239, 68, 68, 0.35);
+  overflow: hidden;
+}
+
+.fbs-batch-labels__bar span {
+  display: block;
+  height: 100%;
+  background: #ef4444;
+  border-radius: 999px;
+  transition: width 0.2s ease;
+}
+
+.fbs-batch-labels__bar--ok {
+  background: rgba(34, 197, 94, 0.35);
+}
+
+.fbs-batch-labels__bar--ok span {
+  background: #22c55e;
 }
 
 .fbs-batch-header .btn-outline-primary,
