@@ -31,7 +31,7 @@ class ApiService {
     console.log(`API Response URL: ${response.url}`)
     
     if (!response.ok) {
-      if (response.status === 401) {
+      if (response.status === 401 || response.status === 403) {
         // Token expired or invalid
         const authStore = useAuthStore()
         authStore.logout()
