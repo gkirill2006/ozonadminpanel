@@ -358,7 +358,7 @@
                               <div class="history-detail-title">Скачивания этикеток</div>
                               <div v-if="historyDetail.label_downloads?.length" class="history-detail-list">
                                 <div
-                                  v-for="(download, idx) in historyDetail.label_downloads"
+                                  v-for="(download, idx) in sortedLabelDownloads(historyDetail.label_downloads)"
                                   :key="`download-${idx}`"
                                   class="history-detail-item"
                                 >
@@ -585,7 +585,7 @@
                               <div class="history-detail-title">Скачивания этикеток</div>
                               <div v-if="historyDetail.label_downloads?.length" class="history-detail-list">
                                 <div
-                                  v-for="(download, idx) in historyDetail.label_downloads"
+                                  v-for="(download, idx) in sortedLabelDownloads(historyDetail.label_downloads)"
                                   :key="`download-notshipped-${idx}`"
                                   class="history-detail-item"
                                 >
@@ -1193,9 +1193,9 @@
           v-if="isShipmentProgressReady"
           class="btn btn-primary btn-sm"
           type="button"
-          @click="goToCarriagesFromProgress"
+          @click="goToShipBatchesFromProgress"
         >
-          Перейти в доставку
+          Перейти на сборку
         </button>
         <button class="btn btn-outline-secondary btn-sm" type="button" @click="closeShipmentProgress">
           Закрыть
@@ -1746,6 +1746,9 @@ const filteredHistoryItems = computed(() => {
 
 const displayPostings = computed(() => {
   const list = filteredPostings.value
+  if (isNotShippedTab.value) {
+    return [...list].sort((a, b) => postingSortDate(a) - postingSortDate(b))
+  }
   if (!isAwaitingPackaging.value || !newSortBy.value) return list
   const direction = newSortDirection.value
   return [...list].sort((a, b) => {
@@ -1916,6 +1919,16 @@ const resolveDownloadBatchLabel = (download: FbsHistoryLabelDownload, detail: Fb
   }
   return '—'
 }
+
+const sortedLabelDownloads = (downloads: FbsHistoryLabelDownload[] = []) =>
+  [...downloads].sort((a, b) => {
+    const aTime = a?.created_at ? Date.parse(a.created_at) : Number.POSITIVE_INFINITY
+    const bTime = b?.created_at ? Date.parse(b.created_at) : Number.POSITIVE_INFINITY
+    if (Number.isNaN(aTime) && Number.isNaN(bTime)) return 0
+    if (Number.isNaN(aTime)) return 1
+    if (Number.isNaN(bTime)) return -1
+    return aTime - bTime
+  })
 
 const formatPostingBatchLabel = (posting: FbsPosting) => {
   if (posting.batch_name) return String(posting.batch_name)
@@ -2245,20 +2258,34 @@ const batchProgressText = (batch?: FbsShipBatch | null) => {
 
 const labelStatusTotal = (batch?: FbsShipBatch | null) => {
   const status = batch?.label_status
-  if (!status) return 0
-  const total = Number(status.total)
+  if (status) {
+    const total = Number(status.total)
+    if (Number.isFinite(total)) return total
+    const ready = Number(status.ready) || 0
+    const pending = Number(status.pending) || 0
+    const error = Number(status.error) || 0
+    const missing = Number(status.missing) || 0
+    return ready + pending + error + missing
+  }
+  const labels = batch?.batch_labels
+  if (!labels) return 0
+  const total = Number(labels.total)
   if (Number.isFinite(total)) return total
-  const ready = Number(status.ready) || 0
-  const pending = Number(status.pending) || 0
-  const error = Number(status.error) || 0
-  const missing = Number(status.missing) || 0
-  return ready + pending + error + missing
+  const ready = Number(labels.ready) || 0
+  const error = Number(labels.error) || 0
+  const missing = Number(labels.missing) || 0
+  return ready + error + missing
 }
 
 const labelStatusReady = (batch?: FbsShipBatch | null) => {
   const status = batch?.label_status
-  if (!status) return 0
-  const ready = Number(status.ready)
+  if (status) {
+    const ready = Number(status.ready)
+    return Number.isFinite(ready) ? ready : 0
+  }
+  const labels = batch?.batch_labels
+  if (!labels) return 0
+  const ready = Number(labels.ready)
   return Number.isFinite(ready) ? ready : 0
 }
 
@@ -2295,12 +2322,10 @@ const batchLabelsPercent = (batch?: FbsShipBatch | null) => {
 }
 
 const labelStatusPending = (batch?: FbsShipBatch | null) => {
-  const status = batch?.label_status
-  if (!status) return 0
   const total = labelStatusTotal(batch)
   if (!total) return 0
   const ready = labelStatusReady(batch)
-  const error = Number(status.error) || 0
+  const error = Number(batch?.label_status?.error) || Number(batch?.batch_labels?.error) || 0
   return Math.max(0, total - ready - error)
 }
 
@@ -3074,10 +3099,10 @@ const closeShipmentProgress = () => {
   stopShipmentProgressPolling()
 }
 
-const goToCarriagesFromProgress = async () => {
+const goToShipBatchesFromProgress = async () => {
   closeShipmentProgress()
-  activeStatus.value = 'carriages'
-  await loadCarriages({ showLoader: true })
+  activeStatus.value = 'ship_batches'
+  await loadShipBatches({ showLoader: true })
 }
 
 const openCarriageDialog = async (batch: FbsShipBatch) => {
