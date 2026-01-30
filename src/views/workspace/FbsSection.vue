@@ -2129,6 +2129,7 @@ const hasPostingRequirements = (posting: FbsPosting) => {
 }
 
 const BATCH_STATUS_FILTERS = [
+  { key: 'awaiting_packaging', label: 'Ожидает сборки' },
   { key: 'awaiting_deliver', label: 'Ожидает отгрузки' },
   { key: 'acceptance_in_progress', label: 'Приемка' },
   { key: 'cancelled', label: 'Отменен' },
@@ -2381,7 +2382,10 @@ const batchDisplayPostings = (batchId: string) => {
   }
   const statusFilters = getBatchStatusFilter(batchId)
   if (statusFilters && statusFilters.size) {
-    list = list.filter((posting) => statusFilters.has(posting.status))
+    const knownStatuses = new Set(BATCH_STATUS_FILTERS.map((item) => item.key))
+    list = list.filter((posting) =>
+      knownStatuses.has(posting.status) ? statusFilters.has(posting.status) : true
+    )
   }
   if (isBatchSplitParentOnly(batchId)) {
     list = list.filter((posting) => Boolean(posting.is_split_parent))
