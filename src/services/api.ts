@@ -551,6 +551,28 @@ class ApiService {
     return this.handleResponse(response)
   }
 
+  async getOzonCountries() {
+    const response = await fetch(`${API_BASE_URL}/api/ozon/countries/`, {
+      method: 'GET',
+      headers: this.getHeaders()
+    })
+    return this.handleResponse(response)
+  }
+
+  async setPostingCountry(payload: {
+    store_id: number
+    posting_number: string
+    product_id: string | number
+    country_iso_code: string
+  }) {
+    const response = await fetch(`${API_BASE_URL}/api/ozon/postings/country/set/`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(payload)
+    })
+    return this.handleResponse(response)
+  }
+
   async cancelFbsCarriage(carriageId: string | number) {
     const response = await fetch(
       `${API_BASE_URL}/api/ozon/postings/carriages/${carriageId}/cancel/`,

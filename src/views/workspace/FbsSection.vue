@@ -854,7 +854,7 @@
                             'row-delivery-warning': isBatchDeliveryLagging(batch, posting),
                             'row-requirements': hasPostingRequirements(posting)
                           }"
-                          @click.stop="toggleBatchRow(batch.batch_id, posting.posting_number)"
+                          @click.stop="handleBatchRowClick(batch.batch_id, posting)"
                         >
                           <td class="text-center fbs-col-check">
                             <div class="fbs-check-cell">
@@ -1240,6 +1240,53 @@
         >
           <span v-if="isCarriageSubmitting" class="spinner-border spinner-border-sm me-2"></span>
           Создать
+        </button>
+      </div>
+    </div>
+  </Modal>
+
+  <Modal v-if="requirementsDialogOpen" @close="closeRequirementsDialog">
+    <div class="fbs-modal">
+      <h5 class="mb-3">Заполнить требования</h5>
+      <div v-if="requirementsPosting" class="text-muted small mb-3">
+        Отправление: {{ requirementsPosting.posting_number }}
+      </div>
+      <div v-if="requirementsLoading && !requirementsCountries.length" class="fbs-loading mb-2">
+        <span class="spinner-border spinner-border-sm me-2"></span>
+        Загружаем список стран...
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Товар</label>
+        <select class="form-select" v-model="requirementsProductId">
+          <option v-for="option in requirementsProductOptions" :key="option.id" :value="option.id">
+            {{ option.label }}
+          </option>
+        </select>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Страна происхождения</label>
+        <select class="form-select" v-model="requirementsCountryCode">
+          <option value="" disabled>Выберите страну</option>
+          <option v-for="country in requirementsCountries" :key="country.id" :value="country.code">
+            {{ country.name }} ({{ country.code }})
+          </option>
+        </select>
+      </div>
+      <div v-if="requirementsError" class="alert alert-danger py-1 px-2">
+        {{ requirementsError }}
+      </div>
+      <div class="d-flex justify-content-end gap-2 mt-3">
+        <button class="btn btn-outline-secondary btn-sm" type="button" @click="closeRequirementsDialog">
+          Отмена
+        </button>
+        <button
+          class="btn btn-primary btn-sm"
+          type="button"
+          :disabled="requirementsLoading"
+          @click="submitRequirements"
+        >
+          <span v-if="requirementsLoading" class="spinner-border spinner-border-sm me-2"></span>
+          Сохранить
         </button>
       </div>
     </div>
@@ -1678,6 +1725,14 @@ const cancelPostingOpen = ref(false)
 const cancelPostingTarget = ref<FbsPosting | null>(null)
 const cancelPostingLoading = ref(false)
 const cancelPostingError = ref<string | null>(null)
+const requirementsDialogOpen = ref(false)
+const requirementsLoading = ref(false)
+const requirementsError = ref<string | null>(null)
+const requirementsPosting = ref<FbsPosting | null>(null)
+const requirementsBatchId = ref<string | null>(null)
+const requirementsCountries = ref<Array<{ id: number | string; name: string; code: string }>>([])
+const requirementsCountryCode = ref('')
+const requirementsProductId = ref<string | number | null>(null)
 const moveDialogOpen = ref(false)
 const moveSourceBatchId = ref<string | null>(null)
 const moveTargetBatchId = ref('')
@@ -2128,6 +2183,74 @@ const hasPostingRequirements = (posting: FbsPosting) => {
   )
 }
 
+const loadCountries = async () => {
+  if (!props.storeId) return
+  requirementsLoading.value = true
+  requirementsError.value = null
+  try {
+    const response = await apiService.getOzonCountries()
+    const list = Array.isArray(response) ? response : (response as any)?.results
+    requirementsCountries.value = Array.isArray(list) ? list : []
+  } catch (error) {
+    requirementsError.value = error instanceof Error ? error.message : 'Не удалось загрузить страны'
+    requirementsCountries.value = []
+  } finally {
+    requirementsLoading.value = false
+  }
+}
+
+const openRequirementsDialog = async (batchId: string, posting: FbsPosting) => {
+  requirementsBatchId.value = batchId
+  requirementsPosting.value = posting
+  requirementsCountryCode.value = ''
+  requirementsProductId.value = null
+  requirementsDialogOpen.value = true
+  if (!requirementsCountries.value.length) {
+    await loadCountries()
+  }
+  const options = requirementsProductOptions.value
+  if (options.length) {
+    requirementsProductId.value = options[0].id
+  }
+}
+
+const closeRequirementsDialog = () => {
+  requirementsDialogOpen.value = false
+  requirementsPosting.value = null
+  requirementsBatchId.value = null
+  requirementsError.value = null
+  requirementsCountryCode.value = ''
+  requirementsProductId.value = null
+}
+
+const submitRequirements = async () => {
+  if (!props.storeId || requirementsLoading.value) return
+  const posting = requirementsPosting.value
+  const batchId = requirementsBatchId.value
+  if (!posting || !batchId) return
+  if (!requirementsCountryCode.value || !requirementsProductId.value) {
+    requirementsError.value = 'Укажите страну и товар.'
+    return
+  }
+  requirementsLoading.value = true
+  requirementsError.value = null
+  try {
+    await apiService.setPostingCountry({
+      store_id: Number(props.storeId),
+      posting_number: posting.posting_number,
+      product_id: requirementsProductId.value,
+      country_iso_code: requirementsCountryCode.value
+    })
+    closeRequirementsDialog()
+    await loadShipBatchDetail(batchId)
+  } catch (error) {
+    requirementsError.value =
+      error instanceof Error ? error.message : 'Не удалось установить страну'
+  } finally {
+    requirementsLoading.value = false
+  }
+}
+
 const BATCH_STATUS_FILTERS = [
   { key: 'awaiting_packaging', label: 'Ожидает сборки' },
   { key: 'awaiting_deliver', label: 'Ожидает отгрузки' },
@@ -2210,6 +2333,29 @@ const postingTotalWeight = (posting: FbsPosting) => {
     return sum
   }, 0)
 }
+
+const postingRequirementProductIds = (posting: FbsPosting) => {
+  const requirements = posting.requirements
+  if (!requirements || typeof requirements !== 'object') return []
+  const list = requirements.products_requiring_country
+  if (!Array.isArray(list)) return []
+  return list
+}
+
+const requirementsProductOptions = computed(() => {
+  const posting = requirementsPosting.value
+  if (!posting) return []
+  const requiredIds = new Set(
+    postingRequirementProductIds(posting).map((value) => String(value))
+  )
+  const products = Array.isArray(posting.products) ? posting.products : []
+  return products
+    .filter((product) => requiredIds.has(String(product.sku)))
+    .map((product) => ({
+      id: product.sku ?? product.offer_id ?? '',
+      label: `${product.offer_id || product.name || '—'}${product.sku ? ` · SKU ${product.sku}` : ''}`
+    }))
+})
 
 const postingPrimaryOfferId = (posting: FbsPosting) => {
   const product = primaryProduct(posting)
@@ -2430,6 +2576,14 @@ const toggleBatchRow = (batchId: string, postingNumber: string) => {
     next.add(postingNumber)
   }
   batchSelections.value = { ...batchSelections.value, [batchId]: next }
+}
+
+const handleBatchRowClick = (batchId: string, posting: FbsPosting) => {
+  if (hasPostingRequirements(posting)) {
+    void openRequirementsDialog(batchId, posting)
+    return
+  }
+  toggleBatchRow(batchId, posting.posting_number)
 }
 
 const isBatchAllSelected = (batchId: string) => {
