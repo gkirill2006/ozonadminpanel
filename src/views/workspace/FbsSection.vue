@@ -2178,8 +2178,10 @@ const isBatchRowSelected = (batchId: string, postingNumber: string) =>
 const hasPostingRequirements = (posting: FbsPosting) => {
   const requirements = posting.requirements
   if (!requirements || typeof requirements !== 'object') return false
-  return Object.values(requirements).some(
-    (value) => Array.isArray(value) && value.length > 0
+  const entries = Object.entries(requirements)
+  return entries.some(
+    ([key, value]) =>
+      key !== 'products_requiring_gtd' && Array.isArray(value) && value.length > 0
   )
 }
 
