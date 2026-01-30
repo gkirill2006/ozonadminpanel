@@ -851,7 +851,8 @@
                           :data-posting-number="posting.posting_number"
                           :class="{
                             'row-selected': isBatchRowSelected(batch.batch_id, posting.posting_number),
-                            'row-delivery-warning': isBatchDeliveryLagging(batch, posting)
+                            'row-delivery-warning': isBatchDeliveryLagging(batch, posting),
+                            'row-requirements': hasPostingRequirements(posting)
                           }"
                           @click.stop="toggleBatchRow(batch.batch_id, posting.posting_number)"
                         >
@@ -878,6 +879,7 @@
                                 type="checkbox"
                                 class="form-check-input"
                                 :checked="batchSelectedMap(batch.batch_id)[posting.posting_number]"
+                                :disabled="hasPostingRequirements(posting)"
                                 @click.stop
                                 @change="toggleBatchRow(batch.batch_id, posting.posting_number)"
                               />
@@ -1421,6 +1423,7 @@ interface FbsPosting {
   total_weight_g?: number | string | null
   products?: FbsPostingProduct[]
   last_synced_at?: string | null
+  requirements?: Record<string, Array<string | number>> | null
 }
 
 interface FbsShipBatch {
@@ -2117,6 +2120,14 @@ const dragConfirmLead = computed(() => {
 const isBatchRowSelected = (batchId: string, postingNumber: string) =>
   batchSelections.value[batchId]?.has(postingNumber) ?? false
 
+const hasPostingRequirements = (posting: FbsPosting) => {
+  const requirements = posting.requirements
+  if (!requirements || typeof requirements !== 'object') return false
+  return Object.values(requirements).some(
+    (value) => Array.isArray(value) && value.length > 0
+  )
+}
+
 const BATCH_STATUS_FILTERS = [
   { key: 'awaiting_deliver', label: 'Ожидает отгрузки' },
   { key: 'acceptance_in_progress', label: 'Приемка' },
@@ -2124,7 +2135,11 @@ const BATCH_STATUS_FILTERS = [
   { key: 'delivering', label: 'Доставляется' }
 ]
 
-const getBatchStatusFilter = (batchId: string) => batchStatusFilters.value[batchId] ?? null
+const getBatchStatusFilter = (batchId: string) => {
+  const filter = batchStatusFilters.value[batchId]
+  if (!filter || filter.size === 0) return null
+  return filter
+}
 
 const isBatchStatusFilterActive = (batchId: string, status: string) => {
   const filter = getBatchStatusFilter(batchId)
@@ -2365,7 +2380,7 @@ const batchDisplayPostings = (batchId: string) => {
     )
   }
   const statusFilters = getBatchStatusFilter(batchId)
-  if (statusFilters) {
+  if (statusFilters && statusFilters.size) {
     list = list.filter((posting) => statusFilters.has(posting.status))
   }
   if (isBatchSplitParentOnly(batchId)) {
@@ -2390,7 +2405,7 @@ const batchDisplayPostings = (batchId: string) => {
 const selectBatchAll = (batchId: string) => {
   const next = new Set<string>()
   batchPostings(batchId).forEach((posting) => {
-    if (posting.posting_number) {
+    if (posting.posting_number && !hasPostingRequirements(posting)) {
       next.add(posting.posting_number)
     }
   })
@@ -2402,6 +2417,8 @@ const resetBatchSelection = (batchId: string) => {
 }
 
 const toggleBatchRow = (batchId: string, postingNumber: string) => {
+  const posting = batchPostings(batchId).find((item) => item.posting_number === postingNumber)
+  if (posting && hasPostingRequirements(posting)) return
   const next = new Set(batchSelections.value[batchId] || [])
   if (next.has(postingNumber)) {
     next.delete(postingNumber)
@@ -2735,6 +2752,18 @@ const applyShipBatchDetail = (batchId: string, response: any) => {
   }
   shipBatchDetails.value = { ...shipBatchDetails.value, [batchId]: detail }
   updateBatchInList(mergedBatch)
+  const currentSelection = batchSelections.value[batchId]
+  if (currentSelection && currentSelection.size) {
+    const filtered = new Set(
+      Array.from(currentSelection).filter((postingNumber) => {
+        const posting = detail.postings.find((item) => item.posting_number === postingNumber)
+        return posting ? !hasPostingRequirements(posting) : true
+      })
+    )
+    if (filtered.size !== currentSelection.size) {
+      batchSelections.value = { ...batchSelections.value, [batchId]: filtered }
+    }
+  }
   return detail
 }
 
@@ -4945,6 +4974,14 @@ onBeforeUnmount(() => {
 
 .fbs-table tbody tr.row-delivery-warning td {
   box-shadow: inset 0 0 0 1px rgba(251, 191, 36, 0.2);
+}
+
+.fbs-table tbody tr.row-requirements {
+  background: rgba(239, 68, 68, 0.35);
+}
+
+.fbs-table tbody tr.row-requirements td {
+  box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.3);
 }
 
 .fbs-table tbody tr.row-selected.row-delivery-warning {
