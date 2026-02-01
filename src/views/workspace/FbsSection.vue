@@ -2466,16 +2466,21 @@ const labelProgressText = (batch?: FbsShipBatch | null) => {
 }
 
 const batchLabelsTotal = (batch?: FbsShipBatch | null) => {
-  const labels = batch?.batch_labels
+  const labels = batch?.batch_labels || batch?.label_status
   if (!labels) return 0
-  const total = Number(labels.total)
-  return Number.isFinite(total) ? total : 0
+  const total = Number((labels as any).total)
+  if (Number.isFinite(total)) return total
+  const ready = Number((labels as any).ready) || 0
+  const error = Number((labels as any).error) || 0
+  const missing = Number((labels as any).missing) || 0
+  const pending = Number((labels as any).pending) || 0
+  return ready + error + missing + pending
 }
 
 const batchLabelsReady = (batch?: FbsShipBatch | null) => {
-  const labels = batch?.batch_labels
+  const labels = batch?.batch_labels || batch?.label_status
   if (!labels) return 0
-  const ready = Number(labels.ready)
+  const ready = Number((labels as any).ready)
   return Number.isFinite(ready) ? ready : 0
 }
 
@@ -2704,6 +2709,7 @@ const loadShipBatches = async (options?: { showLoader?: boolean; preserveState?:
     const list = (response as any)?.batches
     const nextBatches = Array.isArray(list) ? (list as FbsShipBatch[]) : []
     shipBatches.value = nextBatches
+    nextBatches.forEach((batch) => maybeStartBatchLabelPolling(batch.batch_id))
     if (!options?.preserveState) {
       shipBatchExpanded.value = new Set()
       shipBatchDetails.value = {}
@@ -2750,6 +2756,7 @@ const loadShipBatches = async (options?: { showLoader?: boolean; preserveState?:
         if (detail) {
           detail.batch = { ...detail.batch, ...batch }
         }
+        maybeStartBatchLabelPolling(batch.batch_id)
       })
     }
   } catch (error) {
@@ -2804,6 +2811,7 @@ const updateBatchInList = (batch: FbsShipBatch) => {
         }
       : item
   )
+  maybeStartBatchLabelPolling(batch.batch_id)
 }
 
 const applyLabelSortSettings = (data: any) => {
@@ -2850,14 +2858,17 @@ const fetchShipmentProgress = async (batchId: string) => {
   shipmentProgressError.value = null
   try {
     const response = await apiService.getFbsShipBatchDetail(batchId)
-    const batch = ((response as any)?.batch || response) as FbsShipBatch
-    const labelStatus = (response as any)?.label_status ?? (batch as any)?.label_status
-    const labelTasks = (response as any)?.label_tasks ?? (batch as any)?.label_tasks
+    const incoming = ((response as any)?.batch || response) as FbsShipBatch
+    const existing = shipmentProgressBatch.value || { batch_id: batchId }
+    const labelStatus = (response as any)?.label_status ?? (incoming as any)?.label_status ?? existing.label_status
+    const batchLabels = (response as any)?.batch_labels ?? (incoming as any)?.batch_labels ?? existing.batch_labels
+    const labelTasks = (response as any)?.label_tasks ?? (incoming as any)?.label_tasks ?? existing.label_tasks
     if (batch && batch.batch_id) {
       const mergedBatch: FbsShipBatch = {
-        ...(shipmentProgressBatch.value || { batch_id: batchId }),
-        ...batch,
+        ...(existing || { batch_id: batchId }),
+        ...incoming,
         label_status: labelStatus ?? null,
+        batch_labels: batchLabels ?? null,
         label_tasks: labelTasks ?? null
       }
       shipmentProgressBatch.value = mergedBatch
@@ -2961,15 +2972,7 @@ const toggleBatch = async (batch: FbsShipBatch) => {
   next.add(batchId)
   shipBatchExpanded.value = next
   await ensureBatchDetail(batchId)
-  const labels = getBatchLabels(batchId)
-  const ready = Number(labels?.ready)
-  const total = Number(labels?.total)
-  const needsLabelPolling =
-    labels?.status === 'pending' ||
-    (Number.isFinite(ready) && Number.isFinite(total) && total > 0 && ready < total)
-  if (needsLabelPolling) {
-    startBatchLabelPolling(batchId)
-  }
+  maybeStartBatchLabelPolling(batchId)
   selectBatchAll(batchId)
 }
 
@@ -3932,8 +3935,29 @@ const startBatchLabelPolling = (batchId: string) => {
     }
   }
   void poll()
-  const timer = window.setInterval(poll, 5000)
+  const timer = window.setInterval(poll, 2000)
   batchLabelPolling.value = { ...batchLabelPolling.value, [batchId]: timer }
+}
+
+const needsBatchLabelPolling = (batch: FbsShipBatch) => {
+  const labels = batch.batch_labels || batch.label_status
+  if (!labels) return false
+  const status = (labels as any).status
+  if (status === 'ready' || status === 'failed' || status === 'error') return false
+  const ready = Number((labels as any).ready)
+  const total = Number((labels as any).total)
+  if (Number.isFinite(total) && total > 0 && Number.isFinite(ready)) {
+    return ready < total
+  }
+  return status === 'pending'
+}
+
+const maybeStartBatchLabelPolling = (batchId: string) => {
+  if (!batchId) return
+  const batch = shipBatches.value.find((item) => item.batch_id === batchId)
+  if (batch && needsBatchLabelPolling(batch)) {
+    startBatchLabelPolling(batchId)
+  }
 }
 
 const stopAllBatchLabelPolling = () => {
