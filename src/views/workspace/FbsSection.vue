@@ -2863,7 +2863,7 @@ const fetchShipmentProgress = async (batchId: string) => {
     const labelStatus = (response as any)?.label_status ?? (incoming as any)?.label_status ?? existing.label_status
     const batchLabels = (response as any)?.batch_labels ?? (incoming as any)?.batch_labels ?? existing.batch_labels
     const labelTasks = (response as any)?.label_tasks ?? (incoming as any)?.label_tasks ?? existing.label_tasks
-    if (batch && batch.batch_id) {
+    if (incoming && incoming.batch_id) {
       const mergedBatch: FbsShipBatch = {
         ...(existing || { batch_id: batchId }),
         ...incoming,
@@ -2872,7 +2872,7 @@ const fetchShipmentProgress = async (batchId: string) => {
         label_tasks: labelTasks ?? null
       }
       shipmentProgressBatch.value = mergedBatch
-      updateBatchInList(batch)
+      updateBatchInList(mergedBatch)
       updateShipBatchPolling()
       if (shouldStopShipmentProgress(mergedBatch)) {
         stopShipmentProgressPolling()
